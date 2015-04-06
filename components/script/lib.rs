@@ -68,3 +68,10 @@ pub mod textinput;
 mod devtools;
 mod horribly_inefficient_timers;
 mod webdriver_handlers;
+
+#[allow(unsafe_code)]
+pub fn init() {
+    unsafe {
+        js::jsapi::JS_Init();
+    }
+}
