@@ -6,7 +6,7 @@ use ipc_channel::ipc::IpcSender;
 use url::Url;
 use util::str::DOMString;
 
-#[derive(Copy, Clone, Deserialize, Serialize, HeapSizeOf)]
+#[derive(Copy, Clone, NumFromPrimitive, Deserialize, Serialize, HeapSizeOf)]
 pub enum StorageType {
     Session,
     Local

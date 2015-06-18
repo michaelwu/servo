@@ -33,9 +33,10 @@ use canvas_traits::WebGLError;
 use canvas_traits::{CanvasGradientStop, LinearGradientStyle, RadialGradientStyle};
 use canvas_traits::{CompositionOrBlending, LineCapStyle, LineJoinStyle, RepetitionStyle};
 use cssparser::RGBA;
-use dom::bindings::js::{JS, Root};
+use dom::bindings::js::{JS, Root, HeapJS, JSObjectConversion};
 use dom::bindings::refcounted::Trusted;
-use dom::bindings::utils::{Reflectable, Reflector, WindowProxyHandler};
+use dom::bindings::magic::MagicDOMClass;
+use dom::bindings::utils::WindowProxyHandler;
 use encoding::types::EncodingRef;
 use euclid::length::Length as EuclidLength;
 use euclid::matrix2d::Matrix2D;
@@ -89,9 +90,25 @@ pub trait JSTraceable {
     fn trace(&self, trc: *mut JSTracer);
 }
 
-no_jsmanaged_fields!(EncodingRef);
+/// A callback used in JSClass to trace DOM objects
+pub unsafe extern fn trace_hook<T: MagicDOMClass + JSTraceable>(trc: *mut JSTracer, obj: *mut JSObject) {
+    let this: &T = mem::transmute(&obj);
+    this.trace(trc)
+}
 
-no_jsmanaged_fields!(Reflector);
+impl<T: JSObjectConversion> JSTraceable for HeapJS<T> {
+    fn trace(&self, trc: *mut JSTracer) {
+        trace_object(trc, "", self.traceable());
+    }
+}
+
+impl<T: MagicDOMClass> JSTraceable for JS<T> {
+    fn trace(&self, trc: *mut JSTracer) {
+        trace_unbarriered_object(trc, "JS<T>", unsafe { self.traceable() });
+    }
+}
+
+no_jsmanaged_fields!(EncodingRef);
 
 /// Trace a `JSVal`.
 pub fn trace_jsval(tracer: *mut JSTracer, description: &str, val: &Heap<JSVal>) {
@@ -110,20 +127,6 @@ pub fn trace_jsval(tracer: *mut JSTracer, description: &str, val: &Heap<JSVal>) 
     }
 }
 
-/// Trace the `JSObject` held by `reflector`.
-#[allow(unrooted_must_root)]
-pub fn trace_reflector(tracer: *mut JSTracer, description: &str, reflector: &Reflector) {
-    unsafe {
-        let name = CString::new(description).unwrap();
-        (*tracer).debugPrinter_ = None;
-        (*tracer).debugPrintIndex_ = !0;
-        (*tracer).debugPrintArg_ = name.as_ptr() as *const libc::c_void;
-        debug!("tracing reflector {}", description);
-        JS_CallUnbarrieredObjectTracer(tracer, reflector.rootable(),
-                                       GCTraceKindToAscii(JSGCTraceKind::JSTRACE_OBJECT));
-    }
-}
-
 /// Trace a `JSObject`.
 pub fn trace_object(tracer: *mut JSTracer, description: &str, obj: &Heap<*mut JSObject>) {
     unsafe {
@@ -132,7 +135,22 @@ pub fn trace_object(tracer: *mut JSTracer, description: &str, obj: &Heap<*mut JS
         (*tracer).debugPrintIndex_ = !0;
         (*tracer).debugPrintArg_ = name.as_ptr() as *const libc::c_void;
         debug!("tracing {}", description);
-        JS_CallObjectTracer(tracer, obj.ptr.get() as *mut _,
+        if !(*obj.ptr.get()).is_null() {
+            JS_CallObjectTracer(tracer, obj.ptr.get() as *mut _,
+                                GCTraceKindToAscii(JSGCTraceKind::JSTRACE_OBJECT));
+        }
+    }
+}
+
+/// Trace a `JSObject`.
+pub fn trace_unbarriered_object(tracer: *mut JSTracer, description: &str, obj: &*mut JSObject) {
+    unsafe {
+        let name = CString::new(description).unwrap();
+        (*tracer).debugPrinter_ = None;
+        (*tracer).debugPrintIndex_ = !0;
+        (*tracer).debugPrintArg_ = name.as_ptr() as *const libc::c_void;
+        debug!("tracing unbarriered {}", description);
+        JS_CallUnbarrieredObjectTracer(tracer, obj as *const _ as *mut _,
                             GCTraceKindToAscii(JSGCTraceKind::JSTRACE_OBJECT));
     }
 }
@@ -278,7 +296,7 @@ no_jsmanaged_fields!(Size2D<T>);
 no_jsmanaged_fields!(Arc<T>);
 no_jsmanaged_fields!(Image, ImageCacheChan, ImageCacheTask);
 no_jsmanaged_fields!(Atom, Namespace);
-no_jsmanaged_fields!(Trusted<T: Reflectable>);
+no_jsmanaged_fields!(Trusted<T: MagicDOMClass>);
 no_jsmanaged_fields!(PropertyDeclarationBlock);
 no_jsmanaged_fields!(HashSet<T>);
 // These three are interdependent, if you plan to put jsmanaged data
@@ -437,9 +455,9 @@ impl RootedTraceableSet {
 
 /// Roots any JSTraceable thing
 ///
-/// If you have a valid Reflectable, use Root.
+/// If you have a DOM object, use Root.
 /// If you have GC things like *mut JSObject or JSVal, use jsapi::Rooted.
-/// If you have an arbitrary number of Reflectables to root, use RootedVec<JS<T>>
+/// If you have an arbitrary number of DOM objects to root, use RootedVec<JS<T>>
 /// If you know what you're doing, use this.
 #[derive(JSTraceable)]
 pub struct RootedTraceable<'a, T: 'a + JSTraceable> {
@@ -461,16 +479,17 @@ impl<'a, T: JSTraceable> Drop for RootedTraceable<'a, T> {
 }
 
 /// A vector of items that are rooted for the lifetime of this struct.
+/// Must be a reflectable
+/// XXX Build on CustomAutoRooter
 #[allow(unrooted_must_root)]
 #[no_move]
-#[derive(JSTraceable)]
 #[allow_unrooted_interior]
-pub struct RootedVec<T: JSTraceable> {
-    v: Vec<T>
+pub struct RootedVec<T: MagicDOMClass> {
+    v: Vec<JS<T>>
 }
 
 
-impl<T: JSTraceable> RootedVec<T> {
+impl<T: MagicDOMClass> RootedVec<T> {
     /// Create a vector of items of type T that is rooted for
     /// the lifetime of this struct
     pub fn new() -> RootedVec<T> {
@@ -489,37 +508,107 @@ impl<T: JSTraceable> RootedVec<T> {
         }
         RootedVec::<T> { v: vec!() }
     }
-}
 
-impl<T: JSTraceable + Reflectable> RootedVec<JS<T>> {
-    /// Obtain a safe slice of references that can't outlive that RootedVec.
-    pub fn r(&self) -> &[&T] {
-        unsafe { mem::transmute(&*self.v) }
+    /// Gets a iterator over this Vec that returns &T
+    pub fn rooted_iter(&self) -> JSVecIter<T> {
+        JSVecIter {
+            vec: &self.v,
+            head: 0,
+            tail: self.v.len(),
+        }
     }
 }
 
-impl<T: JSTraceable> Drop for RootedVec<T> {
+impl<T: MagicDOMClass> JSTraceable for RootedVec<T> {
+    #[inline]
+    fn trace(&self, trc: *mut JSTracer) {
+        for entry in &self.v {
+            entry.trace(trc);
+        }
+    }
+}
+
+/// An iterator for `RootedVec`s that returns &T
+#[derive(Copy)]
+pub struct JSVecIter<'a, T: MagicDOMClass + 'a> {
+    vec: &'a Vec<JS<T>>,
+    head: usize,
+    tail: usize,
+}
+
+impl<'a, T: MagicDOMClass + 'a> Clone for JSVecIter<'a, T> {
+    fn clone(&self) -> JSVecIter<'a, T> {
+        JSVecIter {
+            vec: self.vec,
+            head: self.head,
+            tail: self.tail,
+        }
+    }
+}
+
+impl<'a, T: MagicDOMClass + 'a> Iterator for JSVecIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<&'a T> {
+        if self.head < self.tail {
+            let entry = &self.vec[self.head] as *const _;
+            self.head += 1;
+            unsafe {
+                Some(&*(entry as *const T))
+            }
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.tail - self.head;
+        (len, Some(len))
+    }
+}
+
+impl<'a, T: MagicDOMClass + 'a> DoubleEndedIterator for JSVecIter<'a, T> {
+    fn next_back(&mut self) -> Option<&'a T> {
+        if self.head < self.tail {
+            self.tail -= 1;
+            let entry = &self.vec[self.tail] as *const _;
+            unsafe {
+                Some(&*(entry as *const T))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, T: MagicDOMClass + 'a> ExactSizeIterator for JSVecIter<'a, T> {
+    fn len(&self) -> usize {
+        self.tail - self.head
+    }
+}
+
+impl<T: MagicDOMClass> Drop for RootedVec<T> {
     fn drop(&mut self) {
         RootedTraceableSet::remove(self);
     }
 }
 
-impl<T: JSTraceable> Deref for RootedVec<T> {
-    type Target = Vec<T>;
-    fn deref(&self) -> &Vec<T> {
+impl<T: MagicDOMClass> Deref for RootedVec<T> {
+    type Target = Vec<JS<T>>;
+    fn deref(&self) -> &Vec<JS<T>> {
         &self.v
     }
 }
 
-impl<T: JSTraceable> DerefMut for RootedVec<T> {
-    fn deref_mut(&mut self) -> &mut Vec<T> {
+impl<T: MagicDOMClass> DerefMut for RootedVec<T> {
+    fn deref_mut(&mut self) -> &mut Vec<JS<T>> {
         &mut self.v
     }
 }
 
-impl<A: JSTraceable + Reflectable> FromIterator<Root<A>> for RootedVec<JS<A>> {
+impl<A: MagicDOMClass> FromIterator<Root<A>> for RootedVec<A> {
     #[allow(moved_no_move)]
-    fn from_iter<T>(iterable: T) -> RootedVec<JS<A>> where T: IntoIterator<Item=Root<A>> {
+    fn from_iter<T>(iterable: T) -> RootedVec<A> where T: IntoIterator<Item=Root<A>> {
         let mut vec = RootedVec::new_with_destination_address(unsafe {
             return_address() as *const libc::c_void
         });

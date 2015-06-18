@@ -5,7 +5,7 @@
 //! Routines for handling measuring the memory usage of arbitrary DOM nodes.
 
 use dom::bindings::conversions::get_dom_class;
-use dom::bindings::utils::Reflectable;
+use dom::bindings::magic::MagicDOMClass;
 use libc::c_void;
 use util::mem::{HeapSizeOf, heap_size_of};
 
@@ -13,9 +13,9 @@ use util::mem::{HeapSizeOf, heap_size_of};
 // associated box in order to stash their pointers in a reserved slot of their
 // JS reflector.
 #[allow(unsafe_code)]
-pub fn heap_size_of_self_and_children<T: Reflectable + HeapSizeOf>(obj: &T) -> usize {
+pub fn heap_size_of_self_and_children<T: MagicDOMClass>(obj: &T) -> usize {
     unsafe {
-        let class = get_dom_class(obj.reflector().get_jsobject().get()).unwrap();
+        let (class, _) = get_dom_class(obj.get_jsobj()).unwrap();
         (class.heap_size_of)(obj as *const T as *const c_void)
     }
 }

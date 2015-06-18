@@ -6,7 +6,7 @@
 
 use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::global_object_for_js_object;
-use dom::bindings::utils::Reflectable;
+use dom::bindings::magic::MagicDOMClass;
 use js::jsapi::GetGlobalForObjectCrossCompartment;
 use js::jsapi::{Heap, MutableHandleObject, RootedObject, RootedValue};
 use js::jsapi::{IsCallable, JSContext, JSObject, JS_WrapObject};
@@ -138,10 +138,10 @@ impl CallbackInterface {
 }
 
 /// Wraps the reflector for `p` into the compartment of `cx`.
-pub fn wrap_call_this_object<T: Reflectable>(cx: *mut JSContext,
-                                             p: &T,
-                                             rval: MutableHandleObject) {
-    rval.set(p.reflector().get_jsobject().get());
+pub fn wrap_call_this_object<T: MagicDOMClass>(cx: *mut JSContext,
+                                               p: &T,
+                                               rval: MutableHandleObject) {
+    rval.set(p.get_jsobj());
     assert!(!rval.get().is_null());
 
     unsafe {

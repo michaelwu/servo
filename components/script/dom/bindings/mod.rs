@@ -138,6 +138,7 @@ pub mod conversions;
 pub mod error;
 pub mod global;
 pub mod js;
+pub mod magic;
 pub mod num;
 pub mod proxyhandler;
 pub mod refcounted;

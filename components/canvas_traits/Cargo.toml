@@ -39,4 +39,5 @@ path = "../util"
 [dependencies]
 euclid = "0.2"
 serde_macros = "0.5"
-
+num = "0.1.25"
+num-macros = "0.1.25"

@@ -8,7 +8,7 @@ use dom::bindings::codegen::InheritTypes::TopTypeId;
 use dom::bindings::codegen::PrototypeList;
 use dom::bindings::codegen::PrototypeList::MAX_PROTO_CHAIN_LENGTH;
 use dom::bindings::conversions::native_from_handleobject;
-use dom::bindings::conversions::private_from_proto_check;
+use dom::bindings::conversions::private_from_proto_chain;
 use dom::bindings::conversions::{is_dom_class, jsstring_to_str};
 use dom::bindings::error::throw_type_error;
 use dom::bindings::error::{Error, ErrorResult, Fallible, throw_invalid_this};
@@ -149,6 +149,20 @@ pub struct NativePropertyHooks {
     pub proto_hooks: Option<&'static NativePropertyHooks>,
 }
 
+static sEmptyNativeProperties: NativeProperties = NativeProperties {
+    static_methods: None,
+    static_attrs: None,
+    methods: None,
+    attrs: None,
+    consts: None,
+};
+
+/// XXX
+pub static EmptyNativePropertyHooks: NativePropertyHooks = NativePropertyHooks {
+    native_properties: &sEmptyNativeProperties,
+    proto_hooks: None,
+};
+
 /// The struct that holds inheritance information for DOM object reflectors.
 #[allow(raw_pointer_derive)]
 #[derive(Copy, Clone)]
@@ -159,6 +173,9 @@ pub struct DOMClass {
 
     /// The type ID of that interface.
     pub type_id: TopTypeId,
+
+    /// The slot the proxy is stored in, if any
+    pub proxy_slot: Option<u8>,
 
     /// The NativePropertyHooks for the interface associated with this class.
     pub native_hooks: &'static NativePropertyHooks,
@@ -186,7 +203,12 @@ unsafe impl Sync for DOMJSClass {}
 pub fn get_proto_or_iface_array(global: *mut JSObject) -> *mut ProtoOrIfaceArray {
     unsafe {
         assert!(((*JS_GetClass(global)).flags & JSCLASS_DOM_GLOBAL) != 0);
-        JS_GetReservedSlot(global, DOM_PROTOTYPE_SLOT).to_private() as *mut ProtoOrIfaceArray
+        let val = JS_GetReservedSlot(global, DOM_PROTOTYPE_SLOT);
+        if val.is_undefined() {
+            ptr::null_mut()
+        } else {
+            val.to_private() as *mut ProtoOrIfaceArray
+        }
     }
 }
 
@@ -413,76 +435,6 @@ pub fn initialize_global(global: *mut JSObject) {
     }
 }
 
-/// A trait to provide access to the `Reflector` for a DOM object.
-pub trait Reflectable {
-    /// Returns the receiver's reflector.
-    fn reflector(&self) -> &Reflector;
-    /// Initializes the Reflector
-    fn init_reflector(&mut self, _obj: *mut JSObject) {
-        panic!("Cannot call init on this Reflectable");
-    }
-}
-
-/// Create the reflector for a new DOM object and yield ownership to the
-/// reflector.
-pub fn reflect_dom_object<T: Reflectable>
-        (obj:     Box<T>,
-         global:  GlobalRef,
-         wrap_fn: extern "Rust" fn(*mut JSContext, GlobalRef, Box<T>) -> Root<T>)
-         -> Root<T> {
-    wrap_fn(global.get_cx(), global, obj)
-}
-
-/// A struct to store a reference to the reflector of a DOM object.
-#[allow(raw_pointer_derive, unrooted_must_root)]
-#[must_root]
-#[servo_lang = "reflector"]
-#[derive(HeapSizeOf)]
-// If you're renaming or moving this field, update the path in plugins::reflector as well
-pub struct Reflector {
-    #[ignore_heap_size_of = "defined and measured in rust-mozjs"]
-    object: UnsafeCell<*mut JSObject>,
-}
-
-#[allow(unrooted_must_root)]
-impl PartialEq for Reflector {
-    fn eq(&self, other: &Reflector) -> bool {
-        unsafe { *self.object.get() == *other.object.get() }
-    }
-}
-
-impl Reflector {
-    /// Get the reflector.
-    #[inline]
-    pub fn get_jsobject(&self) -> HandleObject {
-        unsafe { HandleObject::from_marked_location(self.object.get()) }
-    }
-
-    /// Initialize the reflector. (May be called only once.)
-    pub fn set_jsobject(&mut self, object: *mut JSObject) {
-        unsafe {
-            let obj = self.object.get();
-            assert!((*obj).is_null());
-            assert!(!object.is_null());
-            *obj = object;
-        }
-    }
-
-    /// Return a pointer to the memory location at which the JS reflector
-    /// object is stored. Used to root the reflector, as
-    /// required by the JSAPI rooting APIs.
-    pub fn rootable(&self) -> *mut *mut JSObject {
-        self.object.get()
-    }
-
-    /// Create an uninitialized `Reflector`.
-    pub fn new() -> Reflector {
-        Reflector {
-            object: UnsafeCell::new(ptr::null_mut())
-        }
-    }
-}
-
 /// Gets the property `id` on  `proxy`'s prototype. If it exists, `*found` is
 /// set to true and `*vp` to the value, otherwise `*found` is set to false.
 ///
@@ -687,8 +639,11 @@ pub unsafe fn finalize_global(obj: *mut JSObject) {
 }
 
 /// Trace the resources held by reserved slots of a global object
-pub unsafe fn trace_global(tracer: *mut JSTracer, obj: *mut JSObject) {
+pub unsafe extern "C" fn trace_global(tracer: *mut JSTracer, obj: *mut JSObject) {
     let array = get_proto_or_iface_array(obj);
+    if array.is_null() {
+        return;
+    }
     for proto in (*array).iter() {
         if !proto.is_null() {
             trace_object(tracer, "prototype", &*(proto as *const *mut JSObject as *const Heap<*mut JSObject>));
@@ -725,7 +680,7 @@ pub unsafe extern fn outerize_global(_cx: *mut JSContext, obj: HandleObject) -> 
     // FIXME(https://github.com/rust-lang/rust/issues/23338)
     let win = win.r();
     let context = win.browsing_context();
-    context.as_ref().unwrap().window_proxy()
+    context.unwrap().window_proxy()
 }
 
 /// Deletes the property `id` from `object`.
@@ -751,14 +706,11 @@ unsafe fn generic_call(cx: *mut JSContext, argc: libc::c_uint, vp: *mut JSVal,
     } else {
         GetGlobalForObjectCrossCompartment(JS_CALLEE(cx, vp).to_object_or_null())
     };
-    let obj = RootedObject::new(cx, obj);
+    let mut obj = RootedObject::new(cx, obj);
     let info = RUST_FUNCTION_VALUE_TO_JITINFO(JS_CALLEE(cx, vp));
     let proto_id = (*info).protoID;
     let depth = (*info).depth;
-    let proto_check = |class: &'static DOMClass| {
-        class.interface_chain[depth as usize] as u16 == proto_id
-    };
-    let this = match private_from_proto_check(obj.ptr, proto_check) {
+    obj.ptr = match private_from_proto_chain(obj.ptr, proto_id, depth) {
         Ok(val) => val,
         Err(()) => {
             if is_lenient {
@@ -771,7 +723,7 @@ unsafe fn generic_call(cx: *mut JSContext, argc: libc::c_uint, vp: *mut JSVal,
             }
         }
     };
-    call(info, cx, obj.handle(), this as *mut libc::c_void, argc, vp)
+    call(info, cx, obj.handle(), (&mut obj.ptr) as *mut _ as *mut libc::c_void, argc, vp)
 }
 
 /// Generic method of IDL interface.

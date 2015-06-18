@@ -59,7 +59,7 @@ use selectors::matching::DeclarationBlock;
 use selectors::parser::{AttrSelector, NamespaceConstraint};
 use smallvec::VecLike;
 use std::borrow::ToOwned;
-use std::cell::{Ref, RefMut};
+use std::cell::{Ref, RefMut, RefCell};
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
@@ -132,9 +132,9 @@ impl<'ln> LayoutNode<'ln> {
 
     pub fn flow_debug_id(self) -> usize {
         let layout_data_ref = self.borrow_layout_data();
-        match *layout_data_ref {
+        match layout_data_ref {
             None => 0,
-            Some(ref layout_data) => layout_data.data.flow_construction_result.debug_id()
+            Some(layout_data) => layout_data.data.flow_construction_result.debug_id()
         }
     }
 
@@ -171,15 +171,14 @@ impl<'ln> LayoutNode<'ln> {
     ///
     /// FIXME(pcwalton): Do this as part of fragment building instead of in a traversal.
     pub fn initialize_layout_data(self) {
-        let mut layout_data_ref = self.mutate_layout_data();
-        match *layout_data_ref {
-            None => {
-                *layout_data_ref = Some(LayoutDataWrapper {
+        let r = unsafe { self.get_jsmanaged() };
+        if r.has_layout_data() {
+            unsafe {
+                r.layout_data_set(mem::transmute(box RefCell::new(LayoutDataWrapper {
                     shared_data: SharedLayoutData { style: None },
-                    data: box PrivateLayoutData::new(),
-                });
+                    data: PrivateLayoutData::new(),
+                })))
             }
-            Some(_) => {}
         }
     }
 
@@ -272,13 +271,13 @@ impl<'ln> LayoutNode<'ln> {
 
     /// Borrows the layout data without checks.
     #[inline(always)]
-    pub unsafe fn borrow_layout_data_unchecked(&self) -> *const Option<LayoutDataWrapper> {
+    pub unsafe fn borrow_layout_data_unchecked(&self) -> Option<*const LayoutDataWrapper> {
         mem::transmute(self.get_jsmanaged().layout_data_unchecked())
     }
 
     /// Borrows the layout data immutably. Fails on a conflicting borrow.
     #[inline(always)]
-    pub fn borrow_layout_data(&self) -> Ref<Option<LayoutDataWrapper>> {
+    pub fn borrow_layout_data(&self) -> Option<Ref<LayoutDataWrapper>> {
         unsafe {
             mem::transmute(self.get_jsmanaged().layout_data())
         }
@@ -286,7 +285,7 @@ impl<'ln> LayoutNode<'ln> {
 
     /// Borrows the layout data mutably. Fails on a conflicting borrow.
     #[inline(always)]
-    pub fn mutate_layout_data(&self) -> RefMut<Option<LayoutDataWrapper>> {
+    pub fn mutate_layout_data(&self) -> Option<RefMut<LayoutDataWrapper>> {
         unsafe {
             mem::transmute(self.get_jsmanaged().layout_data_mut())
         }
@@ -350,10 +349,8 @@ pub struct LayoutElement<'le> {
 }
 
 impl<'le> LayoutElement<'le> {
-    pub fn style_attribute(&self) -> &'le Option<PropertyDeclarationBlock> {
-        unsafe {
-            &*self.element.style_attribute()
-        }
+    pub fn style_attribute(&self) -> Option<PropertyDeclarationBlock> {
+        self.element.style_attribute()
     }
 
     pub fn as_node(&self) -> LayoutNode<'le> {
@@ -429,12 +426,12 @@ impl<'le> ::selectors::Element for LayoutElement<'le> {
     }
 
     #[inline]
-    fn get_local_name(&self) -> &Atom {
+    fn get_local_name(&self) -> Atom {
         self.element.local_name()
     }
 
     #[inline]
-    fn get_namespace(&self) -> &Namespace {
+    fn get_namespace(&self) -> Namespace {
         self.element.namespace()
     }
 
@@ -481,9 +478,7 @@ impl<'le> ::selectors::Element for LayoutElement<'le> {
 
     #[inline]
     fn get_id(&self) -> Option<Atom> {
-        unsafe {
-            (*self.element.id_attribute()).clone()
-        }
+        self.element.id_attribute()
     }
 
     #[inline]
@@ -696,13 +691,14 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
     pub fn as_element(&self) -> ThreadSafeLayoutElement<'ln> {
         unsafe {
             let element = match self.get_jsmanaged().downcast() {
-                Some(e) => e.unsafe_get(),
+                Some(e) => e,
                 None => panic!("not an element")
             };
             // FIXME(pcwalton): Workaround until Rust gets multiple lifetime parameters on
             // implementations.
             ThreadSafeLayoutElement {
-                element: &*element,
+                element: element,
+                phantom: PhantomData,
             }
         }
     }
@@ -732,7 +728,7 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
 
     /// Borrows the layout data without checking.
     #[inline(always)]
-    fn borrow_layout_data_unchecked(&self) -> *const Option<LayoutDataWrapper> {
+    fn borrow_layout_data_unchecked(&self) -> Option<*const LayoutDataWrapper> {
         unsafe {
             self.node.borrow_layout_data_unchecked()
         }
@@ -742,7 +738,7 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
     ///
     /// TODO(pcwalton): Make this private. It will let us avoid borrow flag checks in some cases.
     #[inline(always)]
-    pub fn borrow_layout_data(&self) -> Ref<Option<LayoutDataWrapper>> {
+    pub fn borrow_layout_data(&self) -> Option<Ref<LayoutDataWrapper>> {
         self.node.borrow_layout_data()
     }
 
@@ -750,7 +746,7 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
     ///
     /// TODO(pcwalton): Make this private. It will let us avoid borrow flag checks in some cases.
     #[inline(always)]
-    pub fn mutate_layout_data(&self) -> RefMut<Option<LayoutDataWrapper>> {
+    pub fn mutate_layout_data(&self) -> Option<RefMut<LayoutDataWrapper>> {
         self.node.mutate_layout_data()
     }
 
@@ -758,8 +754,8 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
     /// has not yet been performed, fails.
     #[inline]
     pub fn style(&self) -> Ref<Arc<ComputedValues>> {
-        Ref::map(self.borrow_layout_data(), |layout_data_ref| {
-            let layout_data = layout_data_ref.as_ref().expect("no layout data");
+        let layout_data_ref = self.borrow_layout_data().expect("no layout data");
+        Ref::map(layout_data_ref, |layout_data| {
             let style = match self.get_pseudo_element_type() {
                 PseudoElementType::Before(_) => &layout_data.data.before_style,
                 PseudoElementType::After(_) => &layout_data.data.after_style,
@@ -791,7 +787,7 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
                 None => return false
             };
 
-            if !is_whitespace(text.upcast().data_for_layout()) {
+            if !is_whitespace(&text.upcast().data_for_layout()) {
                 return false
             }
 
@@ -832,39 +828,30 @@ impl<'ln> ThreadSafeLayoutNode<'ln> {
 
     /// Set the restyle damage field.
     pub fn set_restyle_damage(self, damage: RestyleDamage) {
-        let mut layout_data_ref = self.mutate_layout_data();
-        match *layout_data_ref {
-            Some(ref mut layout_data) => layout_data.data.restyle_damage = damage,
-            _ => panic!("no layout data for this node"),
-        }
+        let mut layout_data = self.mutate_layout_data().expect("no layout data");
+        layout_data.data.restyle_damage = damage;
     }
 
     /// Returns the layout data flags for this node.
     pub fn flags(self) -> LayoutDataFlags {
         unsafe {
-            match *self.borrow_layout_data_unchecked() {
+            match self.borrow_layout_data_unchecked() {
                 None => panic!(),
-                Some(ref layout_data) => layout_data.data.flags,
+                Some(layout_data) => (&*layout_data).data.flags,
             }
         }
     }
 
     /// Adds the given flags to this node.
     pub fn insert_flags(self, new_flags: LayoutDataFlags) {
-        let mut layout_data_ref = self.mutate_layout_data();
-        match *layout_data_ref {
-            Some(ref mut layout_data) => layout_data.data.flags.insert(new_flags),
-            _ => panic!("no layout data for this node"),
-        }
+        let mut layout_data = self.mutate_layout_data().expect("no layout data");
+        layout_data.data.flags.insert(new_flags)
     }
 
     /// Removes the given flags from this node.
     pub fn remove_flags(self, flags: LayoutDataFlags) {
-        let mut layout_data_ref = self.mutate_layout_data();
-        match *layout_data_ref {
-            Some(ref mut layout_data) => layout_data.data.flags.remove(flags),
-            _ => panic!("no layout data for this node"),
-        }
+        let mut layout_data = self.mutate_layout_data().expect("no layout data");
+        layout_data.data.flags.remove(flags)
     }
 
     /// Returns true if this node contributes content. This is used in the implementation of
@@ -1064,14 +1051,15 @@ impl<'a> Iterator for ThreadSafeLayoutNodeChildrenIterator<'a> {
 /// A wrapper around elements that ensures layout can only ever access safe properties and cannot
 /// race on elements.
 pub struct ThreadSafeLayoutElement<'le> {
-    element: &'le Element,
+    element: LayoutJS<Element>,
+    phantom: PhantomData<&'le Element>
 }
 
 impl<'le> ThreadSafeLayoutElement<'le> {
     #[inline]
     pub fn get_attr(&self, namespace: &Namespace, name: &Atom) -> Option<&'le str> {
         unsafe {
-            self.element.get_attr_val_for_layout(namespace, name)
+            (*self.element.unsafe_get()).get_attr_val_for_layout(namespace, name)
         }
     }
 }

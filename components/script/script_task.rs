@@ -24,8 +24,8 @@ use document_loader::{DocumentLoader, LoadType, NotifierData};
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::DocumentBinding::{DocumentMethods, DocumentReadyState};
 use dom::bindings::conversions::{Castable, FromJSValConvertible, StringificationBehavior};
-use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, RootCollection, trace_roots};
+use dom::bindings::global::{GlobalRef, GlobalRoot};
+use dom::bindings::js::{HeapJS, JS, DOMVec, RootCollection, trace_roots};
 use dom::bindings::js::{Root, RootCollectionPtr, RootedReference};
 use dom::bindings::refcounted::{LiveDOMReferences, Trusted, TrustedReference, trace_refcounted_objects};
 use dom::bindings::trace::{JSTraceable, RootedVec, trace_traceables};
@@ -48,12 +48,14 @@ use hyper::mime::{Mime, SubLevel, TopLevel};
 use ipc_channel::ipc::{self, IpcSender};
 use ipc_channel::router::ROUTER;
 use js::glue::CollectServoSizes;
+use js::jsapi::{CustomAutoRooter, _vftable_CustomAutoRooter};
 use js::jsapi::{DOMProxyShadowsResult, HandleId, HandleObject, RootedValue, SetDOMProxyInformation};
-use js::jsapi::{DisableIncrementalGC, JS_AddExtraGCRootsTracer, JS_SetWrapObjectCallbacks};
+use js::jsapi::{JS_AddExtraGCRootsTracer, JS_SetWrapObjectCallbacks};
 use js::jsapi::{GCDescription, GCProgress, JSGCInvocationKind, SetGCSliceCallback};
 use js::jsapi::{JSAutoRequest, JSGCStatus, JS_GetRuntime, JS_SetGCCallback, SetDOMCallbacks};
 use js::jsapi::{JSContext, JSRuntime, JSTracer};
 use js::jsapi::{JSObject, SetPreserveWrapperCallback};
+use js::jsapi::EvaluateSelfHosted;
 use js::jsval::UndefinedValue;
 use js::rust::Runtime;
 use layout_interface::{ReflowQueryType};
@@ -94,29 +96,48 @@ use std::ptr;
 use std::rc::Rc;
 use std::result::Result;
 use std::sync::mpsc::{Receiver, Select, Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use string_cache::Atom;
 use time::{Tm, now};
 use url::{Url, UrlParser};
 use util::opts;
+use util::resource_files::read_resource_file;
 use util::str::DOMString;
 use util::task::spawn_named_with_send_on_failure;
 use util::task_state;
 use webdriver_handlers;
 
+thread_local!(pub static THREAD_JSCTX: Cell<*mut JSContext> = Cell::new(ptr::null_mut()));
+thread_local!(pub static LAYOUT_LOCK: Arc<RwLock<()>> = Arc::new(RwLock::new(())));
 thread_local!(pub static STACK_ROOTS: Cell<Option<RootCollectionPtr>> = Cell::new(None));
 thread_local!(static SCRIPT_TASK_ROOT: RefCell<Option<*const ScriptTask>> = RefCell::new(None));
 
 unsafe extern fn trace_rust_roots(tr: *mut JSTracer, _data: *mut libc::c_void) {
     SCRIPT_TASK_ROOT.with(|root| {
         if let Some(script_task) = *root.borrow() {
-            (*script_task).trace(tr);
+            let script_task = &*script_task;
+            script_task.trace(tr);
         }
     });
-
-    trace_traceables(tr);
-    trace_roots(tr);
 }
+
+extern fn trace_auto_roots(_this: *mut libc::c_void, tr: *mut JSTracer) {
+    SCRIPT_TASK_ROOT.with(|root| {
+        if let Some(script_task) = *root.borrow() {
+            let script_task = unsafe { &*script_task };
+            let page = script_task.root_page();
+            page.trace_parser(tr);
+        }
+    });
+    unsafe {
+        trace_roots(tr);
+        trace_traceables(tr);
+    }
+}
+
+static TRACE_VFTABLE: _vftable_CustomAutoRooter = _vftable_CustomAutoRooter {
+    trace: trace_auto_roots,
+};
 
 /// A document load that is in the process of fetching the requested resource. Contains
 /// data that will need to be present when the document and frame tree entry are created,
@@ -350,6 +371,24 @@ impl Drop for StackRootTLS {
     }
 }
 
+pub struct ThreadJSContextTLS;
+
+impl ThreadJSContextTLS {
+    pub fn new(cx: *mut JSContext) -> ThreadJSContextTLS {
+        THREAD_JSCTX.with(|ref r| {
+            r.set(cx);
+        });
+        ThreadJSContextTLS
+    }
+}
+
+impl Drop for ThreadJSContextTLS {
+    fn drop(&mut self) {
+        THREAD_JSCTX.with(|ref r| {
+            r.set(ptr::null_mut());
+        })
+    }
+}
 
 /// Information for an entire page. Pages are top-level browsing contexts and can contain multiple
 /// frames.
@@ -410,7 +449,7 @@ pub struct ScriptTask {
     /// The JavaScript runtime.
     js_runtime: Rc<Runtime>,
 
-    mouse_over_targets: DOMRefCell<Vec<JS<Element>>>,
+    mouse_over_targets: HeapJS<DOMVec<JS<Element>>>,
 
     /// List of pipelines that have been owned and closed by this script task.
     closed_pipelines: RefCell<HashSet<PipelineId>>,
@@ -491,6 +530,10 @@ impl ScriptTaskFactory for ScriptTask {
                                               script_port,
                                               chan);
 
+            let _jscontext_tls = ThreadJSContextTLS::new(script_task.get_cx());
+
+            let _car = CustomAutoRooter::new(script_task.get_cx(), &TRACE_VFTABLE);
+
             SCRIPT_TASK_ROOT.with(|root| {
                 *root.borrow_mut() = Some(&script_task as *const _);
             });
@@ -505,6 +548,8 @@ impl ScriptTaskFactory for ScriptTask {
             mem_profiler_chan.run_with_memory_reporting(|| {
                 script_task.start();
             }, reporter_name, channel_for_reporter, CommonScriptMsg::CollectReports);
+
+            script_task.mouse_over_targets.set(None);
 
             // This must always be the very last operation performed before the task completes
             failsafe.neuter();
@@ -641,7 +686,7 @@ impl ScriptTask {
             devtools_sender: ipc_devtools_sender,
 
             js_runtime: Rc::new(runtime),
-            mouse_over_targets: DOMRefCell::new(vec!()),
+            mouse_over_targets: Default::default(),
             closed_pipelines: RefCell::new(HashSet::new()),
 
             scheduler_chan: state.scheduler_chan,
@@ -653,6 +698,17 @@ impl ScriptTask {
     pub fn new_rt_and_cx() -> Runtime {
         LiveDOMReferences::initialize();
         let runtime = Runtime::new();
+
+        let code = match read_resource_file(&["domselfhosted.js"]) {
+            Ok(code) => {
+                String::from_utf8(code).unwrap()
+            },
+            Err(_) => panic!("Can't read domselfhosted.js!")
+        };
+        let script_utf16: Vec<u16> = code.utf16_units().collect();
+        unsafe {
+            assert!(EvaluateSelfHosted(runtime.rt(), script_utf16.as_ptr(), script_utf16.len() as ::libc::size_t, b"domselfhosted.js\n" as *const _ as *const _));
+        }
 
         unsafe {
             JS_AddExtraGCRootsTracer(runtime.rt(), Some(trace_rust_roots), ptr::null_mut());
@@ -676,8 +732,6 @@ impl ScriptTask {
             SetDOMProxyInformation(ptr::null(), 0, Some(shadow_check_callback));
             SetDOMCallbacks(runtime.rt(), &DOM_CALLBACKS);
             SetPreserveWrapperCallback(runtime.rt(), Some(empty_wrapper_callback));
-            // Pre barriers aren't working correctly at the moment
-            DisableIncrementalGC(runtime.rt());
         }
 
         runtime
@@ -1654,10 +1708,7 @@ impl ScriptTask {
         window.r().init_browsing_context(document.r(), frame_element);
 
         // Create the root frame
-        page.set_frame(Some(Frame {
-            document: JS::from_rooted(&document),
-            window: JS::from_rooted(&window),
-        }));
+        page.set_frame(Some((&*document, &*window)));
 
         let is_javascript = incomplete.url.scheme == "javascript";
         let parse_input = if is_javascript {
@@ -1741,21 +1792,20 @@ impl ScriptTask {
                 let page = get_page(&self.root_page(), pipeline_id);
                 let document = page.document();
 
-                let mut prev_mouse_over_targets: RootedVec<JS<Element>> = RootedVec::new();
-                for target in &*self.mouse_over_targets.borrow_mut() {
-                    prev_mouse_over_targets.push(target.clone());
+                let mut prev_mouse_over_targets = RootedVec::new();
+                let mut mouse_over_targets = RootedVec::new();
+                if let Some(targets) = self.mouse_over_targets.get() {
+                    for target in targets.iter() {
+                        mouse_over_targets.push(target.clone());
+                        prev_mouse_over_targets.push(target);
+                    }
                 }
 
-                // We temporarily steal the list of targets over which the mouse is to pass it to
-                // handle_mouse_move_event() in a safe RootedVec container.
-                let mut mouse_over_targets = RootedVec::new();
-                std_mem::swap(&mut *self.mouse_over_targets.borrow_mut(), &mut *mouse_over_targets);
                 document.r().handle_mouse_move_event(self.js_runtime.rt(), point, &mut mouse_over_targets);
 
                 // Notify Constellation about anchors that are no longer mouse over targets.
-                for target in &*prev_mouse_over_targets {
-                    if !mouse_over_targets.contains(target) {
-                        let target = target.root();
+                for target in prev_mouse_over_targets.rooted_iter() {
+                    if !mouse_over_targets.contains(&JS::from_ref(target)) {
                         if target.upcast::<Node>().is_anchor_element() {
                             let event = ConstellationMsg::NodeStatus(None);
                             let ConstellationChan(ref chan) = self.constellation_chan;
@@ -1782,7 +1832,21 @@ impl ScriptTask {
                     }
                 }
 
-                std_mem::swap(&mut *self.mouse_over_targets.borrow_mut(), &mut *mouse_over_targets);
+                let targets = match self.mouse_over_targets.get() {
+                    Some(targets) => targets,
+                    None => {
+                        let global = GlobalRoot::Window(page.window());
+                        let targets = DOMVec::new(global.r(), mouse_over_targets.len() as u32);
+                        self.mouse_over_targets.set(Some(targets));
+                        self.mouse_over_targets.get().unwrap()
+                    },
+                };
+                targets.clear();
+                let mut idx = 0;
+                for target in mouse_over_targets.iter() {
+                    targets.set(idx, target.clone());
+                    idx += 1;
+                }
             }
 
             KeyEvent(key, state, modifiers) => {

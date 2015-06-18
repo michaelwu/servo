@@ -10,13 +10,15 @@
 use devtools_traits::ScriptToDevtoolsControlMsg;
 use dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
 use dom::bindings::conversions::native_from_reflector_jsmanaged;
-use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflectable, Reflector};
+use dom::bindings::js::{JS, Root, JSObjectConversion};
+use dom::bindings::magic::{MagicDOMClass, MagicCastable, RealFields};
 use dom::window::{self, ScriptHelpers};
 use dom::workerglobalscope::WorkerGlobalScope;
 use ipc_channel::ipc::IpcSender;
 use js::jsapi::{GetGlobalForObjectCrossCompartment};
-use js::jsapi::{JSContext, JSObject, JS_GetClass, MutableHandleValue};
+use js::jsapi::{JSContext, JSObject, JS_GetClass, MutableHandleValue, HandleObject};
+use js::jsapi::{JS_GetReservedSlot, JS_SetReservedSlot};
+use js::jsval::ObjectValue;
 use js::{JSCLASS_IS_DOMJSCLASS, JSCLASS_IS_GLOBAL};
 use msg::constellation_msg::{ConstellationChan, PipelineId, WorkerId};
 use net_traits::ResourceTask;
@@ -46,7 +48,6 @@ pub enum GlobalRoot {
 
 /// A traced reference to a global object, for use in fields of traced Rust
 /// structures.
-#[derive(JSTraceable, HeapSizeOf)]
 #[must_root]
 pub enum GlobalField {
     /// A field for a `Window` object.
@@ -196,13 +197,12 @@ impl<'a> GlobalRef<'a> {
             GlobalRef::Worker(worker) => worker.set_devtools_wants_updates(send_updates),
         }
     }
-}
 
-impl<'a> Reflectable for GlobalRef<'a> {
-    fn reflector(&self) -> &Reflector {
+    /// Get a HandleObject for the underlying JSObject
+    pub fn handle(&self) -> HandleObject {
         match *self {
-            GlobalRef::Window(ref window) => window.reflector(),
-            GlobalRef::Worker(ref worker) => worker.reflector(),
+            GlobalRef::Window(window) => window.handle(),
+            GlobalRef::Worker(worker) => worker.handle(),
         }
     }
 }
@@ -214,6 +214,14 @@ impl GlobalRoot {
         match *self {
             GlobalRoot::Window(ref window) => GlobalRef::Window(window.r()),
             GlobalRoot::Worker(ref worker) => GlobalRef::Worker(worker.r()),
+        }
+    }
+
+    /// Get a HandleObject for the underlying JSObject
+    pub fn handle(&self) -> HandleObject {
+        match *self {
+            GlobalRoot::Window(ref window) => window.handle(),
+            GlobalRoot::Worker(ref worker) => worker.handle(),
         }
     }
 }
@@ -237,9 +245,35 @@ impl GlobalField {
     }
 }
 
-/// Returns the global object of the realm that the given DOM object's reflector was created in.
-pub fn global_object_for_reflector<T: Reflectable>(reflector: &T) -> GlobalRoot {
-    global_object_for_js_object(*reflector.reflector().get_jsobject())
+/// Returns the global object of the realm that the given DOM object was created in.
+pub fn global_object_for_dom_object<T: MagicDOMClass>(obj: &T) -> GlobalRoot {
+    global_object_for_js_object(obj.get_jsobj())
+}
+
+// XXX Too many conversions between roots and refs
+impl MagicCastable for GlobalField {
+    #[allow(unrooted_must_root)]
+    fn get_from_slots(real: &RealFields, idx: u8) -> GlobalField {
+        let val = unsafe { JS_GetReservedSlot(real.obj.get(), idx as u32).to_object() };
+        match native_from_reflector_jsmanaged(val) {
+            Ok(window) => return GlobalField::Window(JS::from_rooted(&window)),
+            Err(_) => {},
+        }
+        match native_from_reflector_jsmanaged(val) {
+            Ok(window) => return GlobalField::Worker(JS::from_rooted(&window)),
+            Err(_) => {},
+        }
+        unreachable!("Field doesn't store a global!");
+    }
+    #[allow(unrooted_must_root)]
+    fn set_into_slots(real: &RealFields, idx: u8, v: GlobalField) {
+        let v = match v {
+            GlobalField::Window(global) => global.get_jsobj(),
+            GlobalField::Worker(global) => global.get_jsobj(),
+        };
+
+        unsafe { JS_SetReservedSlot(real.obj.get(), idx as u32, ObjectValue(&*v)) }
+    }
 }
 
 /// Returns the global object of the realm that the given JS object was created in.

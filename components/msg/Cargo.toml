@@ -47,6 +47,8 @@ rustc-serialize = "0.3.4"
 euclid = "0.2"
 serde = "0.6"
 serde_macros = "0.5"
+num = "0.1.25"
+num-macros = "0.1.25"
 
 [target.x86_64-apple-darwin.dependencies]
 core-foundation = "0.1"

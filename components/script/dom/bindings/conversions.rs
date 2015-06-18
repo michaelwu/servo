@@ -34,10 +34,11 @@
 
 use core::nonzero::NonZero;
 use dom::bindings::error::throw_type_error;
-use dom::bindings::js::Root;
+use dom::bindings::js::{JS, Root, JSValConversion};
+use dom::bindings::magic::MagicDOMClass;
 use dom::bindings::num::Finite;
 use dom::bindings::str::{ByteString, USVString};
-use dom::bindings::utils::{DOMClass, Reflectable, Reflector};
+use dom::bindings::utils::{DOMClass, DOMJSClass};
 use js;
 use js::glue::{GetProxyPrivate, IsWrapper, RUST_JS_NumberValue};
 use js::glue::{RUST_JSID_IS_STRING, RUST_JSID_TO_STRING, UnwrapObject};
@@ -101,21 +102,23 @@ impl_as!(u32, u32);
 impl_as!(i64, i64);
 impl_as!(u64, u64);
 
-/// A trait to check whether a given `JSObject` implements an IDL interface.
-pub trait IDLInterface {
-    /// Returns whether the given DOM class derives that interface.
-    fn derives(&'static DOMClass) -> bool;
-}
-
 /// A trait to hold the cast functions of IDL interfaces that either derive
 /// or are derived from other interfaces.
-pub trait Castable: IDLInterface + Reflectable + Sized {
+pub trait Castable: MagicDOMClass + Sized {
     /// Check whether a DOM object implements one of its deriving interfaces.
     fn is<T>(&self) -> bool where T: DerivedFrom<Self> {
-        let class = unsafe {
-            get_dom_class(self.reflector().get_jsobject().get()).unwrap()
+        let (class, _obj) = unsafe {
+            get_dom_class(self.get_jsobj()).unwrap()
         };
-        T::derives(class)
+
+        if T::FINAL {
+            let target_class = unsafe {
+                &*(T::get_jsclass() as *const DOMJSClass)
+            };
+            class as *const _ == &target_class.dom_class as *const _
+        } else {
+            class.interface_chain[T::PROTO_DEPTH] as u32 == T::PROTO_ID
+        }
     }
 
     /// Cast a DOM object upwards to one of the interfaces it derives from.
@@ -641,18 +644,6 @@ impl FromJSValConvertible for ByteString {
     }
 }
 
-
-impl ToJSValConvertible for Reflector {
-    fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) {
-        let obj = self.get_jsobject().get();
-        assert!(!obj.is_null());
-        rval.set(ObjectValue(unsafe { &*obj }));
-        if unsafe { !JS_WrapValue(cx, rval) } {
-            panic!("JS_WrapValue failed.");
-        }
-    }
-}
-
 /// Returns whether the given `clasp` is one for a DOM object.
 pub fn is_dom_class(clasp: *const JSClass) -> bool {
     unsafe {
@@ -697,39 +688,39 @@ pub unsafe fn native_from_reflector<T>(obj: *mut JSObject) -> *const T {
 }
 
 /// Get the `DOMClass` from `obj`, or `Err(())` if `obj` is not a DOM object.
-pub unsafe fn get_dom_class(obj: *mut JSObject) -> Result<&'static DOMClass, ()> {
+pub unsafe fn get_dom_class(obj: *mut JSObject) -> Result<(&'static DOMClass, *mut JSObject), ()> {
     use dom::bindings::utils::DOMJSClass;
     use js::glue::GetProxyHandlerExtra;
+    use js::glue::GetProxyExtra;
 
     let clasp = JS_GetClass(obj);
     if is_dom_class(&*clasp) {
         debug!("plain old dom object");
         let domjsclass: *const DOMJSClass = clasp as *const DOMJSClass;
-        return Ok(&(&*domjsclass).dom_class);
+        return Ok((&(&*domjsclass).dom_class, obj));
     }
     if is_dom_proxy(obj) {
         debug!("proxy dom object");
         let dom_class: *const DOMClass = GetProxyHandlerExtra(obj) as *const DOMClass;
-        return Ok(&*dom_class);
+        return Ok((&*dom_class, GetProxyExtra(obj, 0).to_object()));
     }
     debug!("not a dom object");
     Err(())
 }
 
-/// Get a `*const libc::c_void` for the given DOM object, unwrapping any
+/// Get a `*mut JSObject` for the given DOM object, unwrapping any
 /// wrapper around it first, and checking if the object is of the correct type.
 ///
 /// Returns Err(()) if `obj` is an opaque security wrapper or if the object is
 /// not an object for a DOM object of the given type (as defined by the
 /// proto_id and proto_depth).
-#[inline]
-pub unsafe fn private_from_proto_check<F>(mut obj: *mut JSObject, proto_check: F)
-                                          -> Result<*const libc::c_void, ()>
-                                          where F: Fn(&'static DOMClass) -> bool {
-    let dom_class = try!(get_dom_class(obj).or_else(|_| {
+pub unsafe fn private_from_proto_chain(obj: *mut JSObject,
+                                       proto_id: u16, proto_depth: u16)
+                                       -> Result<*mut JSObject, ()> {
+    let (dom_class, obj) = try!(get_dom_class(obj).or_else(|_| {
         if IsWrapper(obj) {
             debug!("found wrapper");
-            obj = UnwrapObject(obj, /* stopAtOuter = */ 0);
+            let obj = UnwrapObject(obj, /* stopAtOuter = */ 0);
             if obj.is_null() {
                 debug!("unwrapping security wrapper failed");
                 Err(())
@@ -744,9 +735,9 @@ pub unsafe fn private_from_proto_check<F>(mut obj: *mut JSObject, proto_check: F
         }
     }));
 
-    if proto_check(dom_class) {
+    if dom_class.interface_chain[proto_depth as usize] as u16 == proto_id {
         debug!("good prototype");
-        Ok(private_from_reflector(obj))
+        Ok(obj)
     } else {
         debug!("bad prototype");
         Err(())
@@ -760,38 +751,40 @@ pub unsafe fn private_from_proto_check<F>(mut obj: *mut JSObject, proto_check: F
 /// not a reflector for a DOM object of the given type (as defined by the
 /// proto_id and proto_depth).
 pub fn native_from_reflector_jsmanaged<T>(obj: *mut JSObject) -> Result<Root<T>, ()>
-    where T: Reflectable + IDLInterface
+    where T: MagicDOMClass
 {
+    let proto_id = T::PROTO_ID as u16;
+    let proto_depth = T::PROTO_DEPTH as u16;
     unsafe {
-        private_from_proto_check(obj, T::derives).map(|obj| {
-            Root::new(NonZero::new(obj as *const T))
+        private_from_proto_chain(obj, proto_id, proto_depth).map(|obj| {
+            Root::new(NonZero::new(obj))
         })
     }
 }
 
 /// Get a Rooted<T> for a DOM object accessible from a HandleValue
 pub fn native_from_handlevalue<T>(v: HandleValue) -> Result<Root<T>, ()>
-    where T: Reflectable + IDLInterface
+    where T: MagicDOMClass
 {
     native_from_reflector_jsmanaged(v.get().to_object())
 }
 
 /// Get a Rooted<T> for a DOM object accessible from a HandleObject
 pub fn native_from_handleobject<T>(obj: HandleObject) -> Result<Root<T>, ()>
-    where T: Reflectable + IDLInterface
+    where T: MagicDOMClass
 {
     native_from_reflector_jsmanaged(obj.get())
 }
 
-impl<T: Reflectable> ToJSValConvertible for Root<T> {
+impl<T: MagicDOMClass> ToJSValConvertible for Root<T> {
     fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) {
-        self.r().reflector().to_jsval(cx, rval);
+        rval.set(JS::from_rooted(self).get_jsval())
     }
 }
 
-impl<'a, T: Reflectable> ToJSValConvertible for &'a T {
+impl<'a, T: MagicDOMClass> ToJSValConvertible for &'a T {
     fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) {
-        self.reflector().to_jsval(cx, rval);
+        rval.set(JS::from_ref(*self).get_jsval())
     }
 }
 

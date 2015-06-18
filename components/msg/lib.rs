@@ -4,6 +4,7 @@
 
 #![feature(custom_attribute, custom_derive, plugin)]
 #![plugin(serde_macros, plugins)]
+#![plugin(num_macros)]
 
 extern crate app_units;
 #[macro_use]
@@ -24,6 +25,7 @@ extern crate serde;
 extern crate style_traits;
 extern crate url;
 extern crate util;
+extern crate num;
 
 pub mod compositor_msg;
 pub mod constellation_msg;

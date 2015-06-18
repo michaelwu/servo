@@ -1,0 +1,337 @@
+# The Magic DOM Object
+
+## Motivation
+
+DOM is the API that allows scripts to interact with documents. On the web, the scripting language that uses DOM is JavaScript, but the objects that are part of the DOM API are usually implemented as heap allocated C++/Rust objects. For JavaScript to interact with these objects, there is usually a wrapper called a reflector that gives JavaScript code access to the DOM object.
+
+```
+|------------|    /-----------/
+| DOM Object | <- / Reflector /
+|------------|    /-----------/
+```
+
+This isn't ideal for a number of reasons, but the biggest problem is performance. Because native code and JS use different types, expensive conversions have to be performed to convert [JS values](https://evilpie.github.io/sayrer-fatval-backup/cache.aspx.htm#post-485) into equivalent native types before calling native code. Native types then need to be converted to JS values if the function needs to return a value. The native code that is being called is also completely opaque to the JS JITs, which makes it very difficult to do optimizations specific to the calling code. These problems can be mitigated to some degree - conversions can be made cheaper, and hints can be given to the JIT to perform some limited optimizations.
+
+To improve on this, it's worth looking at the data layout of our DOM objects and reflectors on Servo. Here is a simplified node object and its reflector.
+
+```
+|----------------------|   /---------------------/
+| Node                 |   / Node Reflector      /
+|----------------------|   /---------------------/
+| reflector: &JSObject---> / group: &ObjectGroup /
+| parent_node: &Node   |   / shape: &Shape       /
+| first_child: &Node   |   / slots: &HeapSlot    /
+| last_child: &Node    |   / elements: &HeapSlot /
+| next_sibling: &Node  | <---slot0: [&Node]      /
+| prev_sibling: &Node  |   / slot1: [Undefined]  /
+|----------------------|   /---------------------/
+
+```
+
+Every field here is one machine word on a 64 bit machine. Types within brackets represent data stored within JS values. The slots for the reflector are stored inline with the rest of the JS object, and up to 16 slots can be stored inline. A variable number of these slots can be reserved for our own use, so we could store the data for nodes in reserved slots on the JS object. In this particular case, we can also get rid of the heap allocated object completely.
+
+```
+/-------------------------------/
+/ Node                          /
+/-------------------------------/
+/ group: &ObjectGroup           /
+/ shape: &Shape                 /
+/ slots: &HeapSlot              /
+/ elements: &HeapSlot           /
+/ slot0: [&Node] (parent_node)  /
+/ slot1: [&Node] (first_child)  /
+/ slot2: [&Node] (last_child)   /
+/ slot3: [&Node] (next_sibling) /
+/ slot4: [&Node] (prev_sibling) /
+/ slot5: [Undefined]            /
+/ slot6: [Undefined]            /
+/ slot7: [Undefined]            /
+/-------------------------------/
+```
+
+This turns every Node field into JSVals, so conversions between native types and JSVals can be avoided in methods implemented in JS. DOM methods implemented in JS allow the JS JITs to use their full range of optimizations without specialized hints. A more detailed explanation of the performance implications are in the next section.
+
+We need to do this while keeping DOM code reasonably easy to write. The APIs provided to access the reserved slots are primitive and do not provide any reasonable level of type checking for native or JS code. The magic DOM object design provides the means to store data in reserved slots without compromising on ease of use.
+
+### Performance details
+
+Storing dom data in JSVal slots rather than in native types provide additional opportunities for optimizations. The trade off is that native code needs to convert JSVals back into normal types when working on DOM objects. This is offset by two things - 
+
+1. JSVal to native conversions (and vice versa) on DOM objects are highly optimized. Unlike JSVals coming from arbitrary scripts, the JSVals that are stored in slots are well defined. The conversions used for these slots do not need to handle edge cases, and so are very fast compared to normal JSVal conversions.
+2. DOM interfaces can be implemented partially or entirely in JS, which avoids the cost of JSVal to native conversions entirely and allows JIT optimizations which aren't possible with natively implemented DOM interfaces.
+
+It's worth diving into the details of DOM bindings to understand the second point. Native DOM bindings work by creating JS functions which are bound to native functions. These JS functions are then attached to JS objects (usually their prototypes). A call to one of these functions usually looks like this:
+
+1. JS code calls a DOM method implemented in native code.
+2. A generic wrapper does a basic check to make sure `this` is actually a DOM object that implements the given interface. If so, the autogenerated binding is called.
+3. The binding does additional sanity checks and conversions and calls the actual implementation.
+  1. The number of arguments passed in is checked.
+  2. Each argument is converted to an appropriate native type.
+  3. The actual implementation is called.
+  4. If there's a return value, it's converted into a JSVal and returned.
+
+There are a few optimizations which can done for this.
+
+1. Step 2 can be eliminated when the Ion JIT runs and determines that this JS code always calls the function with an appropriate object.
+2. Calls to methods marked "Pure" in the webidl definition can be hoisted out of loops in certain cases. (actually really complicated, but lets leave it at this)
+3. For functions which implement getters, the JIT can be instructed to access the value of a particular reserved slot directly. The slot can be lazily initialized if desired - if the slot contains Undefined, the function is called as a fallback.
+
+Note that the best case here involves avoiding the call or moving the call out of a loop. If the function actually needs to be called, there isn't much the JIT can do to speed things up.
+
+A call to a DOM method implemented in JS is somewhat similar looking:
+
+1. JS code calls a DOM method implemented in JS.
+2. The method is an autogenerated binding which does sanity checks and conversions before calling the implementation.
+  1. `this` is checked to make sure it's an appropriate DOM object.
+  2. The number of arguments passed in is checked.
+  3. Each argument is converted according to webidl specs. String conversions in particular are very fast compared to native conversions.
+  4. The actual implementation code is called.
+  5. The return value is returned. In cases where the object needs a proxy, an additional conversion step is necessary here.
+
+The steps are very similar to the native case, but because things are implemented in JS, conversions to and from native types are eliminated and the JIT can do a lot more. Every single step can be optimized by the JIT. The `this` check can be inlined and eliminated like before. The argument length check can be eliminated. Argument checks and conversions can be eliminated or hoisted out depending on the behavior of the calling code. The actual implementation code can be optimized too. All of this can be inlined, allowing better use of the instruction cache and avoiding the setup costs required to call native code.
+
+### A comparison with Fused DOM objects
+
+There is another design which bears some similarity with magic DOM objects. Here's the theoretical layout of a fused DOM object:
+
+```
+/-------------------------------/
+/ Node                          /
+/-------------------------------/
+/ group: &ObjectGroup           /
+/ shape: &Shape                 /
+/ slots: &HeapSlot              /
+/ elements: &HeapSlot           /
+/ parent_node: &Node            /
+/ first_child: &Node            /
+/ last_child: &Node             /
+/ next_sibling: &Node           /
+/ prev_sibling: &Node           /
+/-------------------------------/
+```
+
+It looks very similar to magic DOM layout of the same object, but using native types rather than slots that store JSVals. Fused DOM can be more memory efficient than the standard DOM object + reflector combo since it allocates everything within a single object, and it allows the GC to move more data around to reduce fragmentation. There are no improvements to type conversions. Fused DOM objects also require changes to Spidermonkey's GC code. Magic DOM objects use standard JS objects and require no new code in Spidermonkey to support. Fused DOM objects can be considered orthogonal to magic DOM objects since some magic DOM objects will also require heap allocated objects, so magic DOM objects can also take advantage of fused DOM objects.
+
+## Implementation
+
+### Defining DOM objects
+
+The definition of these new DOM objects is very similar to the definition of ordinary DOM objects. For example, where a Node used to be defined as:
+
+```rust
+#[dom_struct]
+pub struct Node {
+    eventtarget: EventTarget,
+
+    /// The parent of this node.
+    parent_node: MutNullableHeap<JS<Node>>,
+
+    /// The first child of this node.
+    first_child: MutNullableHeap<JS<Node>>,
+
+    /// The last child of this node.
+    last_child: MutNullableHeap<JS<Node>>,
+
+    /// The next sibling of this node.
+    next_sibling: MutNullableHeap<JS<Node>>,
+
+    /// The previous sibling of this node.
+    prev_sibling: MutNullableHeap<JS<Node>>,
+
+    /// The document that this node belongs to.
+    owner_doc: MutNullableHeap<JS<Document>>,
+
+    /// The live list of children return by .childNodes.
+    child_list: MutNullableHeap<JS<NodeList>>,
+
+    /// The live count of children of this node.
+    children_count: Cell<u32>,
+
+    /// A bitfield of flags for node items.
+    flags: Cell<NodeFlags>,
+
+    // other fields trimmed to keep the example simple
+}
+```
+
+It now looks like:
+
+```rust
+magic_dom_struct! {
+    pub struct Node {
+        eventtarget: Base<EventTarget>,
+
+        /// The parent of this node.
+        parent_node: Layout<Option<JS<Node>>>,
+
+        /// The first child of this node.
+        first_child: Layout<Option<JS<Node>>>,
+
+        /// The last child of this node.
+        last_child: Layout<Option<JS<Node>>>,
+
+        /// The next sibling of this node.
+        next_sibling: Layout<Option<JS<Node>>>,
+
+        /// The previous sibling of this node.
+        prev_sibling: Layout<Option<JS<Node>>>,
+
+        /// The document that this node belongs to.
+        owner_doc: Layout<Option<JS<Document>>>,
+
+        /// The live list of children return by .childNodes.
+        child_list: Mut<Option<JS<NodeList>>>,
+
+        /// The live count of children of this node.
+        children_count: Layout<u32>,
+
+        /// A bitfield of flags for node items.
+        flags: Layout<NodeFlags>,
+
+        // other fields trimmed to keep the example simple
+    }
+}
+```
+
+1. When inheriting from other DOM objects, `Base<T>` is now necessary.
+2. `Layout<T>` and `Mut<T>` replace MutNullableHeap/MutHeap/Cell.
+  1. `Layout<T>` is almost the same as `Mut<T>`, except it includes additional methods that can be used on the layout thread. Failure to use these methods or `Layout<T>` on the layout thread results in assertions.
+  2. `Option<T>` is now correctly reflected in the type, rather than in the name of the wrapping class (MutNullableHeap).
+
+The fields also work almost identically to before. Something like `self.parent_node.get().unwrap().root()` works in both cases. One exception is in the case of constant fields. These are fields that are only set at initialization and aren't wrapped in Cell/MutHeap/MutNullableHeap. Such a field could be accessed using `self.field` before, but now must be written as `self.field.get()`. These types of fields aren't as common as `Mut<T>` or `Layout<T>` fields.
+
+### Creating DOM objects
+
+Creating these DOM objects is different than normal heap/stack allocated objects. For example, a keyboard event that was originally created like this:
+
+```rust
+    reflect_dom_object(box KeyboardEvent::new_inherited(),
+                       GlobalRef::Window(window),
+                       KeyboardEventBinding::Wrap)
+```
+
+Is now created like this:
+
+```rust
+    let mut obj = alloc_dom_object::<KeyboardEvent>(GlobalRef::Window(window));
+    obj.new_inherited();
+    obj.into_root()
+```
+
+Originally, the KeyboardEvent struct is first created and boxed, and then attached to the reflector. With the new DOM objects, the JS object needs to be created first, and then filled in.
+
+`alloc_dom_object` returns a special root type - `InitRoot<T>`. Every field must then be initialized in order via the init function on every field. This init function only works on objects rooted by `InitRoot<T>`. If a field is initialized without initializing all previous fields, the init function asserts. Once the object is initialized, `fn into_root` is used to convert the `InitRoot` into a regular `Root`. If not all fields were initialized, `fn into_root` will assert.
+
+In many dom objects, `fn new_inherited` is implemented to do the job of filling in the object at initialization. For KeyboardEvent, a `fn new_inherited` implementation that looks like this:
+
+```rust
+    fn new_inherited() -> KeyboardEvent {
+        KeyboardEvent {
+            uievent: UIEvent::new_inherited(),
+            key: Cell::new(None),
+            key_string: RefCell::new("".to_owned()),
+            code: RefCell::new("".to_owned()),
+            location: Cell::new(0),
+            ctrl: Cell::new(false),
+            alt: Cell::new(false),
+            shift: Cell::new(false),
+            meta: Cell::new(false),
+            repeat: Cell::new(false),
+            is_composing: Cell::new(false),
+            char_code: Cell::new(None),
+            key_code: Cell::new(0),
+        }
+    }
+```
+
+Now turns into this:
+
+```rust
+    fn new_inherited(&mut self) {
+        self.uievent.new_inherited();
+        self.key.init(None);
+        self.key_string.init("".to_owned());
+        self.code.init("".to_owned());
+        self.location.init(0);
+        self.ctrl.init(false);
+        self.alt.init(false);
+        self.shift.init(false);
+        self.meta.init(false);
+        self.repeat.init(false);
+        self.is_composing.init(false);
+        self.char_code.init(None);
+        self.key_code.init(0);
+    }
+```
+
+### How it works
+
+The magic DOM design maintains its illusion of native DOM objects by transforming DOM structs in the magic_dom_struct macro. It does four types of transformations on the field types:
+
+1. `Base<T> -> T`
+2. `Mut<T: MagicCastable> -> MutMagicField<T, $idx_type>`
+3. `Layout<T: MagicCastable> -> LayoutMagicField<T, $idx_type>`
+4. `T: MagicCastable -> ConstMagicField<T, $idx_type>`
+
+These transformations result in a zero sized struct. All the MagicFields are zero sized, and Base<T> fields are also zero sized structs. This means that the address of every field in the struct is the same. That address points to a rooted `*mut JSObject`. `$idx_type` is a type generated by the magic_dom_struct macro which implements the `SlotIndex` trait. The SlotIndex trait calculates the index of the slot at compile time. This information is enough for us to find the appropriate reserved slot(s). An additional trait - `MagicCastable` - is implemented for every type to convert between JSVals and that native type.
+
+The magic fields provide these functions by default:
+
+```rust
+impl<T: MagicCastable, Index: SlotIndex> ConstMagicField<T, Index> {
+    pub fn init(&mut self, val: T);
+    pub fn get(&self) -> T::Target;
+}
+impl<T: MagicCastable, Index: SlotIndex> MutMagicField<T, Index> {
+    pub fn init(&mut self, val: T);
+    pub fn set(&self, val: T);
+    pub fn get(&self) -> T::Target;
+}
+impl<T: MagicCastable, Index: SlotIndex> LayoutMagicField<T, Index> {
+    pub fn init(&mut self, val: T);
+    pub fn set(&self, val: T);
+    pub fn get(&self) -> T::Target;
+    pub fn layout_get(&self) -> T::Target;
+}
+```
+
+The `MagicCastable` trait is flexible enough to convert most types.
+
+```rust
+pub trait MagicCastable {
+    /// This sets the number of reserved slots necessary to store a field.
+    const SLOT_SIZE: u8 = 1;
+    /// This determines whether finalize_slots needs to be called.
+    const NEED_FINALIZE: bool = false;
+    /// This determines whether heap_size_of and trace need to be called.
+    const HEAP_TYPE: bool = false;
+    /// This is the type output by `get_from_slots`.
+    /// It's usually the same as the type taken in `set_from_slots`,
+    /// but it can be different.
+    type Target = Self;
+
+    /// Generates an object with data from the private slots starting at idx.
+    fn get_from_slots(real: &RealFields, idx: u8) -> Self::Target;
+
+    /// Consumes a given object and saves it into the private slots
+    /// starting at `idx`.
+    /// If necessary, finalize_slots is called before this.
+    fn set_into_slots(real: &RealFields, idx: u8, v: Self);
+
+    /// Does any necessary clean up before this field is set to a new
+    /// value or this object is destroyed.
+    /// This is called iff `NEED_FINALIZE` is true.
+    fn finalize_slots(_real: &RealFields, _idx: u8) { unreachable!() }
+
+    /// Measures the space taken on the heap.
+    /// This is called iff `HEAP_TYPE` is true.
+    fn heap_size_of(_real: &RealFields, _idx: u8) -> usize { unreachable!() }
+
+    /// Traces the slots.
+    /// This is called iff `HEAP_TYPE` is true.
+    fn trace(_real: &RealFields, _idx: u8, _tr: *mut JSTracer) { unreachable!() }
+}
+```
+
+Types that can't trivially be converted into JSVals can be stored inside a `Box<T>`. `Deref` is implemented on `Box<T>` fields. Avoiding `Box<T>` fields is recommended when possible, since it and other fields that require finalization prevent allocation in the nursery.
+

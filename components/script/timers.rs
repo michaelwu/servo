@@ -6,7 +6,7 @@ use dom::bindings::callback::ExceptionHandling::Report;
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::FunctionBinding::Function;
 use dom::bindings::global::global_object_for_js_object;
-use dom::bindings::utils::Reflectable;
+use dom::bindings::magic::MagicDOMClass;
 use dom::window::ScriptHelpers;
 use euclid::length::Length;
 use js::jsapi::{HandleValue, Heap, RootedValue};
@@ -203,7 +203,7 @@ impl ActiveTimers {
 
     // see https://html.spec.whatwg.org/multipage/#timer-initialisation-steps
     #[allow(unsafe_code)]
-    pub fn fire_timer<T: Reflectable>(&self, id: TimerEventId, this: &T) {
+    pub fn fire_timer<T: MagicDOMClass>(&self, id: TimerEventId, this: &T) {
         let expected_id = self.expected_event_id.get();
         if expected_id != id {
             debug!("ignoring timer fire event {:?} (expected {:?}", id, expected_id);
@@ -247,8 +247,7 @@ impl ActiveTimers {
             // step 14
             match callback {
                 InternalTimerCallback::StringTimerCallback(code_str) => {
-                    let proxy = this.reflector().get_jsobject();
-                    let cx = global_object_for_js_object(proxy.get()).r().get_cx();
+                    let cx = global_object_for_js_object(this.get_jsobj()).r().get_cx();
                     let mut rval = RootedValue::new(cx, UndefinedValue());
 
                     this.evaluate_js_on_global_with_result(&code_str, rval.handle_mut());

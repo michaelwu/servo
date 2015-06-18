@@ -4004,7 +4004,8 @@ class IDLAttribute(IDLInterfaceMember):
               identifier == "UnsafeInPrerendering" or
               identifier == "CheckAnyPermissions" or
               identifier == "CheckAllPermissions" or
-              identifier == "BinaryName"):
+              identifier == "BinaryName" or
+              identifier == "SelfHosted"):
             # Known attributes that we don't need to do anything with here
             pass
         else:
@@ -4692,7 +4693,8 @@ class IDLMethod(IDLInterfaceMember, IDLScope):
               identifier == "CheckAllPermissions" or
               identifier == "BinaryName" or
               identifier == "MethodIdentityTestable" or
-              identifier == "StaticClassOverride"):
+              identifier == "StaticClassOverride" or
+              identifier == "SelfHosted"):
             # Known attributes that we don't need to do anything with here
             pass
         else:

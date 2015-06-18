@@ -11,26 +11,6 @@ use syntax::ext::deriving::generic::{Struct, Substructure, TraitDef, ty};
 use syntax::ext::deriving::generic::{combine_substructure, EnumMatching, FieldInfo, MethodDef};
 use syntax::ptr::P;
 
-pub fn expand_dom_struct(cx: &mut ExtCtxt, sp: Span, _: &MetaItem, anno: Annotatable) -> Annotatable {
-    if let Annotatable::Item(item) = anno {
-        let mut item2 = (*item).clone();
-        item2.attrs.push(quote_attr!(cx, #[must_root]));
-        item2.attrs.push(quote_attr!(cx, #[privatize]));
-        item2.attrs.push(quote_attr!(cx, #[derive(JSTraceable)]));
-        item2.attrs.push(quote_attr!(cx, #[derive(HeapSizeOf)]));
-
-        // The following attributes are only for internal usage
-        item2.attrs.push(quote_attr!(cx, #[_generate_reflector]));
-        // #[dom_struct] gets consumed, so this lets us keep around a residue
-        // Do NOT register a modifier/decorator on this attribute
-        item2.attrs.push(quote_attr!(cx, #[_dom_struct_marker]));
-        Annotatable::Item(P(item2))
-    } else {
-        cx.span_err(sp, "#[dom_struct] applied to something other than a struct");
-        anno
-    }
-}
-
 /// Provides the hook to expand `#[derive(JSTraceable)]` into an implementation of `JSTraceable`
 ///
 /// The expansion basically calls `trace()` on all of the fields of the struct/enum, erroring if they do not

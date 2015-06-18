@@ -32,7 +32,7 @@ impl OpaqueNodeMethods for OpaqueNode {
 
     fn from_jsmanaged(node: &LayoutJS<Node>) -> OpaqueNode {
         unsafe {
-            let ptr: uintptr_t = node.get_jsobject() as uintptr_t;
+            let ptr: uintptr_t = node.get_jsobj() as uintptr_t;
             OpaqueNode(ptr)
         }
     }

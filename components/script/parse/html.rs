@@ -40,6 +40,10 @@ use string_cache::QualName;
 use tendril::StrTendril;
 use url::Url;
 use util::str::DOMString;
+use js::jsapi::{CustomAutoRooter, JSTracer, _vftable_CustomAutoRooter};
+use dom::bindings::global::global_object_for_dom_object;
+use dom::bindings::trace::JSTraceable;
+use std::intrinsics::return_address;
 
 impl<'a> TreeSink for servohtmlparser::Sink {
     type Handle = JS<Node>;
@@ -254,6 +258,31 @@ pub enum ParseContext<'a> {
     Owner(Option<PipelineId>),
 }
 
+#[allow(unsafe_code)]
+extern fn trace_parser(this: *mut ::libc::c_void, tr: *mut JSTracer) {
+    let par = unsafe { &*(this as *const _ as *const ParserAutoRooter) };
+    par.parser.trace(tr);
+}
+
+static TRACE_PARSER_VFTABLE: _vftable_CustomAutoRooter = _vftable_CustomAutoRooter {
+    trace: trace_parser,
+};
+
+struct ParserAutoRooter<'a> {
+    rooter: CustomAutoRooter,
+    parser: &'a ServoHTMLParser,
+}
+
+impl<'a> ParserAutoRooter<'a> {
+    #[allow(unsafe_code)]
+    fn new(parser: &ServoHTMLParser) -> ParserAutoRooter {
+        ParserAutoRooter {
+            rooter: CustomAutoRooter::new_with_addr(global_object_for_dom_object(parser).r().get_cx(), &TRACE_PARSER_VFTABLE, unsafe { return_address() }),
+            parser: parser,
+        }
+    }
+}
+
 pub fn parse_html(document: &Document,
                   input: String,
                   url: Url,
@@ -264,6 +293,7 @@ pub fn parse_html(document: &Document,
         ParseContext::Fragment(fc) =>
             ServoHTMLParser::new_for_fragment(Some(url), document, fc),
     };
+    let _par = ParserAutoRooter::new(&*parser);
     parser.r().parse_chunk(input.into());
 }
 

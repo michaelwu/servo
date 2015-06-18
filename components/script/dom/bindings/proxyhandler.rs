@@ -113,13 +113,8 @@ pub fn ensure_expando_object(cx: *mut JSContext, obj: HandleObject)
                              -> *mut JSObject {
     unsafe {
         assert!(is_dom_proxy(obj.get()));
-        let mut expando = get_expando_object(obj);
-        if expando.is_null() {
-            expando = JS_NewObjectWithGivenProto(cx, ptr::null_mut(), HandleObject::null());
-            assert!(!expando.is_null());
-
-            SetProxyExtra(obj.get(), JSPROXYSLOT_EXPANDO, ObjectValue(&*expando));
-        }
+        let expando = get_expando_object(obj);
+        assert!(!expando.is_null());
         expando
     }
 }

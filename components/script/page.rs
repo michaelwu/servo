@@ -3,12 +3,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use dom::bindings::cell::DOMRefCell;
-use dom::bindings::js::{JS, Root};
+use dom::bindings::js::{JS, HeapJS, Root};
+use dom::bindings::trace::JSTraceable;
 use dom::document::Document;
 use dom::window::Window;
 use msg::constellation_msg::PipelineId;
 use std::cell::Cell;
+use std::default::Default;
 use std::rc::Rc;
+use js::jsapi::JSTracer;
 
 /// Encapsulates a handle to a frame in a frame tree.
 #[derive(JSTraceable, HeapSizeOf)]
@@ -18,7 +21,7 @@ pub struct Page {
     id: PipelineId,
 
     /// The outermost frame containing the document and window.
-    frame: DOMRefCell<Option<Frame>>,
+    frame: DOMRefCell<Frame>,
 
     /// Indicates if reflow is required when reloading.
     needs_reflow: Cell<bool>,
@@ -57,7 +60,7 @@ impl Page {
     pub fn new(id: PipelineId) -> Page {
         Page {
             id: id,
-            frame: DOMRefCell::new(None),
+            frame: DOMRefCell::new(Default::default()),
             needs_reflow: Cell::new(true),
             children: DOMRefCell::new(vec!()),
         }
@@ -68,11 +71,11 @@ impl Page {
     }
 
     pub fn window(&self) -> Root<Window> {
-        self.frame.borrow().as_ref().unwrap().window.root()
+        self.frame.borrow().window.get().unwrap().root()
     }
 
     pub fn document(&self) -> Root<Document> {
-        self.frame.borrow().as_ref().unwrap().document.root()
+        self.frame.borrow().document.get().unwrap().root()
     }
 
     // must handle root case separately
@@ -92,6 +95,21 @@ impl Page {
                     .filter_map(|page_tree| page_tree.remove(id))
                     .next()
             }
+        }
+    }
+
+    #[allow(unsafe_code, unrooted_must_root)]
+    pub fn trace_parser(&self, tr: *mut JSTracer) {
+        if let Some(doc) = self.frame.borrow().document.get() {
+            let doc = doc.root();
+            if let Some(parser) = doc.get_current_parser() {
+                unsafe {
+                    parser.tokenizer().borrow_for_gc_trace().trace(tr);
+                }
+            }
+        }
+        for child in &*self.children.borrow() {
+            child.trace_parser(tr);
         }
     }
 }
@@ -119,18 +137,27 @@ impl Page {
         old
     }
 
-    #[allow(unrooted_must_root)]
-    pub fn set_frame(&self, frame: Option<Frame>) {
-        *self.frame.borrow_mut() = frame;
+    pub fn set_frame(&self, frame: Option<(&Document, &Window)>) {
+        let frame_ref = self.frame.borrow_mut();
+        match frame {
+            Some((doc, win)) => {
+                frame_ref.document.set(Some(JS::from_ref(doc)));
+                frame_ref.window.set(Some(JS::from_ref(win)));
+            },
+            None => {
+                frame_ref.document.set(None);
+                frame_ref.window.set(None);
+            }
+        }
     }
 }
 
 /// Information for one frame in the browsing context.
-#[derive(JSTraceable, HeapSizeOf)]
+#[derive(JSTraceable, Default, HeapSizeOf)]
 #[must_root]
 pub struct Frame {
     /// The document for this frame.
-    pub document: JS<Document>,
+    pub document: HeapJS<JS<Document>>,
     /// The window object for this frame.
-    pub window: JS<Window>,
+    pub window: HeapJS<JS<Window>>,
 }

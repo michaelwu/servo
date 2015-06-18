@@ -225,10 +225,10 @@ impl StyleSharingCandidate {
         };
 
         let style = unsafe {
-            match *element.as_node().borrow_layout_data_unchecked() {
+            match element.as_node().borrow_layout_data_unchecked() {
                 None => return None,
-                Some(ref layout_data_ref) => {
-                    match layout_data_ref.shared_data.style {
+                Some(layout_data_ref) => {
+                    match (*layout_data_ref).shared_data.style {
                         None => return None,
                         Some(ref data) => (*data).clone(),
                     }
@@ -236,10 +236,10 @@ impl StyleSharingCandidate {
             }
         };
         let parent_style = unsafe {
-            match *parent_element.as_node().borrow_layout_data_unchecked() {
+            match parent_element.as_node().borrow_layout_data_unchecked() {
                 None => return None,
-                Some(ref parent_layout_data_ref) => {
-                    match parent_layout_data_ref.shared_data.style {
+                Some(parent_layout_data_ref) => {
+                    match (*parent_layout_data_ref).shared_data.style {
                         None => return None,
                         Some(ref data) => (*data).clone(),
                     }
@@ -258,14 +258,14 @@ impl StyleSharingCandidate {
             class: element.get_attr(&ns!(""), &atom!("class"))
                           .map(|string| string.to_owned()),
             link: element.is_link(),
-            namespace: (*element.get_namespace()).clone(),
+            namespace: element.get_namespace(),
             common_style_affecting_attributes:
                    create_common_style_affecting_attributes_from_element(&element)
         })
     }
 
     fn can_share_style_with(&self, element: &LayoutElement) -> bool {
-        if *element.get_local_name() != self.local_name {
+        if element.get_local_name() != self.local_name {
             return false
         }
 
@@ -279,7 +279,7 @@ impl StyleSharingCandidate {
             (&Some(_), Some(_)) | (&None, None) => {}
         }
 
-        if *element.get_namespace() != self.namespace {
+        if element.get_namespace() != self.namespace {
             return false
         }
 
@@ -519,11 +519,11 @@ impl<'ln> PrivateElementMatchMethods for LayoutElement<'ln> {
             Some(_) | None => return None,
         };
 
-        let parent_layout_data: &Option<LayoutDataWrapper> = unsafe {
-            &*parent_node.borrow_layout_data_unchecked()
+        let parent_layout_data: Option<&LayoutDataWrapper> = unsafe {
+            parent_node.borrow_layout_data_unchecked().map(|v| &*v)
         };
-        match *parent_layout_data {
-            Some(ref parent_layout_data_ref) => {
+        match parent_layout_data {
+            Some(parent_layout_data_ref) => {
                 // Check parent style.
                 let parent_style = parent_layout_data_ref.shared_data.style.as_ref().unwrap();
                 if !arc_ptr_eq(parent_style, &candidate.parent_style) {
@@ -550,12 +550,13 @@ impl<'ln> ElementMatchMethods for LayoutElement<'ln> {
                      parent_bf: Option<&BloomFilter>,
                      applicable_declarations: &mut ApplicableDeclarations)
                      -> bool {
-        let style_attribute = self.style_attribute().as_ref();
+        let style_attribute = self.style_attribute();
+        let style_attribute_ref = style_attribute.as_ref();
 
         applicable_declarations.normal_shareable =
             stylist.push_applicable_declarations(self,
                                                  parent_bf,
-                                                 style_attribute,
+                                                 style_attribute_ref,
                                                  None,
                                                  &mut applicable_declarations.normal);
         stylist.push_applicable_declarations(self,
@@ -629,8 +630,8 @@ impl<'ln> MatchMethods for LayoutNode<'ln> {
     fn insert_into_bloom_filter(&self, bf: &mut BloomFilter) {
         // Only elements are interesting.
         if let Some(element) = self.as_element() {
-            bf.insert(element.get_local_name());
-            bf.insert(element.get_namespace());
+            bf.insert(&element.get_local_name());
+            bf.insert(&element.get_namespace());
             element.get_id().map(|id| bf.insert(&id));
 
             // TODO: case-sensitivity depends on the document type and quirks mode
@@ -641,8 +642,8 @@ impl<'ln> MatchMethods for LayoutNode<'ln> {
     fn remove_from_bloom_filter(&self, bf: &mut BloomFilter) {
         // Only elements are interesting.
         if let Some(element) = self.as_element() {
-            bf.remove(element.get_local_name());
-            bf.remove(element.get_namespace());
+            bf.remove(&element.get_local_name());
+            bf.remove(&element.get_namespace());
             element.get_id().map(|id| bf.remove(&id));
 
             // TODO: case-sensitivity depends on the document type and quirks mode
@@ -664,9 +665,8 @@ impl<'ln> MatchMethods for LayoutNode<'ln> {
         let parent_style = match parent {
             None => None,
             Some(parent_node) => {
-                let parent_layout_data_ref = parent_node.borrow_layout_data_unchecked();
-                let parent_layout_data = (&*parent_layout_data_ref).as_ref()
-                                                                   .expect("no parent data!?");
+                let parent_layout_data_ref = parent_node.borrow_layout_data_unchecked().expect("no parent data!?");
+                let parent_layout_data = &*parent_layout_data_ref;
                 let parent_style = parent_layout_data.shared_data
                                                      .style
                                                      .as_ref()
@@ -675,54 +675,49 @@ impl<'ln> MatchMethods for LayoutNode<'ln> {
             }
         };
 
-        let mut layout_data_ref = self.mutate_layout_data();
-        match *layout_data_ref {
-            None => panic!("no layout data"),
-            Some(ref mut layout_data) => {
-                match self.type_id() {
-                    NodeTypeId::CharacterData(CharacterDataTypeId::Text) => {
-                        // Text nodes get a copy of the parent style. This ensures
-                        // that during fragment construction any non-inherited
-                        // CSS properties (such as vertical-align) are correctly
-                        // set on the fragment(s).
-                        let cloned_parent_style = parent_style.unwrap().clone();
-                        layout_data.shared_data.style = Some(cloned_parent_style);
-                    }
-                    _ => {
-                        let mut damage = self.cascade_node_pseudo_element(
-                            layout_context,
-                            parent_style,
-                            &applicable_declarations.normal,
-                            &mut layout_data.shared_data.style,
-                            applicable_declarations_cache,
-                            new_animations_sender,
-                            applicable_declarations.normal_shareable,
-                            true);
-                        if applicable_declarations.before.len() > 0 {
-                            damage = damage | self.cascade_node_pseudo_element(
-                                layout_context,
-                                Some(layout_data.shared_data.style.as_ref().unwrap()),
-                                &*applicable_declarations.before,
-                                &mut layout_data.data.before_style,
-                                applicable_declarations_cache,
-                                new_animations_sender,
-                                false,
-                                false);
-                        }
-                        if applicable_declarations.after.len() > 0 {
-                            damage = damage | self.cascade_node_pseudo_element(
-                                layout_context,
-                                Some(layout_data.shared_data.style.as_ref().unwrap()),
-                                &*applicable_declarations.after,
-                                &mut layout_data.data.after_style,
-                                applicable_declarations_cache,
-                                new_animations_sender,
-                                false,
-                                false);
-                        }
-                        layout_data.data.restyle_damage = damage;
-                    }
+        let mut layout_data = &mut *self.mutate_layout_data().expect("no layout data");
+        match self.type_id() {
+            NodeTypeId::CharacterData(CharacterDataTypeId::Text) => {
+                // Text nodes get a copy of the parent style. This ensures
+                // that during fragment construction any non-inherited
+                // CSS properties (such as vertical-align) are correctly
+                // set on the fragment(s).
+                let cloned_parent_style = parent_style.unwrap().clone();
+                layout_data.shared_data.style = Some(cloned_parent_style);
+            }
+            _ => {
+                let mut damage = self.cascade_node_pseudo_element(
+                    layout_context,
+                    parent_style,
+                    &applicable_declarations.normal,
+                    &mut layout_data.shared_data.style,
+                    applicable_declarations_cache,
+                    new_animations_sender,
+                    applicable_declarations.normal_shareable,
+                    true);
+                if applicable_declarations.before.len() > 0 {
+                    damage = damage | self.cascade_node_pseudo_element(
+                        layout_context,
+                        Some(layout_data.shared_data.style.as_ref().unwrap()),
+                        &*applicable_declarations.before,
+                        &mut layout_data.data.before_style,
+                        applicable_declarations_cache,
+                        new_animations_sender,
+                        false,
+                        false);
                 }
+                if applicable_declarations.after.len() > 0 {
+                    damage = damage | self.cascade_node_pseudo_element(
+                        layout_context,
+                        Some(layout_data.shared_data.style.as_ref().unwrap()),
+                        &*applicable_declarations.after,
+                        &mut layout_data.data.after_style,
+                        applicable_declarations_cache,
+                        new_animations_sender,
+                        false,
+                        false);
+                }
+                layout_data.data.restyle_damage = damage;
             }
         }
     }

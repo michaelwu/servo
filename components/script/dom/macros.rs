@@ -296,3 +296,91 @@ macro_rules! global_event_handlers(
         event_handler!(submit, GetOnsubmit, SetOnsubmit);
     )
 );
+
+macro_rules! anonymous_dom_object(
+    ($name: ty) => (
+        static Class: ::dom::bindings::utils::DOMJSClass = ::dom::bindings::utils::DOMJSClass {
+            base: ::js::jsapi::Class {
+                name: concat!(stringify!($name), "\0") as *const str as *const ::libc::c_char,
+                flags: ::js::JSCLASS_IS_DOMJSCLASS | ::js::JSCLASS_IMPLEMENTS_BARRIERS |
+                       (((<$name as ::dom::bindings::magic::SlotCount>::SLOT_COUNT as u32) & ::js::JSCLASS_RESERVED_SLOTS_MASK) <<
+                       ::js::JSCLASS_RESERVED_SLOTS_SHIFT),
+                addProperty: None,
+                delProperty: None,
+                getProperty: None,
+                setProperty: None,
+                enumerate: None,
+                resolve: None,
+                convert: None,
+                finalize: None,
+                call: None,
+                hasInstance: None,
+                construct: None,
+                trace: None,
+
+                spec: ::js::jsapi::ClassSpec {
+                    createConstructor: None,
+                    createPrototype: None,
+                    constructorFunctions: 0 as *const ::js::jsapi::JSFunctionSpec,
+                    constructorProperties: 0 as *const ::js::jsapi::JSPropertySpec,
+                    prototypeFunctions: 0 as *const ::js::jsapi::JSFunctionSpec,
+                    prototypeProperties: 0 as *const ::js::jsapi::JSPropertySpec,
+                    finishInit: None,
+                    flags: 0,
+                },
+
+                ext: ::js::jsapi::ClassExtension {
+                    outerObject: None,
+                    innerObject: None,
+                    isWrappedNative: false,
+                    weakmapKeyDelegateOp: None,
+                    objectMovedOp: None,
+                },
+
+                ops: ::js::jsapi::ObjectOps {
+                    lookupProperty: None,
+                    defineProperty: None,
+                    hasProperty: None,
+                    getProperty: None,
+                    setProperty: None,
+                    getOwnPropertyDescriptor: None,
+                    deleteProperty: None,
+                    watch: None,
+                    unwatch: None,
+                    getElements: None,
+                    enumerate: None,
+                    thisObject: None,
+                },
+            },
+            dom_class: ::dom::bindings::utils::DOMClass {
+                interface_chain: [
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                    ::dom::bindings::codegen::PrototypeList::ID::Count,
+                ],
+                native_hooks: &::dom::bindings::utils::EmptyNativePropertyHooks,
+                proxy_slot: None,
+                type_id: ::dom::bindings::codegen::InheritTypes::TopTypeId::Alone,
+                heap_size_of: ::mem::heap_size_of_raw_self_and_children::<$name> as unsafe fn(_) -> _,
+            }
+        };
+
+        impl ::dom::bindings::magic::MagicDOMClass for $name {
+            const PROTO_ID: u32 = ::dom::bindings::codegen::PrototypeList::ID::Count as u32;
+            const PROTO_DEPTH: usize = 0;
+            const PROXIED: Option<::dom::bindings::codegen::PrototypeList::Proxies> = None;
+            const FINAL: bool = true;
+            fn create_proto(cx: *mut ::js::jsapi::JSContext,
+                            global: ::js::jsapi::HandleObject)
+                -> *mut ::js::jsapi::JSObject {
+                ::std::ptr::null_mut()
+            }
+            fn get_jsclass() -> *const ::js::jsapi::Class {
+                &Class.base
+            }
+        }
+    );
+);
