@@ -69,7 +69,7 @@ pub enum KeyState {
 }
 
 //N.B. Based on the glutin key enum
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Deserialize, Serialize, HeapSizeOf)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, NumFromPrimitive, Deserialize, Serialize, HeapSizeOf)]
 pub enum Key {
     Space,
     Apostrophe,

@@ -2,10 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#![feature(arc_counts)]
+#![feature(associated_type_defaults)]
 #![feature(ascii)]
 #![feature(as_unsafe_cell)]
 #![feature(borrow_state)]
 #![feature(box_syntax)]
+// XXX remove after next rustup
+#![feature(braced_empty_structs)]
 #![feature(cell_extras)]
 #![feature(const_fn)]
 #![feature(core)]
@@ -21,11 +25,15 @@
 #![feature(nonzero)]
 #![feature(on_unimplemented)]
 #![feature(plugin)]
+#![feature(raw)]
 #![feature(ref_slice)]
 #![feature(slice_patterns)]
 #![feature(str_utf16)]
 #![feature(unicode)]
+#![feature(unique)]
 #![feature(vec_push_all)]
+#![feature(associated_consts)]
+#![feature(const_fn)]
 
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]

@@ -272,6 +272,42 @@ class CGThing():
         """Produce code for a Rust file."""
         raise NotImplementedError  # Override me!
 
+class CGMagicClassTrait(CGThing):
+    def __init__(self, descriptor):
+        CGThing.__init__(self)
+        jsclass = "&Class.base"
+        proxy = "None"
+        if descriptor.proxy:
+            proxy = "Some(PrototypeList::Proxies::%s)" % descriptor.name
+        final = "true"
+        if descriptor.interface.getUserData("hasConcreteDescendant", False):
+            final = "false"
+        code = """
+impl MagicDOMClass for %s {
+    const PROTO_ID: u32 = PrototypeList::ID::%s as u32;
+    const PROTO_DEPTH: usize = %s;
+    const PROXIED: Option<PrototypeList::Proxies> = %s;
+    const FINAL: bool = %s;
+    fn create_proto(cx: *mut JSContext, global: HandleObject) -> *mut JSObject {
+        let mut proto = RootedObject::new(cx, ptr::null_mut());
+        CreateInterfaceObjects(cx, global, global, proto.handle_mut());
+        proto.ptr
+    }
+    fn get_jsclass() -> *const js::jsapi::Class {
+        %s
+    }
+}
+""" % (descriptor.interface.identifier.name,
+       descriptor.name,
+       descriptor.interface.inheritanceDepth(),
+       proxy,
+       final,
+       jsclass)
+        self.cgRoot = CGGeneric(code)
+
+    def define(self):
+        return self.cgRoot.define()
+
 
 class CGNativePropertyHooks(CGThing):
     """
@@ -1749,13 +1785,17 @@ def DOMClass(descriptor):
         protoList.extend(['PrototypeList::ID::Count'] * (descriptor.config.maxProtoChainLength - len(protoList)))
         prototypeChainString = ', '.join(protoList)
         heapSizeOf = 'heap_size_of_raw_self_and_children::<%s>' % descriptor.interface.identifier.name
+        proxy_slot = "None"
+        if descriptor.proxy:
+            proxy_slot = "Some(%s::SLOT_COUNT)" % descriptor.name
         return """\
 DOMClass {
     interface_chain: [ %s ],
     native_hooks: &sNativePropertyHooks,
+    proxy_slot: %s,
     type_id: %s,
     heap_size_of: %s as unsafe fn(_) -> _,
-}""" % (prototypeChainString, DOMClassTypeId(descriptor), heapSizeOf)
+}""" % (prototypeChainString, proxy_slot, DOMClassTypeId(descriptor), heapSizeOf)
 
 
 class CGDOMJSClass(CGThing):
@@ -1767,14 +1807,17 @@ class CGDOMJSClass(CGThing):
         self.descriptor = descriptor
 
     def define(self):
-        traceHook = 'Some(%s)' % TRACE_HOOK_NAME
+        #traceHook = 'Some(%s)' % TRACE_HOOK_NAME
+        traceHook = 'None'
+        slots = "%s::SLOT_COUNT as u32" % self.descriptor.name
+        if self.descriptor.proxy:
+            slots += " + 1"
         if self.descriptor.isGlobal():
             traceHook = "Some(js::jsapi::JS_GlobalObjectTraceHook)"
             flags = "JSCLASS_IS_GLOBAL | JSCLASS_DOM_GLOBAL"
-            slots = "JSCLASS_GLOBAL_SLOT_COUNT + 1"
         else:
             flags = "0"
-            slots = "1"
+        # XXX add finalize hook
         return """\
 static Class: DOMJSClass = DOMJSClass {
     base: js::jsapi::Class {
@@ -1789,7 +1832,7 @@ static Class: DOMJSClass = DOMJSClass {
         enumerate: None,
         resolve: None,
         convert: None,
-        finalize: Some(%s),
+        finalize: None,
         call: None,
         hasInstance: None,
         construct: None,
@@ -1832,7 +1875,7 @@ static Class: DOMJSClass = DOMJSClass {
     dom_class: %s
 };""" % (str_to_const_array(self.descriptor.interface.identifier.name),
          flags, slots, slots,
-         FINALIZE_HOOK_NAME, traceHook,
+         traceHook,
          self.descriptor.outerObjectHook,
          self.descriptor.outerObjectHook,
          CGGeneric(DOMClass(self.descriptor)).define())
@@ -2140,132 +2183,6 @@ class CGAbstractMethod(CGThing):
         raise NotImplementedError  # Override me!
 
 
-def CreateBindingJSObject(descriptor, parent=None):
-    create = "let raw = Box::into_raw(object);\nlet _rt = RootedTraceable::new(&*raw);\n"
-    if descriptor.proxy:
-        assert not descriptor.isGlobal()
-        create += """
-let handler = RegisterBindings::proxy_handlers[PrototypeList::Proxies::%s as usize];
-let private = RootedValue::new(cx, PrivateValue(raw as *const libc::c_void));
-let obj = {
-    let _ac = JSAutoCompartment::new(cx, proto.ptr);
-    NewProxyObject(cx, handler,
-                   private.handle(),
-                   proto.ptr, %s.get(),
-                   ptr::null_mut(), ptr::null_mut())
-};
-assert!(!obj.is_null());
-let obj = RootedObject::new(cx, obj);\
-""" % (descriptor.name, parent)
-    else:
-        if descriptor.isGlobal():
-            create += ("let obj = RootedObject::new(\n"
-                       "    cx,\n"
-                       "    create_dom_global(\n"
-                       "        cx,\n"
-                       "        &Class.base as *const js::jsapi::Class as *const JSClass,\n"
-                       "        Some(%s))\n"
-                       ");\n" % TRACE_HOOK_NAME)
-        else:
-            create += ("let obj = {\n"
-                       "    let _ac = JSAutoCompartment::new(cx, proto.ptr);\n"
-                       "    JS_NewObjectWithGivenProto(\n"
-                       "        cx, &Class.base as *const js::jsapi::Class as *const JSClass, proto.handle())\n"
-                       "};\n"
-                       "let obj = RootedObject::new(cx, obj);\n")
-        create += """\
-assert!(!obj.ptr.is_null());
-
-JS_SetReservedSlot(obj.ptr, DOM_OBJECT_SLOT,
-                   PrivateValue(raw as *const libc::c_void));"""
-    return create
-
-
-class CGWrapMethod(CGAbstractMethod):
-    """
-    Class that generates the FooBinding::Wrap function for non-callback
-    interfaces.
-    """
-    def __init__(self, descriptor):
-        assert not descriptor.interface.isCallback()
-        if not descriptor.isGlobal():
-            args = [Argument('*mut JSContext', 'cx'), Argument('GlobalRef', 'scope'),
-                    Argument("Box<%s>" % descriptor.concreteType, 'object')]
-        else:
-            args = [Argument('*mut JSContext', 'cx'),
-                    Argument("Box<%s>" % descriptor.concreteType, 'object')]
-        retval = 'Root<%s>' % descriptor.concreteType
-        CGAbstractMethod.__init__(self, descriptor, 'Wrap', retval, args,
-                                  pub=True, unsafe=True)
-
-    def definition_body(self):
-        if not self.descriptor.isGlobal():
-            return CGGeneric("""\
-let _ar = JSAutoRequest::new(cx);
-let scope = scope.reflector().get_jsobject();
-assert!(!scope.get().is_null());
-assert!(((*JS_GetClass(scope.get())).flags & JSCLASS_IS_GLOBAL) != 0);
-
-let mut proto = RootedObject::new(cx, ptr::null_mut());
-{
-    let _ac = JSAutoCompartment::new(cx, scope.get());
-    GetProtoObject(cx, scope, scope, proto.handle_mut())
-}
-assert!(!proto.ptr.is_null());
-
-%s
-
-(*raw).init_reflector(obj.ptr);
-
-Root::from_ref(&*raw)""" % CreateBindingJSObject(self.descriptor, "scope"))
-        else:
-            return CGGeneric("""\
-let _ar = JSAutoRequest::new(cx);
-%s
-
-let _ac = JSAutoCompartment::new(cx, obj.ptr);
-let mut proto = RootedObject::new(cx, ptr::null_mut());
-GetProtoObject(cx, obj.handle(), obj.handle(), proto.handle_mut());
-JS_SetPrototype(cx, obj.handle(), proto.handle());
-
-(*raw).init_reflector(obj.ptr);
-
-let ret = Root::from_ref(&*raw);
-
-RegisterBindings::Register(cx, obj.handle());
-
-ret""" % CreateBindingJSObject(self.descriptor))
-
-
-class CGIDLInterface(CGThing):
-    """
-    Class for codegen of an implementation of the IDLInterface trait.
-    """
-    def __init__(self, descriptor):
-        CGThing.__init__(self)
-        self.descriptor = descriptor
-
-    def define(self):
-        interface = self.descriptor.interface
-        name = self.descriptor.name
-        if (interface.getUserData("hasConcreteDescendant", False) or
-                interface.getUserData("hasProxyDescendant", False)):
-            depth = len(self.descriptor.prototypeChain)
-            check = "class.interface_chain[%s] == PrototypeList::ID::%s" % (depth - 1, name)
-        elif self.descriptor.proxy:
-            check = "class as *const _ == &Class as *const _"
-        else:
-            check = "class as *const _ == &Class.dom_class as *const _"
-        return """\
-impl IDLInterface for %(name)s {
-    #[inline]
-    fn derives(class: &'static DOMClass) -> bool {
-        %(check)s
-    }
-}
-""" % {'check': check, 'name': name}
-
-
 class CGAbstractExternMethod(CGAbstractMethod):
     """
     Abstract base class for codegen of implementation-only (no
@@ -2361,10 +2278,7 @@ class CGCreateInterfaceObjectsMethod(CGAbstractMethod):
             protoClass = "Some(&PrototypeClass)"
 
         if self.descriptor.concrete:
-            if self.descriptor.proxy:
-                domClass = "Some(&Class)"
-            else:
-                domClass = "Some(&Class.dom_class)"
+            domClass = "Some(&Class.dom_class)"
         else:
             domClass = "None"
 
@@ -2529,15 +2443,15 @@ let traps = ProxyTraps {
     fun_toString: None,
     boxedValue_unbox: None,
     defaultValue: None,
-    trace: Some(%s),
-    finalize: Some(%s),
+    trace: None,
+    finalize: None,
     objectMoved: None,
     isCallable: None,
     isConstructor: None,
 };
 
-CreateProxyHandler(&traps, &Class as *const _ as *const _)\
-""" % (customDefineProperty, customDelete, TRACE_HOOK_NAME, FINALIZE_HOOK_NAME)
+CreateProxyHandler(&traps, &Class.dom_class as *const _ as *const _)\
+""" % (customDefineProperty, customDelete)
         return CGGeneric(body)
 
 
@@ -2633,7 +2547,7 @@ class CGCallGenerator(CGThing):
             if static:
                 glob = ""
             else:
-                glob = "        let global = global_object_for_js_object(this.reflector().get_jsobject().get());\n"
+                glob = "        let global = global_object_for_dom_object(%s);\n" % object
 
             self.cgRoot.append(CGGeneric(
                 "let result = match result {\n"
@@ -2856,7 +2770,7 @@ class CGSpecializedMethod(CGAbstractExternMethod):
     def __init__(self, descriptor, method):
         self.method = method
         name = method.identifier.name
-        args = [Argument('*mut JSContext', 'cx'), Argument('HandleObject', '_obj'),
+        args = [Argument('*mut JSContext', 'cx'), Argument('HandleObject', 'obj'),
                 Argument('*const %s' % descriptor.concreteType, 'this'),
                 Argument('*const JSJitMethodCallArgs', 'args')]
         CGAbstractExternMethod.__init__(self, descriptor, name, 'bool', args)
@@ -2905,7 +2819,7 @@ class CGSpecializedGetter(CGAbstractExternMethod):
         self.attr = attr
         name = 'get_' + descriptor.internalNameFor(attr.identifier.name)
         args = [Argument('*mut JSContext', 'cx'),
-                Argument('HandleObject', '_obj'),
+                Argument('HandleObject', 'obj'),
                 Argument('*const %s' % descriptor.concreteType, 'this'),
                 Argument('JSJitGetterCallArgs', 'args')]
         CGAbstractExternMethod.__init__(self, descriptor, name, "bool", args)
@@ -3318,7 +3232,7 @@ class CGEnum(CGThing):
 
         decl = """\
 #[repr(usize)]
-#[derive(JSTraceable, PartialEq, Copy, Clone, HeapSizeOf)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive, HeapSizeOf)]
 pub enum %s {
     %s
 }
@@ -4029,7 +3943,7 @@ class CGProxyNamedOperation(CGProxySpecialOperation):
         argName = self.arguments[0].identifier.name
         return ("let %s = jsid_to_str(cx, id);\n"
                 "let this = UnwrapProxy(proxy);\n"
-                "let this = &*this;\n" % argName +
+                "let this = this.r();\n" % argName +
                 CGProxySpecialOperation.define(self))
 
 
@@ -4072,7 +3986,7 @@ class CGProxyUnwrap(CGAbstractMethod):
     def __init__(self, descriptor):
         args = [Argument('HandleObject', 'obj')]
         CGAbstractMethod.__init__(self, descriptor, "UnwrapProxy",
-                                  '*const ' + descriptor.concreteType, args,
+                                  'Root<%s>' % descriptor.concreteType, args,
                                   alwaysInline=True, unsafe=True)
 
     def definition_body(self):
@@ -4081,8 +3995,8 @@ class CGProxyUnwrap(CGAbstractMethod):
     obj = js::UnwrapObject(obj);
 }*/
 //MOZ_ASSERT(IsProxy(obj));
-let box_ = GetProxyPrivate(*obj.ptr).to_private() as *const %s;
-return box_;""" % self.descriptor.concreteType)
+Root::new(NonZero::new(GetProxyExtra(*obj.ptr, 0).to_object()))
+""")
 
 
 class CGDOMJSProxyHandler_getOwnPropertyDescriptor(CGAbstractExternMethod):
@@ -4178,7 +4092,6 @@ class CGDOMJSProxyHandler_defineProperty(CGAbstractExternMethod):
             set += ("let index = get_array_index_from_id(cx, id);\n" +
                     "if let Some(index) = index {\n" +
                     "    let this = UnwrapProxy(proxy);\n" +
-                    "    let this = &*this;\n" +
                     CGIndenter(CGProxyIndexedSetter(self.descriptor)).define() +
                     "    return true;\n" +
                     "}\n")
@@ -4254,7 +4167,7 @@ class CGDOMJSProxyHandler_ownPropertyKeys(CGAbstractExternMethod):
         if self.descriptor.operations['IndexedGetter']:
             body += dedent(
                 """
-                for i in 0..(*unwrapped_proxy).Length() {
+                for i in 0..unwrapped_proxy.Length() {
                     let rooted_jsid = RootedId::new(cx, int_to_jsid(i as i32));
                     AppendToAutoIdVector(props, rooted_jsid.handle().get());
                 }
@@ -4263,7 +4176,7 @@ class CGDOMJSProxyHandler_ownPropertyKeys(CGAbstractExternMethod):
         if self.descriptor.operations['NamedGetter']:
             body += dedent(
                 """
-                for name in (*unwrapped_proxy).SupportedPropertyNames() {
+                for name in unwrapped_proxy.SupportedPropertyNames() {
                     let cstring = CString::new(name).unwrap();
                     let jsstring = JS_InternString(cx, cstring.as_ptr());
                     let rooted = RootedString::new(cx, jsstring);
@@ -4303,7 +4216,6 @@ class CGDOMJSProxyHandler_hasOwn(CGAbstractExternMethod):
             indexed = ("let index = get_array_index_from_id(cx, id);\n" +
                        "if let Some(index) = index {\n" +
                        "    let this = UnwrapProxy(proxy);\n" +
-                       "    let this = &*this;\n" +
                        CGIndenter(CGProxyIndexedGetter(self.descriptor)).define() + "\n" +
                        "    *bp = found;\n" +
                        "    return true;\n" +
@@ -4372,7 +4284,6 @@ if !expando.ptr.is_null() {
             getIndexedOrExpando = ("let index = get_array_index_from_id(cx, id);\n" +
                                    "if let Some(index) = index {\n" +
                                    "    let this = UnwrapProxy(proxy);\n" +
-                                   "    let this = &*this;\n" +
                                    CGIndenter(CGProxyIndexedGetter(self.descriptor, templateValues)).define())
             getIndexedOrExpando += """\
     // Even if we don't have this index, we don't forward the
@@ -4450,37 +4361,6 @@ let this: *const %s = native_from_reflector::<%s>(obj);
         raise NotImplementedError  # Override me!
 
 
-def finalizeHook(descriptor, hookName, context):
-    release = ""
-    if descriptor.isGlobal():
-        release += """\
-finalize_global(obj);
-"""
-    release += """\
-let _ = Box::from_raw(this as *mut %s);
-debug!("%s finalize: {:p}", this);\
-""" % (descriptor.concreteType, descriptor.concreteType)
-    return release
-
-
-class CGClassTraceHook(CGAbstractClassHook):
-    """
-    A hook to trace through our native object; used for GC and CC
-    """
-    def __init__(self, descriptor):
-        args = [Argument('*mut JSTracer', 'trc'), Argument('*mut JSObject', 'obj')]
-        CGAbstractClassHook.__init__(self, descriptor, TRACE_HOOK_NAME, 'void',
-                                     args)
-        self.traceGlobal = descriptor.isGlobal()
-
-    def generate_code(self):
-        body = [CGGeneric("if this.is_null() { return; } // GC during obj creation\n"
-                          "(*this).trace(%s);" % self.args[0].name)]
-        if self.traceGlobal:
-            body += [CGGeneric("trace_global(trc, obj);")]
-        return CGList(body, "\n")
-
-
 class CGClassConstructHook(CGAbstractExternMethod):
     """
     JS-visible constructor for our objects
@@ -4530,19 +4410,6 @@ let args = CallArgs::from_vp(vp, argc);
         callGenerator = CGMethodCall(["global.r()"], nativeName, True,
                                      self.descriptor, self._ctor)
         return CGList([preamble, callGenerator])
-
-
-class CGClassFinalizeHook(CGAbstractClassHook):
-    """
-    A hook for finalize, used to release our native object.
-    """
-    def __init__(self, descriptor):
-        args = [Argument('*mut FreeOp', '_fop'), Argument('*mut JSObject', 'obj')]
-        CGAbstractClassHook.__init__(self, descriptor, FINALIZE_HOOK_NAME,
-                                     'void', args)
-
-    def generate_code(self):
-        return CGGeneric(finalizeHook(self.descriptor, self.name, self.args[0].name))
 
 
 class CGDOMJSProxyHandlerDOMClass(CGThing):
@@ -4680,10 +4547,6 @@ class CGDescriptor(CGThing):
                 if (not m.isStatic() and not descriptor.interface.isCallback()):
                     cgThings.append(CGMemberJITInfo(descriptor, m))
 
-        if descriptor.concrete:
-            cgThings.append(CGClassFinalizeHook(descriptor))
-            cgThings.append(CGClassTraceHook(descriptor))
-
         if descriptor.interface.hasInterfaceObject():
             cgThings.append(CGClassConstructHook(descriptor))
             for ctor in descriptor.interface.namedConstructors:
@@ -4713,7 +4576,8 @@ class CGDescriptor(CGThing):
             if descriptor.proxy:
                 # cgThings.append(CGProxyIsProxy(descriptor))
                 cgThings.append(CGProxyUnwrap(descriptor))
-                cgThings.append(CGDOMJSProxyHandlerDOMClass(descriptor))
+                #cgThings.append(CGDOMJSProxyHandlerDOMClass(descriptor))
+                cgThings.append(CGDOMJSClass(descriptor))
                 cgThings.append(CGDOMJSProxyHandler_ownPropertyKeys(descriptor))
                 cgThings.append(CGDOMJSProxyHandler_getOwnPropertyDescriptor(descriptor))
                 cgThings.append(CGDOMJSProxyHandler_className(descriptor))
@@ -4736,10 +4600,9 @@ class CGDescriptor(CGThing):
                 cgThings.append(CGDOMJSClass(descriptor))
                 pass
 
-            cgThings.append(CGWrapMethod(descriptor))
+            cgThings.append(CGMagicClassTrait(descriptor))
 
         if not descriptor.interface.isCallback():
-            cgThings.append(CGIDLInterface(descriptor))
             cgThings.append(CGInterfaceTrait(descriptor))
 
         cgThings = CGList(cgThings, "\n")
@@ -5096,7 +4959,7 @@ class CGBindingRoot(CGThing):
             'js::jsval::{ObjectValue, ObjectOrNullValue, PrivateValue}',
             'js::jsval::{NullValue, UndefinedValue}',
             'js::glue::{CallJitMethodOp, CallJitGetterOp, CallJitSetterOp, CreateProxyHandler}',
-            'js::glue::{GetProxyPrivate, NewProxyObject, ProxyTraps}',
+            'js::glue::{GetProxyExtra, NewProxyObject, ProxyTraps}',
             'js::glue::{RUST_FUNCTION_VALUE_TO_JITINFO}',
             'js::glue::{RUST_JS_NumberValue, RUST_JSID_IS_STRING, int_to_jsid}',
             'js::glue::AppendToAutoIdVector',
@@ -5104,6 +4967,7 @@ class CGBindingRoot(CGThing):
             'dom::bindings',
             'dom::bindings::global::GlobalRef',
             'dom::bindings::global::global_object_for_js_object',
+            'dom::bindings::global::global_object_for_dom_object',
             'dom::bindings::js::{JS, Root, RootedReference}',
             'dom::bindings::js::{OptionalRootedReference}',
             'dom::bindings::utils::{create_dom_global, do_create_interface_objects}',
@@ -5115,7 +4979,6 @@ class CGBindingRoot(CGThing):
             'dom::bindings::utils::{finalize_global, trace_global}',
             'dom::bindings::utils::has_property_on_prototype',
             'dom::bindings::utils::is_platform_object',
-            'dom::bindings::utils::{Reflectable}',
             'dom::bindings::utils::throwing_constructor',
             'dom::bindings::utils::get_dictionary_property',
             'dom::bindings::utils::set_dictionary_property',
@@ -5132,7 +4995,6 @@ class CGBindingRoot(CGThing):
             'dom::bindings::conversions::{FromJSValConvertible, ToJSValConvertible, ConversionBehavior}',
             'dom::bindings::conversions::{native_from_reflector, native_from_handlevalue, native_from_handleobject}',
             'dom::bindings::conversions::DOM_OBJECT_SLOT',
-            'dom::bindings::conversions::IDLInterface',
             'dom::bindings::conversions::jsid_to_str',
             'dom::bindings::conversions::StringificationBehavior',
             'dom::bindings::codegen::{PrototypeList, RegisterBindings, UnionTypes}',
@@ -5144,12 +5006,14 @@ class CGBindingRoot(CGThing):
             'dom::bindings::proxyhandler',
             'dom::bindings::proxyhandler::{fill_property_descriptor, get_expando_object}',
             'dom::bindings::proxyhandler::{get_property_descriptor}',
+            'dom::bindings::magic::{MagicDOMClass, SlotCount}',
             'dom::bindings::num::Finite',
             'dom::bindings::str::ByteString',
             'dom::bindings::str::USVString',
             'mem::heap_size_of_raw_self_and_children',
             'libc',
             'util::str::DOMString',
+            'core::nonzero::NonZero',
             'std::borrow::ToOwned',
             'std::cmp',
             'std::mem',
@@ -5330,7 +5194,7 @@ class CGCallback(CGClass):
             })
         return [ClassMethod(method.name + '_', method.returnType, args,
                             bodyInHeader=True,
-                            templateArgs=["T: Reflectable"],
+                            templateArgs=["T: MagicDOMClass"],
                             body=bodyWithThis,
                             visibility='pub'),
                 ClassMethod(method.name + '__', method.returnType, argsWithoutThis,
@@ -5827,7 +5691,7 @@ class GlobalGenRoots():
                    CGGeneric("use dom::bindings::conversions::{Castable, DerivedFrom, get_dom_class};\n"),
                    CGGeneric("use dom::bindings::js::{JS, LayoutJS, Root};\n"),
                    CGGeneric("use dom::bindings::trace::JSTraceable;\n"),
-                   CGGeneric("use dom::bindings::utils::Reflectable;\n"),
+                   CGGeneric("use dom::bindings::magic::MagicDOMClass;\n"),
                    CGGeneric("use js::jsapi::JSTracer;\n\n"),
                    CGGeneric("use std::mem;\n\n")]
         allprotos = []
@@ -5894,7 +5758,7 @@ class GlobalGenRoots():
 impl %(base)s {
     pub fn type_id(&self) -> &'static %(base)sTypeId {
         let domclass = unsafe {
-            get_dom_class(self.reflector().get_jsobject().get()).unwrap()
+            get_dom_class(self.get_jsobj().get()).unwrap()
         };
         match domclass.type_id {
             TopTypeId::%(base)s(ref type_id) => type_id,

@@ -60,9 +60,10 @@ bitflags! {
 
 pub struct LayoutDataWrapper {
     pub shared_data: SharedLayoutData,
-    pub data: Box<PrivateLayoutData>,
+    pub data: PrivateLayoutData,
 }
 
+/*
 #[allow(dead_code, unsafe_code)]
 fn static_assertion(x: Option<LayoutDataWrapper>) {
     unsafe {
@@ -70,3 +71,4 @@ fn static_assertion(x: Option<LayoutDataWrapper>) {
             ::std::intrinsics::transmute(x);
     }
 }
+*/
