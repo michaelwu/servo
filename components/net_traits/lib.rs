@@ -12,6 +12,7 @@
 #![feature(custom_attribute)]
 #![plugin(serde_macros, plugins)]
 #![plugin(regex_macros)]
+#![plugin(num_macros)]
 
 #[macro_use]
 extern crate log;
@@ -25,6 +26,7 @@ extern crate serde;
 extern crate stb_image;
 extern crate url;
 extern crate util;
+extern crate num;
 
 use hyper::header::{ContentType, Headers};
 use hyper::http::RawStatus;

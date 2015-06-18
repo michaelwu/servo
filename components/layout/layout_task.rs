@@ -64,7 +64,7 @@ use selectors::parser::PseudoElement;
 use sequential;
 use serde_json;
 use std::borrow::ToOwned;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::collections::hash_state::DefaultState;
 use std::mem::transmute;
@@ -641,7 +641,7 @@ impl LayoutTask {
             }
             Msg::ReapLayoutData(dead_layout_data) => {
                 unsafe {
-                    self.handle_reap_layout_data(dead_layout_data)
+                    self.handle_reap_layout_data(*dead_layout_data)
                 }
             }
             Msg::CollectReports(reports_chan) => {
@@ -740,7 +740,7 @@ impl LayoutTask {
             match self.port.recv().unwrap() {
                 Msg::ReapLayoutData(dead_layout_data) => {
                     unsafe {
-                        self.handle_reap_layout_data(dead_layout_data)
+                        self.handle_reap_layout_data(*dead_layout_data)
                     }
                 }
                 Msg::ExitNow(exit_type) => {
@@ -1509,8 +1509,8 @@ impl LayoutTask {
 
     /// Handles a message to destroy layout data. Layout data must be destroyed on *this* task
     /// because the struct type is transmuted to a different type on the script side.
-    unsafe fn handle_reap_layout_data(&self, layout_data: LayoutData) {
-        let _: LayoutDataWrapper = transmute(layout_data);
+    unsafe fn handle_reap_layout_data(&self, layout_data: *mut RefCell<LayoutData>) {
+        let _ = Box::from_raw(layout_data as *mut RefCell<LayoutDataWrapper>);
     }
 
     /// Returns profiling information which is passed to the time profiler.

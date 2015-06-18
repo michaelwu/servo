@@ -23,6 +23,8 @@ use script_traits::{ConstellationControlMsg, LayoutControlMsg};
 use script_traits::{OpaqueScriptLayoutChannel, StylesheetLoadResponder, UntrustedNodeAddress};
 use selectors::parser::PseudoElement;
 use std::any::Any;
+use std::cell::RefCell;
+use std::ptr::Unique;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use string_cache::Atom;
 use style::animation::PropertyAnimation;
@@ -65,7 +67,7 @@ pub enum Msg {
     /// Destroys layout data associated with a DOM node.
     ///
     /// TODO(pcwalton): Maybe think about batching to avoid message traffic.
-    ReapLayoutData(LayoutData),
+    ReapLayoutData(Unique<RefCell<LayoutData>>),
 
     /// Requests that the layout task measure its memory usage. The resulting reports are sent back
     /// via the supplied channel.

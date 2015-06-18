@@ -185,9 +185,9 @@ trait ParallelPostorderDomTraversal : PostorderDomTraversal {
             };
 
             let parent_layout_data = unsafe {
-                &*parent.borrow_layout_data_unchecked()
+                &*parent.borrow_layout_data_unchecked().expect("no layout data")
             };
-            let parent_layout_data = parent_layout_data.as_ref().expect("no layout data");
+            let parent_layout_data = parent_layout_data;
             unsafe_node = layout_node_to_unsafe_layout_node(&parent);
 
             if parent_layout_data

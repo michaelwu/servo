@@ -6,7 +6,7 @@ use dom::bindings::callback::ExceptionHandling::Report;
 use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::FunctionBinding::Function;
 use dom::bindings::global::global_object_for_js_object;
-use dom::bindings::utils::Reflectable;
+use dom::bindings::magic::MagicDOMClass;
 use dom::window::ScriptHelpers;
 use horribly_inefficient_timers;
 use js::jsapi::{HandleValue, Heap, RootedValue};
@@ -233,7 +233,7 @@ impl TimerManager {
     }
 
     #[allow(unsafe_code)]
-    pub fn fire_timer<T: Reflectable>(&self, timer_id: TimerId, this: &T) {
+    pub fn fire_timer<T: MagicDOMClass>(&self, timer_id: TimerId, this: &T) {
 
         let (is_interval, callback, args): (IsInterval, TimerCallback, Vec<JSVal>) =
             match self.active_timers.borrow().get(&timer_id) {
@@ -252,8 +252,8 @@ impl TimerManager {
                 let _ = function.Call_(this, arg_handles, Report);
             }
             TimerCallback::StringTimerCallback(code_str) => {
-                let proxy = this.reflector().get_jsobject();
-                let cx = global_object_for_js_object(proxy.get()).r().get_cx();
+                let proxy = this.get_jsobj();
+                let cx = global_object_for_js_object(proxy).r().get_cx();
                 let mut rval = RootedValue::new(cx, UndefinedValue());
                 this.evaluate_js_on_global_with_result(&code_str, rval.handle_mut());
             }

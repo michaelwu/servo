@@ -9,6 +9,7 @@
 #![feature(nonzero)]
 #![feature(plugin)]
 #![plugin(serde_macros, plugins)]
+#![plugin(num_macros)]
 
 extern crate azure;
 extern crate core;
@@ -17,6 +18,7 @@ extern crate euclid;
 extern crate gfx_traits;
 extern crate ipc_channel;
 extern crate layers;
+extern crate num;
 extern crate offscreen_gl_context;
 extern crate serde;
 extern crate util;
@@ -178,7 +180,7 @@ pub enum CanvasWebGLMsg {
     DrawingBufferHeight(IpcSender<i32>),
 }
 
-#[derive(Clone, Copy, PartialEq, Deserialize, Serialize, HeapSizeOf)]
+#[derive(Clone, Copy, PartialEq, NumFromPrimitive, Deserialize, Serialize, HeapSizeOf)]
 pub enum WebGLError {
     InvalidEnum,
     InvalidOperation,
