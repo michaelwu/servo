@@ -12,7 +12,7 @@ use dom::bindings::js::{MutHeapJSVal, Root};
 use dom::bindings::utils::{TopDOMClass, reflect_dom_object};
 use dom::event::Event;
 use js::jsapi::{HandleValue, JSContext};
-use js::jsval::JSVal;
+use js::jsval::{JSVal, UndefinedValue};
 use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#interface-customevent
