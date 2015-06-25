@@ -21,12 +21,23 @@ use util::str::DOMString;
 #[dom_struct]
 pub struct MessageEvent {
     event: Event,
-    data: Heap<JSVal>,
+    data: JSVal,
     origin: DOMString,
     lastEventId: DOMString,
 }
 
 impl MessageEvent {
+    pub fn new_inherited(data: HandleValue,
+                         origin: DOMString,
+                         lastEventId: DOMString) {
+        MessageEvent {
+            event: Event::new_inherited(),
+            data: data.get(),
+            origin: origin,
+            lastEventId: lastEventId,
+        }
+    }
+
     pub fn new_uninitialized(global: GlobalRef) -> Root<MessageEvent> {
         MessageEvent::new_initialized(global, HandleValue::undefined(), "".to_owned(), "".to_owned())
     }
@@ -35,14 +46,7 @@ impl MessageEvent {
                            data: HandleValue,
                            origin: DOMString,
                            lastEventId: DOMString) -> Root<MessageEvent> {
-        let mut ev = box MessageEvent {
-            event: Event::new_inherited(),
-            data: Heap::default(),
-            origin: origin,
-            lastEventId: lastEventId,
-        };
-        ev.data.set(data.get());
-        reflect_dom_object(ev, global, MessageEventBinding::Wrap)
+        reflect_dom_object(box MessageEvent::new_inherited(data, origin, lastEventId), global, MessageEventBinding::Wrap)
     }
 
     pub fn new(global: GlobalRef, type_: DOMString,
