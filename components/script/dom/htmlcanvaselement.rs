@@ -12,7 +12,7 @@ use dom::bindings::codegen::InheritTypes::{HTMLCanvasElementDerived, HTMLElement
 use dom::bindings::codegen::InheritTypes::{HTMLElementTypeId, NodeTypeId};
 use dom::bindings::codegen::UnionTypes::CanvasRenderingContext2DOrWebGLRenderingContext;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{HeapGCValue, JS, LayoutJS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, LayoutJS, MutNullableHeap, Root};
 use dom::bindings::utils::{Reflectable, TopDOMClass};
 use dom::canvasrenderingcontext2d::{CanvasRenderingContext2D, LayoutCanvasRenderingContext2DHelpers};
 use dom::document::Document;
@@ -40,8 +40,6 @@ pub enum CanvasContext {
     Context2d(JS<CanvasRenderingContext2D>),
     WebGL(JS<WebGLRenderingContext>),
 }
-
-impl HeapGCValue for CanvasContext {}
 
 #[dom_struct]
 pub struct HTMLCanvasElement {
