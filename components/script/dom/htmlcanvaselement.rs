@@ -11,7 +11,7 @@ use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLContext
 use dom::bindings::codegen::UnionTypes::CanvasRenderingContext2DOrWebGLRenderingContext;
 use dom::bindings::conversions::Castable;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{HeapGCValue, JS, LayoutJS, Root};
+use dom::bindings::js::{JS, LayoutJS, Root};
 use dom::bindings::utils::{Reflectable};
 use dom::canvasrenderingcontext2d::{CanvasRenderingContext2D, LayoutCanvasRenderingContext2DHelpers};
 use dom::document::Document;
@@ -37,8 +37,6 @@ pub enum CanvasContext {
     Context2d(JS<CanvasRenderingContext2D>),
     WebGL(JS<WebGLRenderingContext>),
 }
-
-impl HeapGCValue for CanvasContext {}
 
 #[dom_struct]
 pub struct HTMLCanvasElement {
