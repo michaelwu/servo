@@ -993,12 +993,8 @@ impl Document {
             DocumentReadyState::Complete
         };
 
-        Document {
-            node: Node::new_document_node(),
-            window: JS::from_ref(window),
-            implementation: Default::default(),
-            location: Default::default(),
-            content_type: match content_type {
+        let content_type =
+            match content_type {
                 Some(string) => string,
                 None => match is_html_document {
                     // https://dom.spec.whatwg.org/#dom-domimplementation-createhtmldocument
@@ -1006,7 +1002,14 @@ impl Document {
                     // https://dom.spec.whatwg.org/#concept-document-content-type
                     IsHTMLDocument::NonHTMLDocument => "application/xml".to_owned()
                 }
-            },
+            };
+
+        Document {
+            node: Node::new_document_node(),
+            window: JS::from_ref(window),
+            implementation: Default::default(),
+            location: Default::default(),
+            content_type: content_type,
             last_modified: last_modified,
             // https://dom.spec.whatwg.org/#concept-document-encoding
             encoding_name: DOMRefCell::new("UTF-8".to_owned()),
