@@ -14,7 +14,7 @@ use dom::bindings::trace::JSTraceable;
 use dom::bindings::utils::reflect_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use js::jsapi::{RootedValue, HandleValue, JSContext};
-use js::jsval::JSVal;
+use js::jsval::{JSVal, UndefinedValue};
 use std::borrow::ToOwned;
 use std::cell::Cell;
 use util::str::DOMString;
