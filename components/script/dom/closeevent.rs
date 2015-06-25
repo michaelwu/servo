@@ -40,8 +40,7 @@ impl CloseEvent {
                wasClean: bool,
                code: u16,
                reason: DOMString) -> Root<CloseEvent> {
-        let event = box CloseEvent::new_inherited(wasClean, code, reason);
-        let ev = reflect_dom_object(event, global, CloseEventBinding::Wrap);
+        let ev = reflect_dom_object(box CloseEvent::new_inherited(wasClean, code, reason), global, CloseEventBinding::Wrap);
         {
             let event = EventCast::from_ref(ev.r());
             event.InitEvent(type_,
