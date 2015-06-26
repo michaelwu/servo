@@ -145,10 +145,8 @@ impl Element {
                namespace: Namespace,
                prefix: Option<DOMString>,
                document: &Document) -> Root<Element> {
-        Node::reflect_node(
-            box Element::new_inherited(ElementTypeId::Element, local_name, namespace, prefix, document),
-            document,
-            ElementBinding::Wrap)
+        let element = Element::new_inherited(ElementTypeId::Element, local_name, namespace, prefix, document);
+        Node::reflect_node(box element, document, ElementBinding::Wrap)
     }
 }
 
