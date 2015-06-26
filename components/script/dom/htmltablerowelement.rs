@@ -50,9 +50,8 @@ impl HTMLTableRowElement {
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableRowElement> {
-        Node::reflect_node(box HTMLTableRowElement::new_inherited(localName, prefix, document),
-                           document,
-                           HTMLTableRowElementBinding::Wrap)
+        let element = HTMLTableRowElement::new_inherited(localName, prefix, document);
+        Node::reflect_node(box element, document, HTMLTableRowElementBinding::Wrap)
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {
