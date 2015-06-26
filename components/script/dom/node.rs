@@ -1239,15 +1239,10 @@ pub enum CloneChildrenFlag {
 fn as_uintptr<T>(t: &T) -> uintptr_t { t as *const T as uintptr_t }
 
 impl Node {
-    pub fn reflect_node<N: DerivedFrom<Node> + Reflectable>
-            (node:      Box<N>,
-             document:  &Document,
-             wrap_fn:   extern "Rust" fn(*mut JSContext, GlobalRef, Box<N>) -> Root<N>)
-             -> Root<N> {
+    pub fn alloc_node<N: MagicDOMClass + DerivedFrom<Node>>(document: &Document) -> InitRoot<N> {
         let window = document.window();
-        reflect_dom_object(node, GlobalRef::Window(window.r()), wrap_fn)
+        alloc_dom_object::<N>(GlobalRef::Window(window.r()))
     }
-
     pub fn new_inherited(doc: &Document) -> Node {
         Node::new_(NodeFlags::new(), Some(doc))
     }
