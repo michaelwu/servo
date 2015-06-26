@@ -27,10 +27,7 @@ impl HTMLTableDataCellElement {
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableDataCellElement> {
-        Node::reflect_node(box HTMLTableDataCellElement::new_inherited(localName,
-                                                                       prefix,
-                                                                       document),
-                           document,
-                           HTMLTableDataCellElementBinding::Wrap)
+        let element = HTMLTableDataCellElement::new_inherited(localName, prefix, document);
+        Node::reflect_node(box element, document, HTMLTableDataCellElementBinding::Wrap)
     }
 }

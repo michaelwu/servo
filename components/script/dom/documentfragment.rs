@@ -33,8 +33,8 @@ impl DocumentFragment {
     }
 
     pub fn new(document: &Document) -> Root<DocumentFragment> {
-        Node::reflect_node(box DocumentFragment::new_inherited(document),
-                           document, DocumentFragmentBinding::Wrap)
+        let element = DocumentFragment::new_inherited(document);
+        Node::reflect_node(box element, document, DocumentFragmentBinding::Wrap)
     }
 
     pub fn Constructor(global: GlobalRef) -> Fallible<Root<DocumentFragment>> {
