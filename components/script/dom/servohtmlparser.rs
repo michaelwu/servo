@@ -204,6 +204,24 @@ impl<'a> Parser for &'a ServoHTMLParser {
 
 impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
+    pub fn new_inherited(tok: Tokenizer,
+                         document: &Document,
+                         last_chunk_received: bool,
+                         pipeline: Option<PipelineId>) -> ServoHTMLParser {
+        ServoHTMLParser {
+            reflector_: Reflector::new(),
+            document: JS::from_ref(document),
+            suspended: Cell::new(false),
+            last_chunk_received: Cell::new(last_chunk_received),
+            pipeline: pipeline,
+            extra: box ServoHTMLParserExtra {
+                tokenizer: DOMRefCell::new(tok),
+                pending_input: DOMRefCell::new(vec!()),
+            },
+        }
+    }
+
+    #[allow(unrooted_must_root)]
     pub fn new(base_url: Option<Url>, document: &Document, pipeline: Option<PipelineId>)
                -> Root<ServoHTMLParser> {
         let window = document.window();
@@ -219,19 +237,8 @@ impl ServoHTMLParser {
 
         let tok = tokenizer::Tokenizer::new(tb, Default::default());
 
-        let parser = ServoHTMLParser {
-            reflector_: Reflector::new(),
-            document: JS::from_ref(document),
-            suspended: Cell::new(false),
-            last_chunk_received: Cell::new(false),
-            pipeline: pipeline,
-            extra: box ServoHTMLParserExtra {
-                tokenizer: DOMRefCell::new(tok),
-                pending_input: DOMRefCell::new(vec!()),
-            },
-        };
-
-        reflect_dom_object(box parser, GlobalRef::Window(window.r()),
+        reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, false, pipeline),
+                           GlobalRef::Window(window.r()),
                            ServoHTMLParserBinding::Wrap)
     }
 
@@ -259,19 +266,8 @@ impl ServoHTMLParser {
         };
         let tok = tokenizer::Tokenizer::new(tb, tok_opts);
 
-        let parser = ServoHTMLParser {
-            reflector_: Reflector::new(),
-            document: JS::from_ref(document),
-            suspended: Cell::new(false),
-            last_chunk_received: Cell::new(true),
-            pipeline: None,
-            extra: box ServoHTMLParserExtra {
-                tokenizer: DOMRefCell::new(tok),
-                pending_input: DOMRefCell::new(vec!()),
-            },
-        };
-
-        reflect_dom_object(box parser, GlobalRef::Window(window.r()),
+        reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, true, None),
+                           GlobalRef::Window(window.r()),
                            ServoHTMLParserBinding::Wrap)
     }
 
