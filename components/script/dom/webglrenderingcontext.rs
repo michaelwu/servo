@@ -62,9 +62,21 @@ pub struct WebGLRenderingContext {
 impl WebGLRenderingContext {
     fn new_inherited(global: GlobalRef,
                      canvas: &HTMLCanvasElement,
-                     size: Size2D<i32>,
-                     attrs: GLContextAttributes)
-                     -> Result<WebGLRenderingContext, String> {
+                     renderer_id: usize,
+                     ipc_renderer: IpcSender<CanvasMsg>)
+                     -> WebGLRenderingContext {
+        WebGLRenderingContext {
+            reflector_: Reflector::new(),
+            global: GlobalField::from_rooted(&global),
+            renderer_id: renderer_id,
+            ipc_renderer: ipc_renderer,
+            last_error: Cell::new(None),
+            canvas: JS::from_ref(canvas),
+        }
+    }
+
+    pub fn new(global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>, attrs: GLContextAttributes)
+               -> Option<Root<WebGLRenderingContext>> {
         let (sender, receiver) = ipc::channel().unwrap();
         let constellation_chan = global.constellation_chan();
         constellation_chan.0
@@ -72,28 +84,17 @@ impl WebGLRenderingContext {
                           .unwrap();
         let result = receiver.recv().unwrap();
 
-        result.map(|(ipc_renderer, renderer_id)| {
-            WebGLRenderingContext {
-                reflector_: Reflector::new(),
-                global: GlobalField::from_rooted(&global),
-                renderer_id: renderer_id,
-                ipc_renderer: ipc_renderer,
-                last_error: Cell::new(None),
-                canvas: JS::from_ref(canvas),
-            }
-        })
-    }
-
-    pub fn new(global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>, attrs: GLContextAttributes)
-               -> Option<Root<WebGLRenderingContext>> {
-        match WebGLRenderingContext::new_inherited(global, canvas, size, attrs) {
-            Ok(ctx) => Some(reflect_dom_object(box ctx, global,
-                                               WebGLRenderingContextBinding::Wrap)),
+        let (ipc_renderer, renderer_id) = match receiver.recv().unwrap() {
+            Ok((ipc_renderer, renderer_id)) => (ipc_renderer, renderer_id),
             Err(msg) => {
-                error!("Couldn't create WebGLRenderingContext: {}", msg);
-                None
+                error!("Couldn't create WebGLPaintTask: {}", msg);
+                return None;
             }
-        }
+        };
+
+        Some(reflect_dom_object(box WebGLRenderingContext::new_inherited(global, canvas, renderer_id, ipc_renderer),
+                                global,
+                                WebGLRenderingContextBinding::Wrap))
     }
 
     pub fn recreate(&self, size: Size2D<i32>) {
