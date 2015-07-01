@@ -23,8 +23,6 @@ pub fn heap_size_of_eventtarget(target: &EventTarget) -> usize {
     //TODO: add more specific matches for concrete element types as derive(HeapSizeOf) is
     //      added to each one.
     match target.type_id() {
-        &EventTargetTypeId::Window =>
-            heap_size_of_self_and_children(WindowCast::to_ref(target).unwrap()),
         &EventTargetTypeId::Node(NodeTypeId::CharacterData(_)) =>
             heap_size_of_self_and_children(CharacterDataCast::to_ref(target).unwrap()),
         &EventTargetTypeId::Node(NodeTypeId::Document) =>
