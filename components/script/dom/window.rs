@@ -111,13 +111,47 @@ pub type ScrollPoint = Point2D<Au>;
 #[dom_struct]
 pub struct Window {
     eventtarget: EventTarget,
+    console: MutNullableHeap<JS<Console>>,
+    crypto: MutNullableHeap<JS<Crypto>>,
+    navigator: MutNullableHeap<JS<Navigator>>,
+    page: Rc<Page>,
+    performance: MutNullableHeap<JS<Performance>>,
+    screen: MutNullableHeap<JS<Screen>>,
+    session_storage: MutNullableHeap<JS<Storage>>,
+    local_storage: MutNullableHeap<JS<Storage>>,
+
+    next_worker_id: Cell<WorkerId>,
+
+    /// A flag to indicate whether the developer tools have requested live updates of
+    /// page changes.
+    devtools_wants_updates: Cell<bool>,
+
+    next_subpage_id: Cell<SubpageId>,
+
+    /// Pipeline id associated with this page.
+    id: PipelineId,
+
+    /// Subpage id associated with this page, if any.
+    parent_info: Option<(PipelineId, SubpageId)>,
+
+    /// Unique id for last reflow request; used for confirming completion reply.
+    last_reflow_id: Cell<u32>,
+
+    /// The JavaScript runtime.
+    #[ignore_heap_size_of = "Rc<T> is hard"]
+    js_runtime: DOMRefCell<Option<Rc<Runtime>>>,
+
+    /// Extra data
+    extra: Box<WindowExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct WindowExtra {
     #[ignore_heap_size_of = "trait objects are hard"]
     script_chan: MainThreadScriptChan,
     #[ignore_heap_size_of = "channels are hard"]
     control_chan: Sender<ConstellationControlMsg>,
-    console: MutNullableHeap<JS<Console>>,
-    crypto: MutNullableHeap<JS<Crypto>>,
-    navigator: MutNullableHeap<JS<Navigator>>,
     #[ignore_heap_size_of = "channels are hard"]
     image_cache_task: ImageCacheTask,
     #[ignore_heap_size_of = "channels are hard"]
@@ -125,16 +159,9 @@ pub struct Window {
     #[ignore_heap_size_of = "TODO(#6911) newtypes containing unmeasurable types are hard"]
     compositor: IpcSender<ScriptToCompositorMsg>,
     browsing_context: DOMRefCell<Option<BrowsingContext>>,
-    page: Rc<Page>,
-    performance: MutNullableHeap<JS<Performance>>,
     navigation_start: u64,
     navigation_start_precise: f64,
-    screen: MutNullableHeap<JS<Screen>>,
-    session_storage: MutNullableHeap<JS<Storage>>,
-    local_storage: MutNullableHeap<JS<Storage>>,
     timers: TimerManager,
-
-    next_worker_id: Cell<WorkerId>,
 
     /// For sending messages to the memory profiler.
     #[ignore_heap_size_of = "channels are hard"]
@@ -150,30 +177,11 @@ pub struct Window {
     #[ignore_heap_size_of = "channels are hard"]
     devtools_marker_sender: RefCell<Option<IpcSender<TimelineMarker>>>,
 
-    /// A flag to indicate whether the developer tools have requested live updates of
-    /// page changes.
-    devtools_wants_updates: Cell<bool>,
-
-    next_subpage_id: Cell<SubpageId>,
-
     /// Pending resize event, if any.
     resize_event: Cell<Option<WindowSizeData>>,
 
-    /// Pipeline id associated with this page.
-    id: PipelineId,
-
-    /// Subpage id associated with this page, if any.
-    parent_info: Option<(PipelineId, SubpageId)>,
-
-    /// Unique id for last reflow request; used for confirming completion reply.
-    last_reflow_id: Cell<u32>,
-
     /// Global static data related to the DOM.
     dom_static: GlobalStaticData,
-
-    /// The JavaScript runtime.
-    #[ignore_heap_size_of = "Rc<T> is hard"]
-    js_runtime: DOMRefCell<Option<Rc<Runtime>>>,
 
     /// A handle for communicating messages to the layout task.
     #[ignore_heap_size_of = "channels are hard"]
@@ -182,13 +190,6 @@ pub struct Window {
     /// A handle to perform RPC calls into the layout, quickly.
     #[ignore_heap_size_of = "trait objects are hard"]
     layout_rpc: Box<LayoutRPC + 'static>,
-
-    /// The port that we will use to join layout. If this is `None`, then layout is not running.
-    #[ignore_heap_size_of = "channels are hard"]
-    layout_join_port: DOMRefCell<Option<Receiver<()>>>,
-
-    /// The current size of the window, in pixels.
-    window_size: Cell<Option<WindowSizeData>>,
 
     /// Associated resource task for use by DOM objects like XMLHttpRequest
     #[ignore_heap_size_of = "channels are hard"]
@@ -212,14 +213,21 @@ pub struct Window {
     /// A counter of the number of pending reflows for this window.
     pending_reflow_count: Cell<u32>,
 
-    /// A channel for communicating results of async scripts back to the webdriver server
-    #[ignore_heap_size_of = "channels are hard"]
-    webdriver_script_chan: RefCell<Option<IpcSender<WebDriverJSResult>>>,
-
     /// The current state of the window object
     current_state: Cell<WindowState>,
 
-    current_viewport: Cell<Rect<Au>>
+    current_viewport: Cell<Rect<Au>>,
+
+    /// The port that we will use to join layout. If this is `None`, then layout is not running.
+    #[ignore_heap_size_of = "channels are hard"]
+    layout_join_port: DOMRefCell<Option<Receiver<()>>>,
+
+    /// The current size of the window, in pixels.
+    window_size: Cell<Option<WindowSizeData>>,
+
+    /// A channel for communicating results of async scripts back to the webdriver server
+    #[ignore_heap_size_of = "channels are hard"]
+    webdriver_script_chan: RefCell<Option<IpcSender<WebDriverJSResult>>>,
 }
 
 impl Window {
@@ -227,8 +235,8 @@ impl Window {
     pub fn clear_js_runtime_for_script_deallocation(&self) {
         unsafe {
             *self.js_runtime.borrow_for_script_deallocation() = None;
-            *self.browsing_context.borrow_for_script_deallocation() = None;
-            self.current_state.set(WindowState::Zombie);
+            *self.extra.browsing_context.borrow_for_script_deallocation() = None;
+            self.extra.current_state.set(WindowState::Zombie);
         }
     }
 
@@ -237,16 +245,16 @@ impl Window {
     }
 
     pub fn script_chan(&self) -> Box<ScriptChan + Send> {
-        self.script_chan.clone()
+        self.extra.script_chan.clone()
     }
 
     pub fn main_thread_script_chan(&self) -> &Sender<MainThreadScriptMsg> {
-        let MainThreadScriptChan(ref sender) = self.script_chan;
+        let MainThreadScriptChan(ref sender) = self.extra.script_chan;
         sender
     }
 
     pub fn image_cache_chan(&self) -> ImageCacheChan {
-        self.image_cache_chan.clone()
+        self.extra.image_cache_chan.clone()
     }
 
     pub fn get_next_worker_id(&self) -> WorkerId {
@@ -274,15 +282,15 @@ impl Window {
     }
 
     pub fn image_cache_task(&self) -> &ImageCacheTask {
-        &self.image_cache_task
+        &self.extra.image_cache_task
     }
 
     pub fn compositor(&self) -> &IpcSender<ScriptToCompositorMsg> {
-        &self.compositor
+        &self.extra.compositor
     }
 
     pub fn browsing_context(&self) -> Ref<Option<BrowsingContext>> {
-        self.browsing_context.borrow()
+        self.extra.browsing_context.borrow()
     }
 
     pub fn page(&self) -> &Page {
@@ -290,7 +298,7 @@ impl Window {
     }
 
     pub fn storage_task(&self) -> StorageTask {
-        self.storage_task.clone()
+        self.extra.storage_task.clone()
     }
 }
 
@@ -424,47 +432,47 @@ impl WindowMethods for Window {
 
     // https://html.spec.whatwg.org/#dom-windowtimers-settimeout
     fn SetTimeout(&self, _cx: *mut JSContext, callback: Rc<Function>, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
-                                            args,
-                                            timeout,
-                                            IsInterval::NonInterval,
-                                            TimerSource::FromWindow(self.id.clone()),
-                                            self.script_chan.clone())
+        self.extra.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
+                                                  args,
+                                                  timeout,
+                                                  IsInterval::NonInterval,
+                                                  TimerSource::FromWindow(self.id.clone()),
+                                                  self.extra.script_chan.clone())
     }
 
     // https://html.spec.whatwg.org/#dom-windowtimers-settimeout
     fn SetTimeout_(&self, _cx: *mut JSContext, callback: DOMString, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
-                                            args,
-                                            timeout,
-                                            IsInterval::NonInterval,
-                                            TimerSource::FromWindow(self.id.clone()),
-                                            self.script_chan.clone())
+        self.extra.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
+                                                  args,
+                                                  timeout,
+                                                  IsInterval::NonInterval,
+                                                  TimerSource::FromWindow(self.id.clone()),
+                                                  self.extra.script_chan.clone())
     }
 
     // https://html.spec.whatwg.org/#dom-windowtimers-cleartimeout
     fn ClearTimeout(&self, handle: i32) {
-        self.timers.clear_timeout_or_interval(handle);
+        self.extra.timers.clear_timeout_or_interval(handle);
     }
 
     // https://html.spec.whatwg.org/#dom-windowtimers-setinterval
     fn SetInterval(&self, _cx: *mut JSContext, callback: Rc<Function>, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
+        self.extra.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
                                             args,
                                             timeout,
                                             IsInterval::Interval,
                                             TimerSource::FromWindow(self.id.clone()),
-                                            self.script_chan.clone())
+                                            self.extra.script_chan.clone())
     }
 
     // https://html.spec.whatwg.org/#dom-windowtimers-setinterval
     fn SetInterval_(&self, _cx: *mut JSContext, callback: DOMString, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
-                                            args,
-                                            timeout,
-                                            IsInterval::Interval,
-                                            TimerSource::FromWindow(self.id.clone()),
-                                            self.script_chan.clone())
+        self.extra.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
+                                                  args,
+                                                  timeout,
+                                                  IsInterval::Interval,
+                                                  TimerSource::FromWindow(self.id.clone()),
+                                                  self.extra.script_chan.clone())
     }
 
     // https://html.spec.whatwg.org/#dom-windowtimers-clearinterval
@@ -505,8 +513,8 @@ impl WindowMethods for Window {
     // NavigationTiming/Overview.html#sec-window.performance-attribute
     fn Performance(&self) -> Root<Performance> {
         self.performance.or_init(|| {
-            Performance::new(self, self.navigation_start,
-                             self.navigation_start_precise)
+            Performance::new(self, self.extra.navigation_start,
+                             self.extra.navigation_start_precise)
         })
     }
 
@@ -581,14 +589,14 @@ impl WindowMethods for Window {
 
     fn WebdriverCallback(&self, cx: *mut JSContext, val: HandleValue) {
         let rv = jsval_to_webdriver(cx, val);
-        let opt_chan = self.webdriver_script_chan.borrow_mut().take();
+        let opt_chan = self.extra.webdriver_script_chan.borrow_mut().take();
         if let Some(chan) = opt_chan {
             chan.send(rv).unwrap();
         }
     }
 
     fn WebdriverTimeout(&self) {
-        let opt_chan = self.webdriver_script_chan.borrow_mut().take();
+        let opt_chan = self.extra.webdriver_script_chan.borrow_mut().take();
         if let Some(chan) = opt_chan {
             chan.send(Err(WebDriverJSError::Timeout)).unwrap();
         }
@@ -614,22 +622,22 @@ impl WindowMethods for Window {
     // https://drafts.csswg.org/cssom-view/#dom-window-innerheight
     //TODO Include Scrollbar
     fn InnerHeight(&self) -> i32 {
-        self.window_size.get()
-                        .and_then(|e| e.visible_viewport.height.get().to_i32())
-                        .unwrap_or(0)
+        self.extra.window_size.get()
+                              .and_then(|e| e.visible_viewport.height.get().to_i32())
+                              .unwrap_or(0)
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-innerwidth
     //TODO Include Scrollbar
     fn InnerWidth(&self) -> i32 {
-        self.window_size.get()
-                        .and_then(|e| e.visible_viewport.width.get().to_i32())
-                        .unwrap_or(0)
+        self.extra.window_size.get()
+                              .and_then(|e| e.visible_viewport.width.get().to_i32())
+                              .unwrap_or(0)
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-scrollx
     fn ScrollX(&self) -> i32 {
-        self.current_viewport.get().origin.x.to_px()
+        self.extra.current_viewport.get().origin.x.to_px()
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-pagexoffset
@@ -639,7 +647,7 @@ impl WindowMethods for Window {
 
     // https://drafts.csswg.org/cssom-view/#dom-window-scrolly
     fn ScrollY(&self) -> i32 {
-        self.current_viewport.get().origin.y.to_px()
+        self.extra.current_viewport.get().origin.y.to_px()
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-pageyoffset
@@ -696,7 +704,7 @@ impl WindowMethods for Window {
         // Step 1
         //TODO determine if this operation is allowed
         let size = Size2D::new(x.to_u32().unwrap_or(1), y.to_u32().unwrap_or(1));
-        self.compositor.send(ScriptToCompositorMsg::ResizeTo(size)).unwrap()
+        self.extra.compositor.send(ScriptToCompositorMsg::ResizeTo(size)).unwrap()
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-resizeby
@@ -711,7 +719,7 @@ impl WindowMethods for Window {
         // Step 1
         //TODO determine if this operation is allowed
         let point = Point2D::new(x, y);
-        self.compositor.send(ScriptToCompositorMsg::MoveTo(point)).unwrap()
+        self.extra.compositor.send(ScriptToCompositorMsg::MoveTo(point)).unwrap()
     }
 
     // https://drafts.csswg.org/cssom-view/#dom-window-moveby
@@ -747,9 +755,9 @@ impl WindowMethods for Window {
 
     // https://drafts.csswg.org/cssom-view/#dom-window-devicepixelratio
     fn DevicePixelRatio(&self) -> Finite<f64> {
-        let dpr = self.window_size.get()
-                                  .map(|data| data.device_pixel_ratio.get())
-                                  .unwrap_or(1.0f32);
+        let dpr = self.extra.window_size.get()
+                                        .map(|data| data.device_pixel_ratio.get())
+                                        .unwrap_or(1.0f32);
         Finite::wrap(dpr as f64)
     }
 }
@@ -807,9 +815,9 @@ impl Window {
         // which causes a panic!
         self.Gc();
 
-        self.current_state.set(WindowState::Zombie);
+        self.extra.current_state.set(WindowState::Zombie);
         *self.js_runtime.borrow_mut() = None;
-        *self.browsing_context.borrow_mut() = None;
+        *self.extra.browsing_context.borrow_mut() = None;
     }
 
     /// https://drafts.csswg.org/cssom-view/#dom-window-scroll
@@ -819,7 +827,7 @@ impl Window {
         let yfinite = if y_.is_finite() { y_ } else { 0.0f64 };
 
         // Step 4
-        if self.window_size.get().is_none() {
+        if self.extra.window_size.get().is_none() {
             return;
         }
 
@@ -876,16 +884,16 @@ impl Window {
         };
 
         // TODO (farodin91): Raise an event to stop the current_viewport
-        let size = self.current_viewport.get().size;
-        self.current_viewport.set(Rect::new(Point2D::new(Au::from_f32_px(x), Au::from_f32_px(y)), size));
+        let size = self.extra.current_viewport.get().size;
+        self.extra.current_viewport.set(Rect::new(Point2D::new(Au::from_f32_px(x), Au::from_f32_px(y)), size));
 
-        self.compositor.send(ScriptToCompositorMsg::ScrollFragmentPoint(
+        self.extra.compositor.send(ScriptToCompositorMsg::ScrollFragmentPoint(
                                                          self.pipeline(), LayerId::null(), point, smooth)).unwrap()
     }
 
     pub fn client_window(&self) -> (Size2D<u32>, Point2D<i32>) {
         let (send, recv) = ipc::channel::<(Size2D<u32>, Point2D<i32>)>().unwrap();
-        self.compositor.send(ScriptToCompositorMsg::GetClientWindow(send)).unwrap();
+        self.extra.compositor.send(ScriptToCompositorMsg::GetClientWindow(send)).unwrap();
         recv.recv().unwrap_or((Size2D::zero(), Point2D::zero()))
     }
 
@@ -903,7 +911,7 @@ impl Window {
         };
         let root = NodeCast::from_ref(root);
 
-        let window_size = match self.window_size.get() {
+        let window_size = match self.extra.window_size.get() {
             Some(window_size) => window_size,
             None => return,
         };
@@ -920,7 +928,7 @@ impl Window {
         let (join_chan, join_port) = channel();
 
         {
-            let mut layout_join_port = self.layout_join_port.borrow_mut();
+            let mut layout_join_port = self.extra.layout_join_port.borrow_mut();
             *layout_join_port = Some(join_port);
         }
 
@@ -936,24 +944,24 @@ impl Window {
         let reflow = box ScriptReflow {
             reflow_info: Reflow {
                 goal: goal,
-                page_clip_rect: self.page_clip_rect.get(),
+                page_clip_rect: self.extra.page_clip_rect.get(),
             },
             document_root: root.to_trusted_node_address(),
             window_size: window_size,
-            script_chan: self.control_chan.clone(),
+            script_chan: self.extra.control_chan.clone(),
             script_join_chan: join_chan,
             id: last_reflow_id.get(),
             query_type: query_type,
         };
 
-        let LayoutChan(ref chan) = self.layout_chan;
+        let LayoutChan(ref chan) = self.extra.layout_chan;
         chan.send(Msg::Reflow(reflow)).unwrap();
 
         debug!("script: layout forked");
 
         self.join_layout();
 
-        self.pending_reflow_count.set(0);
+        self.extra.pending_reflow_count.set(0);
 
         if let Some(marker) = marker {
             self.emit_timeline_marker(marker.end());
@@ -989,7 +997,7 @@ impl Window {
     /// Sends a ping to layout and waits for the response. The response will arrive when the
     /// layout task has finished any pending request messages.
     pub fn join_layout(&self) {
-        let mut layout_join_port = self.layout_join_port.borrow_mut();
+        let mut layout_join_port = self.extra.layout_join_port.borrow_mut();
         if let Some(join_port) = std_mem::replace(&mut *layout_join_port, None) {
             match join_port.try_recv() {
                 Err(Empty) => {
@@ -1007,7 +1015,7 @@ impl Window {
     }
 
     pub fn layout(&self) -> &LayoutRPC {
-        &*self.layout_rpc
+        &*self.extra.layout_rpc
     }
 
     pub fn content_box_query(&self, content_box_request: TrustedNodeAddress) -> Rect<Au> {
@@ -1015,7 +1023,7 @@ impl Window {
                     ReflowQueryType::ContentBoxQuery(content_box_request),
                     ReflowReason::Query);
         self.join_layout(); //FIXME: is this necessary, or is layout_rpc's mutex good enough?
-        let ContentBoxResponse(rect) = self.layout_rpc.content_box();
+        let ContentBoxResponse(rect) = self.extra.layout_rpc.content_box();
         rect
     }
 
@@ -1024,7 +1032,7 @@ impl Window {
                     ReflowQueryType::ContentBoxesQuery(content_boxes_request),
                     ReflowReason::Query);
         self.join_layout(); //FIXME: is this necessary, or is layout_rpc's mutex good enough?
-        let ContentBoxesResponse(rects) = self.layout_rpc.content_boxes();
+        let ContentBoxesResponse(rects) = self.extra.layout_rpc.content_boxes();
         rects
     }
 
@@ -1032,7 +1040,7 @@ impl Window {
         self.reflow(ReflowGoal::ForScriptQuery,
                     ReflowQueryType::NodeGeometryQuery(node_geometry_request),
                     ReflowReason::Query);
-        self.layout_rpc.node_geometry().client_rect
+        self.extra.layout_rpc.node_geometry().client_rect
     }
 
     pub fn resolved_style_query(&self,
@@ -1042,7 +1050,7 @@ impl Window {
         self.reflow(ReflowGoal::ForScriptQuery,
                     ReflowQueryType::ResolvedStyleQuery(element, pseudo, property.clone()),
                     ReflowReason::Query);
-        let ResolvedStyleResponse(resolved) = self.layout_rpc.resolved_style();
+        let ResolvedStyleResponse(resolved) = self.extra.layout_rpc.resolved_style();
         resolved
     }
 
@@ -1050,7 +1058,7 @@ impl Window {
         self.reflow(ReflowGoal::ForScriptQuery,
                     ReflowQueryType::OffsetParentQuery(node),
                     ReflowReason::Query);
-        let response = self.layout_rpc.offset_parent();
+        let response = self.extra.layout_rpc.offset_parent();
         let js_runtime = self.js_runtime.borrow();
         let js_runtime = js_runtime.as_ref().unwrap();
         let element = response.node_address.and_then(|parent_node_address| {
@@ -1063,12 +1071,12 @@ impl Window {
     pub fn handle_reflow_complete_msg(&self, reflow_id: u32) {
         let last_reflow_id = self.last_reflow_id.get();
         if last_reflow_id == reflow_id {
-            *self.layout_join_port.borrow_mut() = None;
+            *self.extra.layout_join_port.borrow_mut() = None;
         }
     }
 
     pub fn init_browsing_context(&self, doc: &Document, frame_element: Option<&Element>) {
-        let mut browsing_context = self.browsing_context.borrow_mut();
+        let mut browsing_context = self.extra.browsing_context.borrow_mut();
         *browsing_context = Some(BrowsingContext::new(doc, frame_element));
         (*browsing_context).as_mut().unwrap().create_window_proxy();
     }
@@ -1080,24 +1088,24 @@ impl Window {
     }
 
     pub fn handle_fire_timer(&self, timer_id: TimerId) {
-        self.timers.fire_timer(timer_id, self);
+        self.extra.timers.fire_timer(timer_id, self);
         self.reflow(ReflowGoal::ForDisplay, ReflowQueryType::NoQuery, ReflowReason::Timer);
     }
 
     pub fn set_fragment_name(&self, fragment: Option<String>) {
-        *self.fragment_name.borrow_mut() = fragment;
+        *self.extra.fragment_name.borrow_mut() = fragment;
     }
 
     pub fn steal_fragment_name(&self) -> Option<String> {
-        self.fragment_name.borrow_mut().take()
+        self.extra.fragment_name.borrow_mut().take()
     }
 
     pub fn set_window_size(&self, size: WindowSizeData) {
-        self.window_size.set(Some(size));
+        self.extra.window_size.set(Some(size));
     }
 
     pub fn window_size(&self) -> Option<WindowSizeData> {
-        self.window_size.get()
+        self.extra.window_size.get()
     }
 
     pub fn get_url(&self) -> Url {
@@ -1106,27 +1114,27 @@ impl Window {
     }
 
     pub fn resource_task(&self) -> ResourceTask {
-        (*self.resource_task).clone()
+        (*self.extra.resource_task).clone()
     }
 
     pub fn mem_profiler_chan(&self) -> mem::ProfilerChan {
-        self.mem_profiler_chan.clone()
+        self.extra.mem_profiler_chan.clone()
     }
 
     pub fn devtools_chan(&self) -> Option<IpcSender<ScriptToDevtoolsControlMsg>> {
-        self.devtools_chan.clone()
+        self.extra.devtools_chan.clone()
     }
 
     pub fn layout_chan(&self) -> LayoutChan {
-        self.layout_chan.clone()
+        self.extra.layout_chan.clone()
     }
 
     pub fn constellation_chan(&self) -> ConstellationChan {
-        self.constellation_chan.clone()
+        self.extra.constellation_chan.clone()
     }
 
     pub fn windowproxy_handler(&self) -> WindowProxyHandler {
-        WindowProxyHandler(self.dom_static.windowproxy_handler.0)
+        WindowProxyHandler(self.extra.dom_static.windowproxy_handler.0)
     }
 
     pub fn get_next_subpage_id(&self) -> SubpageId {
@@ -1137,30 +1145,30 @@ impl Window {
     }
 
     pub fn layout_is_idle(&self) -> bool {
-        self.layout_join_port.borrow().is_none()
+        self.extra.layout_join_port.borrow().is_none()
     }
 
     pub fn get_pending_reflow_count(&self) -> u32 {
-        self.pending_reflow_count.get()
+        self.extra.pending_reflow_count.get()
     }
 
     pub fn add_pending_reflow(&self) {
-        self.pending_reflow_count.set(self.pending_reflow_count.get() + 1);
+        self.extra.pending_reflow_count.set(self.extra.pending_reflow_count.get() + 1);
     }
 
     pub fn set_resize_event(&self, event: WindowSizeData) {
-        self.resize_event.set(Some(event));
+        self.extra.resize_event.set(Some(event));
     }
 
     pub fn steal_resize_event(&self) -> Option<WindowSizeData> {
-        let event = self.resize_event.get();
-        self.resize_event.set(None);
+        let event = self.extra.resize_event.get();
+        self.extra.resize_event.set(None);
         event
     }
 
     pub fn set_page_clip_rect_with_new_viewport(&self, viewport: Rect<f32>) -> bool {
         let rect = geometry::f32_rect_to_au_rect(viewport.clone());
-        self.current_viewport.set(rect);
+        self.extra.current_viewport.set(rect);
         // We use a clipping rectangle that is five times the size of the of the viewport,
         // so that we don't collect display list items for areas too far outside the viewport,
         // but also don't trigger reflows every time the viewport changes.
@@ -1168,7 +1176,7 @@ impl Window {
         let proposed_clip_rect = geometry::f32_rect_to_au_rect(
             viewport.inflate(viewport.size.width * VIEWPORT_EXPANSION,
             viewport.size.height * VIEWPORT_EXPANSION));
-        let clip_rect = self.page_clip_rect.get();
+        let clip_rect = self.extra.page_clip_rect.get();
         if proposed_clip_rect == clip_rect {
             return false;
         }
@@ -1178,7 +1186,7 @@ impl Window {
             return false;
         }
 
-        self.page_clip_rect.set(proposed_clip_rect);
+        self.extra.page_clip_rect.set(proposed_clip_rect);
 
         // If we didn't have a clip rect, the previous display doesn't need rebuilding
         // because it was built for infinite clip (MAX_RECT).
@@ -1195,7 +1203,7 @@ impl Window {
     }
 
     pub fn thaw(&self) {
-        self.timers.resume();
+        self.extra.timers.resume();
 
         // Push the document title to the compositor since we are
         // activating this document due to a navigation.
@@ -1204,16 +1212,16 @@ impl Window {
     }
 
     pub fn freeze(&self) {
-        self.timers.suspend();
+        self.extra.timers.suspend();
     }
 
     pub fn need_emit_timeline_marker(&self, timeline_type: TimelineMarkerType) -> bool {
-        let markers = self.devtools_markers.borrow();
+        let markers = self.extra.devtools_markers.borrow();
         markers.contains(&timeline_type)
     }
 
     pub fn emit_timeline_marker(&self, marker: TimelineMarker) {
-        let sender = self.devtools_marker_sender.borrow();
+        let sender = self.extra.devtools_marker_sender.borrow();
         let sender = sender.as_ref().expect("There is no marker sender");
         sender.send(marker).unwrap();
     }
@@ -1221,26 +1229,26 @@ impl Window {
     pub fn set_devtools_timeline_markers(&self,
                                          markers: Vec<TimelineMarkerType>,
                                          reply: IpcSender<TimelineMarker>) {
-        *self.devtools_marker_sender.borrow_mut() = Some(reply);
-        self.devtools_markers.borrow_mut().extend(markers.into_iter());
+        *self.extra.devtools_marker_sender.borrow_mut() = Some(reply);
+        self.extra.devtools_markers.borrow_mut().extend(markers.into_iter());
     }
 
     pub fn drop_devtools_timeline_markers(&self, markers: Vec<TimelineMarkerType>) {
-        let mut devtools_markers = self.devtools_markers.borrow_mut();
+        let mut devtools_markers = self.extra.devtools_markers.borrow_mut();
         for marker in markers {
             devtools_markers.remove(&marker);
         }
         if devtools_markers.is_empty() {
-            *self.devtools_marker_sender.borrow_mut() = None;
+            *self.extra.devtools_marker_sender.borrow_mut() = None;
         }
     }
 
     pub fn set_webdriver_script_chan(&self, chan: Option<IpcSender<WebDriverJSResult>>) {
-        *self.webdriver_script_chan.borrow_mut() = chan;
+        *self.extra.webdriver_script_chan.borrow_mut() = chan;
     }
 
     pub fn is_alive(&self) -> bool {
-        self.current_state.get() == WindowState::Alive
+        self.extra.current_state.get() == WindowState::Alive
     }
 
     pub fn parent(&self) -> Option<Root<Window>> {
@@ -1284,50 +1292,52 @@ impl Window {
 
         let win = box Window {
             eventtarget: EventTarget::new_inherited(),
-            script_chan: script_chan,
-            image_cache_chan: image_cache_chan,
-            control_chan: control_chan,
             console: Default::default(),
             crypto: Default::default(),
-            compositor: compositor,
             page: page,
             navigator: Default::default(),
-            image_cache_task: image_cache_task,
-            mem_profiler_chan: mem_profiler_chan,
-            devtools_chan: devtools_chan,
-            browsing_context: DOMRefCell::new(None),
             performance: Default::default(),
-            navigation_start: time::get_time().sec as u64,
-            navigation_start_precise: time::precise_time_ns() as f64,
             screen: Default::default(),
             session_storage: Default::default(),
             local_storage: Default::default(),
-            timers: TimerManager::new(),
             next_worker_id: Cell::new(WorkerId(0)),
             id: id,
             parent_info: parent_info,
-            dom_static: GlobalStaticData::new(),
             js_runtime: DOMRefCell::new(Some(runtime.clone())),
-            resource_task: resource_task,
-            storage_task: storage_task,
-            constellation_chan: constellation_chan,
-            page_clip_rect: Cell::new(MAX_RECT),
-            fragment_name: DOMRefCell::new(None),
             last_reflow_id: Cell::new(0),
-            resize_event: Cell::new(None),
             next_subpage_id: Cell::new(SubpageId(0)),
-            layout_chan: layout_chan,
-            layout_rpc: layout_rpc,
-            layout_join_port: DOMRefCell::new(None),
-            window_size: Cell::new(window_size),
-            current_viewport: Cell::new(Rect::zero()),
-            pending_reflow_count: Cell::new(0),
-            current_state: Cell::new(WindowState::Alive),
 
-            devtools_marker_sender: RefCell::new(None),
-            devtools_markers: RefCell::new(HashSet::new()),
             devtools_wants_updates: Cell::new(false),
-            webdriver_script_chan: RefCell::new(None),
+            extra: box WindowExtra {
+                script_chan: script_chan,
+                control_chan: control_chan,
+                image_cache_task: image_cache_task,
+                image_cache_chan: image_cache_chan,
+                compositor: DOMRefCell::new(compositor),
+                browsing_context: DOMRefCell::new(None),
+                navigation_start: time::get_time().sec as u64,
+                navigation_start_precise: time::precise_time_ns() as f64,
+                timers: TimerManager::new(),
+                mem_profiler_chan: mem_profiler_chan,
+                devtools_chan: devtools_chan,
+                devtools_markers: RefCell::new(HashSet::new()),
+                devtools_marker_sender: RefCell::new(None),
+                resize_event: Cell::new(None),
+                dom_static: GlobalStaticData::new(),
+                layout_chan: layout_chan,
+                layout_rpc: layout_rpc,
+                resource_task: resource_task,
+                storage_task: storage_task,
+                constellation_chan: constellation_chan,
+                fragment_name: DOMRefCell::new(None),
+                page_clip_rect: Cell::new(MAX_RECT),
+                pending_reflow_count: Cell::new(0),
+                current_state: Cell::new(WindowState::Alive),
+                current_viewport: Cell::new(Rect::zero()),
+                layout_join_port: DOMRefCell::new(None),
+                window_size: Cell::new(window_size),
+                webdriver_script_chan: RefCell::new(None),
+            },
         };
 
         WindowBinding::Wrap(runtime.cx(), win)
