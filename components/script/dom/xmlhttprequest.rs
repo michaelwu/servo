@@ -124,22 +124,30 @@ pub struct XMLHttpRequest {
     response_url: DOMString,
     status: Cell<u16>,
     status_text: DOMRefCell<ByteString>,
-    response: DOMRefCell<ByteString>,
-    response_type: Cell<XMLHttpRequestResponseType>,
     response_xml: MutNullableHeap<JS<Document>>,
-    response_headers: DOMRefCell<Headers>,
 
     // Associated concepts
-    request_method: DOMRefCell<Method>,
-    request_url: DOMRefCell<Option<Url>>,
-    request_headers: DOMRefCell<Headers>,
-    request_body_len: Cell<usize>,
     sync: Cell<bool>,
     upload_complete: Cell<bool>,
     upload_events: Cell<bool>,
     send_flag: Cell<bool>,
 
     global: GlobalField,
+    extra: Box<XMLHttpRequestExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable)]
+pub struct XMLHttpRequestExtra {
+    response: DOMRefCell<ByteString>,
+    response_type: Cell<XMLHttpRequestResponseType>,
+    response_headers: DOMRefCell<Headers>,
+
+    request_method: DOMRefCell<Method>,
+    request_url: DOMRefCell<Option<Url>>,
+    request_headers: DOMRefCell<Headers>,
+    request_body_len: Cell<usize>,
+
     timeout_cancel: DOMRefCell<Option<Sender<()>>>,
     fetch_time: Cell<i64>,
     timeout_target: DOMRefCell<Option<Box<ScriptChan+Send>>>,
@@ -158,15 +166,8 @@ impl XMLHttpRequest {
             response_url: "".to_owned(),
             status: Cell::new(0),
             status_text: DOMRefCell::new(ByteString::new(vec!())),
-            response: DOMRefCell::new(ByteString::new(vec!())),
-            response_type: Cell::new(_empty),
             response_xml: Default::default(),
-            response_headers: DOMRefCell::new(Headers::new()),
 
-            request_method: DOMRefCell::new(Method::Get),
-            request_url: DOMRefCell::new(None),
-            request_headers: DOMRefCell::new(Headers::new()),
-            request_body_len: Cell::new(0),
             sync: Cell::new(false),
             send_flag: Cell::new(false),
 
@@ -174,11 +175,20 @@ impl XMLHttpRequest {
             upload_events: Cell::new(false),
 
             global: GlobalField::from_rooted(&global),
-            timeout_cancel: DOMRefCell::new(None),
-            fetch_time: Cell::new(0),
-            timeout_target: DOMRefCell::new(None),
-            generation_id: Cell::new(GenerationId(0)),
-            response_status: Cell::new(Ok(())),
+            extra: box XMLHttpRequestExtra {
+                response: DOMRefCell::new(ByteString::new(vec!())),
+                response_type: Cell::new(_empty),
+                response_headers: DOMRefCell::new(Headers::new()),
+                request_method: DOMRefCell::new(Method::Get),
+                request_url: DOMRefCell::new(None),
+                request_headers: DOMRefCell::new(Headers::new()),
+                request_body_len: Cell::new(0),
+                timeout_cancel: DOMRefCell::new(None),
+                fetch_time: Cell::new(0),
+                timeout_target: DOMRefCell::new(None),
+                generation_id: Cell::new(GenerationId(0)),
+                response_status: Cell::new(Ok(())),
+            },
         }
     }
     pub fn new(global: GlobalRef) -> Root<XMLHttpRequest> {
@@ -268,7 +278,7 @@ impl XMLHttpRequest {
         impl PreInvoke for XHRContext {
             fn should_invoke(&self) -> bool {
                 let xhr = self.xhr.root();
-                xhr.r().generation_id.get() == self.gen_id
+                xhr.r().extra.generation_id.get() == self.gen_id
             }
         }
 
@@ -323,7 +333,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                     return Err(Syntax)
                 }
 
-                *self.request_method.borrow_mut() = parsed_method;
+                *self.extra.request_method.borrow_mut() = parsed_method;
 
                 // Step 6
                 let base = self.global.root().r().get_url();
@@ -334,7 +344,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                 // XXXManishearth Do some handling of username/passwords
                 if self.sync.get() {
                     // FIXME: This should only happen if the global environment is a document environment
-                    if self.timeout.get() != 0 || self.with_credentials.get() || self.response_type.get() != _empty {
+                    if self.timeout.get() != 0 || self.with_credentials.get() || self.extra.response_type.get() != _empty {
                         return Err(InvalidAccess)
                     }
                 }
@@ -342,8 +352,8 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                 self.terminate_ongoing_fetch();
 
                 // Step 12
-                *self.request_url.borrow_mut() = Some(parsed_url);
-                *self.request_headers.borrow_mut() = Headers::new();
+                *self.extra.request_url.borrow_mut() = Some(parsed_url);
+                *self.extra.request_headers.borrow_mut() = Headers::new();
                 self.send_flag.set(false);
                 *self.status_text.borrow_mut() = ByteString::new(vec!());
                 self.status.set(0);
@@ -397,7 +407,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
         };
 
         debug!("SetRequestHeader: name={:?}, value={:?}", name.as_str(), value.as_str());
-        let mut headers = self.request_headers.borrow_mut();
+        let mut headers = self.extra.request_headers.borrow_mut();
 
 
         // Steps 6,7
@@ -434,7 +444,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                     self.cancel_timeout();
                     return Ok(());
                 }
-                let progress = time::now().to_timespec().sec - self.fetch_time.get();
+                let progress = time::now().to_timespec().sec - self.extra.fetch_time.get();
                 if timeout > (progress * 1000) as u32 {
                     self.set_timeout(timeout - (progress * 1000) as u32);
                 } else {
@@ -479,12 +489,12 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
             return Err(InvalidState); // Step 1, 2
         }
 
-        let data = match *self.request_method.borrow() {
+        let data = match *self.extra.request_method.borrow() {
             Method::Get | Method::Head => None, // Step 3
             _ => data
         };
         let extracted = data.as_ref().map(|d| d.extract());
-        self.request_body_len.set(extracted.as_ref().map(|e| e.len()).unwrap_or(0));
+        self.extra.request_body_len.set(extracted.as_ref().map(|e| e.len()).unwrap_or(0));
 
         // Step 6
         self.upload_events.set(false);
@@ -507,14 +517,14 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
             self.send_flag.set(true);
             // If one of the event handlers below aborts the fetch by calling
             // abort or open we will need the current generation id to detect it.
-            let gen_id = self.generation_id.get();
+            let gen_id = self.extra.generation_id.get();
             self.dispatch_response_progress_event("loadstart".to_owned());
-            if self.generation_id.get() != gen_id {
+            if self.extra.generation_id.get() != gen_id {
                 return Ok(());
             }
             if !self.upload_complete.get() {
                 self.dispatch_upload_progress_event("loadstart".to_owned(), Some(0));
-                if self.generation_id.get() != gen_id {
+                if self.extra.generation_id.get() != gen_id {
                     return Ok(());
                 }
             }
@@ -523,7 +533,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
 
         let global = self.global.root();
         let pipeline_id = global.r().pipeline();
-        let mut load_data = LoadData::new(self.request_url.borrow().clone().unwrap(), Some(pipeline_id));
+        let mut load_data = LoadData::new(self.extra.request_url.borrow().clone().unwrap(), Some(pipeline_id));
         load_data.data = extracted;
 
         #[inline]
@@ -548,14 +558,14 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
             None => ()
         }
 
-        load_data.preserved_headers = (*self.request_headers.borrow()).clone();
+        load_data.preserved_headers = (*self.extra.request_headers.borrow()).clone();
 
         if !load_data.preserved_headers.has::<Accept>() {
             let mime = Mime(mime::TopLevel::Star, mime::SubLevel::Star, vec![]);
             load_data.preserved_headers.set(Accept(vec![qitem(mime)]));
         }
 
-        load_data.method = (*self.request_method.borrow()).clone();
+        load_data.method = (*self.extra.request_method.borrow()).clone();
 
         // CORS stuff
         let global = self.global.root();
@@ -583,16 +593,16 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                     buf.push_str(&p.to_string());
                 });
                 referer_url.serialize_path().map(|ref h| buf.push_str(h));
-                self.request_headers.borrow_mut().set_raw("Referer".to_owned(), vec![buf.into_bytes()]);
+                self.extra.request_headers.borrow_mut().set_raw("Referer".to_owned(), vec![buf.into_bytes()]);
             },
             Ok(Some(ref req)) => self.insert_trusted_header("origin".to_owned(),
                                                             req.origin.to_string()),
             _ => {}
         }
 
-        debug!("request_headers = {:?}", *self.request_headers.borrow());
+        debug!("request_headers = {:?}", *self.extra.request_headers.borrow());
 
-        self.fetch_time.set(time::now().to_timespec().sec);
+        self.extra.fetch_time.set(time::now().to_timespec().sec);
         let rv = self.fetch(load_data, cors_request, global.r());
         if self.sync.get() {
             return rv;
@@ -612,11 +622,11 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
         if (state == XMLHttpRequestState::Opened && self.send_flag.get()) ||
            state == XMLHttpRequestState::HeadersReceived ||
            state == XMLHttpRequestState::Loading {
-            let gen_id = self.generation_id.get();
+            let gen_id = self.extra.generation_id.get();
             self.process_partial_response(XHRProgress::Errored(gen_id, Abort));
             // If open was called in one of the handlers invoked by the
             // above call then we should terminate the abort sequence
-            if self.generation_id.get() != gen_id {
+            if self.extra.generation_id.get() != gen_id {
                 return
             }
         }
@@ -654,7 +664,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-responsetype-attribute
     fn ResponseType(self) -> XMLHttpRequestResponseType {
-        self.response_type.get()
+        self.extra.response_type.get()
     }
 
     // https://xhr.spec.whatwg.org/#the-responsetype-attribute
@@ -668,7 +678,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
             XMLHttpRequestState::Loading | XMLHttpRequestState::Done => Err(InvalidState),
             _ if self.sync.get() => Err(InvalidAccess),
             _ => {
-                self.response_type.set(response_type);
+                self.extra.response_type.set(response_type);
                 Ok(())
             }
         }
@@ -678,7 +688,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
     // https://xhr.spec.whatwg.org/#the-response-attribute
     fn Response(self, cx: *mut JSContext) -> JSVal {
          let mut rval = RootedValue::new(cx, UndefinedValue());
-         match self.response_type.get() {
+         match self.extra.response_type.get() {
             _empty | Text => {
                 let ready_state = self.ready_state.get();
                 if ready_state == XMLHttpRequestState::Done || ready_state == XMLHttpRequestState::Loading {
@@ -691,7 +701,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
                 return NullValue()
             },
             Json => {
-                let decoded = UTF_8.decode(&self.response.borrow(), DecoderTrap::Replace).unwrap().to_owned();
+                let decoded = UTF_8.decode(&self.extra.response.borrow(), DecoderTrap::Replace).unwrap().to_owned();
                 let decoded: Vec<u16> = decoded.utf16_units().collect();
                 unsafe {
                     if JS_ParseJSON(cx,
@@ -705,7 +715,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
             }
             _ => {
                 // XXXManishearth handle other response types
-                self.response.borrow().to_jsval(cx, rval.handle_mut());
+                self.extra.response.borrow().to_jsval(cx, rval.handle_mut());
             }
         }
         rval.ptr
@@ -713,7 +723,7 @@ impl<'a> XMLHttpRequestMethods for &'a XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-responsetext-attribute
     fn GetResponseText(self) -> Fallible<DOMString> {
-        match self.response_type.get() {
+        match self.extra.response_type.get() {
             _empty | Text => {
                 match self.ready_state.get() {
                     XMLHttpRequestState::Loading | XMLHttpRequestState::Done => Ok(self.text_response()),
@@ -823,7 +833,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
         // (including from one of the event handlers called below)
         macro_rules! return_if_fetch_was_terminated(
             () => (
-                if msg_id != self.generation_id.get() {
+                if msg_id != self.extra.generation_id.get() {
                     return
                 }
             );
@@ -833,7 +843,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
         return_if_fetch_was_terminated!();
 
         // Ignore messages coming from previously-errored responses or requests that have timed out
-        if self.response_status.get().is_err() {
+        if self.extra.response_status.get().is_err() {
             return;
         }
 
@@ -862,7 +872,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
                     self.status.set(code);
                     *self.status_text.borrow_mut() = ByteString::new(reason.into_owned().into_bytes());
                 });
-                headers.as_ref().map(|h| *self.response_headers.borrow_mut() = h.clone());
+                headers.as_ref().map(|h| *self.extra.response_headers.borrow_mut() = h.clone());
 
                 // Substep 3
                 if !self.sync.get() {
@@ -874,7 +884,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
                 // Part of step 11, send() (processing response body)
                 // XXXManishearth handle errors, if any (substep 2)
 
-                *self.response.borrow_mut() = partial_response;
+                *self.extra.response.borrow_mut() = partial_response;
                 if !self.sync.get() {
                     if self.ready_state.get() == XMLHttpRequestState::HeadersReceived {
                         self.change_ready_state(XMLHttpRequestState::Loading);
@@ -939,16 +949,16 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
     }
 
     fn terminate_ongoing_fetch(self) {
-        let GenerationId(prev_id) = self.generation_id.get();
-        self.generation_id.set(GenerationId(prev_id + 1));
-        *self.timeout_target.borrow_mut() = None;
-        self.response_status.set(Ok(()));
+        let GenerationId(prev_id) = self.extra.generation_id.get();
+        self.extra.generation_id.set(GenerationId(prev_id + 1));
+        *self.extra.timeout_target.borrow_mut() = None;
+        self.extra.response_status.set(Ok(()));
     }
 
     fn insert_trusted_header(self, name: String, value: String) {
         // Insert a header without checking spec-compliance
         // Use for hardcoded headers
-        self.request_headers.borrow_mut().set_raw(name, vec![value.into_bytes()]);
+        self.extra.request_headers.borrow_mut().set_raw(name, vec![value.into_bytes()]);
     }
 
     fn dispatch_progress_event(self, upload: bool, type_: DOMString, loaded: u64, total: Option<u64>) {
@@ -970,13 +980,13 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
     fn dispatch_upload_progress_event(self, type_: DOMString, partial_load: Option<u64>) {
         // If partial_load is None, loading has completed and we can just use the value from the request body
 
-        let total = self.request_body_len.get() as u64;
+        let total = self.extra.request_body_len.get() as u64;
         self.dispatch_progress_event(true, type_, partial_load.unwrap_or(total), Some(total));
     }
 
     fn dispatch_response_progress_event(self, type_: DOMString) {
-        let len = self.response.borrow().len() as u64;
-        let total = self.response_headers.borrow().get::<ContentLength>().map(|x| {**x as u64});
+        let len = self.extra.response.borrow().len() as u64;
+        let total = self.extra.response_headers.borrow().get::<ContentLength>().map(|x| {**x as u64});
         self.dispatch_progress_event(false, type_, len, total);
     }
     fn set_timeout(self, duration_ms: u32) {
@@ -997,12 +1007,12 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
 
         // Sets up the object to timeout in a given number of milliseconds
         // This will cancel all previous timeouts
-        let timeout_target = (*self.timeout_target.borrow().as_ref().unwrap()).clone();
+        let timeout_target = (*self.extra.timeout_target.borrow().as_ref().unwrap()).clone();
         let global = self.global.root();
         let xhr = Trusted::new(global.r().get_cx(), self, global.r().script_chan());
-        let gen_id = self.generation_id.get();
+        let gen_id = self.extra.generation_id.get();
         let (cancel_tx, cancel_rx) = channel();
-        *self.timeout_cancel.borrow_mut() = Some(cancel_tx);
+        *self.extra.timeout_cancel.borrow_mut() = Some(cancel_tx);
         spawn_named("XHR:Timer".to_owned(), move || {
             sleep_ms(duration_ms);
             match cancel_rx.try_recv() {
@@ -1023,14 +1033,14 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
     }
 
     fn cancel_timeout(self) {
-        if let Some(cancel_tx) = self.timeout_cancel.borrow_mut().take() {
+        if let Some(cancel_tx) = self.extra.timeout_cancel.borrow_mut().take() {
             let _ = cancel_tx.send(());
         }
     }
 
     fn text_response(self) -> DOMString {
         let mut encoding = UTF_8 as EncodingRef;
-        match self.response_headers.borrow().get() {
+        match self.extra.response_headers.borrow().get() {
             Some(&ContentType(mime::Mime(_, _, ref params))) => {
                 for &(ref name, ref value) in params.iter() {
                     if name == &mime::Attr::Charset {
@@ -1044,7 +1054,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
 
         // According to Simon, decode() should never return an error, so unwrap()ing
         // the result should be fine. XXXManishearth have a closer look at this later
-        encoding.decode(&self.response.borrow(), DecoderTrap::Replace).unwrap().to_owned()
+        encoding.decode(&self.extra.response.borrow(), DecoderTrap::Replace).unwrap().to_owned()
     }
     fn filter_response_headers(self) -> Headers {
         // https://fetch.spec.whatwg.org/#concept-response-header-list
@@ -1071,7 +1081,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
             }
         }
 
-        let mut headers = self.response_headers.borrow().clone();
+        let mut headers = self.extra.response_headers.borrow().clone();
         headers.remove::<SetCookie>();
         headers.remove::<SetCookie2>();
         // XXXManishearth additional CORS filtering goes here
@@ -1079,7 +1089,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
     }
 
     fn discard_subsequent_responses(self) {
-        self.response_status.set(Err(()));
+        self.extra.response_status.set(Err(()));
     }
 
     fn fetch(self,
@@ -1090,7 +1100,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
             Err(_) => {
                 // Happens in case of cross-origin non-http URIs
                 self.process_partial_response(XHRProgress::Errored(
-                    self.generation_id.get(), Network));
+                    self.extra.generation_id.get(), Network));
                 return Err(Network);
             }
             Ok(req) => req,
@@ -1101,7 +1111,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
         let context = Arc::new(Mutex::new(XHRContext {
             xhr: xhr,
             cors_request: cors_request.clone(),
-            gen_id: self.generation_id.get(),
+            gen_id: self.extra.generation_id.get(),
             buf: DOMRefCell::new(vec!()),
             sync_status: DOMRefCell::new(None),
         }));
@@ -1112,7 +1122,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
         } else {
             (global.script_chan(), None)
         };
-        *self.timeout_target.borrow_mut() = Some(script_chan.clone());
+        *self.extra.timeout_target.borrow_mut() = Some(script_chan.clone());
 
         let resource_task = global.resource_task();
         if let Some(req) = cors_request {
