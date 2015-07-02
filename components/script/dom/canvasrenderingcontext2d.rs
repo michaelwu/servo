@@ -58,10 +58,16 @@ enum CanvasFillOrStrokeStyle {
 pub struct CanvasRenderingContext2D {
     reflector_: Reflector,
     global: GlobalField,
+    canvas: JS<HTMLCanvasElement>,
+    extra: Box<CanvasRenderingContext2DExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct CanvasRenderingContext2DExtra {
     renderer_id: usize,
     #[ignore_heap_size_of = "Defined in ipc-channel"]
     ipc_renderer: IpcSender<CanvasMsg>,
-    canvas: JS<HTMLCanvasElement>,
     state: RefCell<CanvasContextState>,
     saved_states: RefCell<Vec<CanvasContextState>>,
 }
@@ -122,11 +128,13 @@ impl CanvasRenderingContext2D {
         CanvasRenderingContext2D {
             reflector_: Reflector::new(),
             global: GlobalField::from_rooted(&global),
-            renderer_id: renderer_id,
-            ipc_renderer: ipc_renderer,
             canvas: JS::from_ref(canvas),
-            state: RefCell::new(CanvasContextState::new()),
-            saved_states: RefCell::new(Vec::new()),
+            extra: box CanvasRenderingContext2DExtra {
+                renderer_id: renderer_id,
+                ipc_renderer: ipc_renderer,
+                state: RefCell::new(CanvasContextState::new()),
+                saved_states: RefCell::new(Vec::new()),
+            },
         }
     }
 
@@ -137,13 +145,13 @@ impl CanvasRenderingContext2D {
     }
 
     pub fn recreate(&self, size: Size2D<i32>) {
-        self.ipc_renderer
+        self.extra.ipc_renderer
             .send(CanvasMsg::Common(CanvasCommonMsg::Recreate(size)))
             .unwrap();
     }
 
     pub fn ipc_renderer(&self) -> IpcSender<CanvasMsg> {
-        self.ipc_renderer.clone()
+        self.extra.ipc_renderer.clone()
     }
 
     fn mark_as_dirty(&self) {
@@ -151,8 +159,8 @@ impl CanvasRenderingContext2D {
     }
 
     fn update_transform(&self) {
-        self.ipc_renderer
-            .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetTransform(self.state.borrow().transform)))
+        self.extra.ipc_renderer
+            .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetTransform(self.extra.state.borrow().transform)))
             .unwrap()
     }
 
@@ -286,7 +294,7 @@ impl CanvasRenderingContext2D {
             return Err(Error::IndexSize)
         }
 
-        let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
+        let smoothing_enabled = self.extra.state.borrow().image_smoothing_enabled;
 
         // If the source and target canvas are the same
         let msg = if self.canvas.root().r() == canvas {
@@ -309,7 +317,7 @@ impl CanvasRenderingContext2D {
                 Canvas2dMsg::DrawImage(imagedata, source_rect.size, dest_rect, source_rect, smoothing_enabled))
         };
 
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
         self.mark_as_dirty();
         Ok(())
     }
@@ -326,8 +334,8 @@ impl CanvasRenderingContext2D {
             return Err(Error::IndexSize)
         }
 
-        let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
-        self.ipc_renderer
+        let smoothing_enabled = self.extra.state.borrow().image_smoothing_enabled;
+        self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::DrawImage(image_data,
                                                              image_size,
                                                              dest_rect,
@@ -384,10 +392,10 @@ impl CanvasRenderingContext2D {
     }
 
     pub fn get_renderer_id(&self) -> usize {
-        self.renderer_id
+        self.extra.renderer_id
     }
     pub fn get_ipc_renderer(&self) -> IpcSender<CanvasMsg> {
-        self.ipc_renderer.clone()
+        self.extra.ipc_renderer.clone()
     }
 }
 
@@ -401,11 +409,11 @@ pub trait LayoutCanvasRenderingContext2DHelpers {
 impl LayoutCanvasRenderingContext2DHelpers for LayoutJS<CanvasRenderingContext2D> {
     #[allow(unsafe_code)]
     unsafe fn get_renderer_id(&self) -> usize {
-        (*self.unsafe_get()).renderer_id
+        (*self.unsafe_get()).extra.renderer_id
     }
     #[allow(unsafe_code)]
     unsafe fn get_ipc_renderer(&self) -> IpcSender<CanvasMsg> {
-        (*self.unsafe_get()).ipc_renderer.clone()
+        (*self.unsafe_get()).extra.ipc_renderer.clone()
     }
 }
 
@@ -426,16 +434,16 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
     fn Save(&self) {
-        self.saved_states.borrow_mut().push(self.state.borrow().clone());
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SaveContext)).unwrap();
+        self.extra.saved_states.borrow_mut().push(self.extra.state.borrow().clone());
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SaveContext)).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-restore
     fn Restore(&self) {
-        let mut saved_states = self.saved_states.borrow_mut();
+        let mut saved_states = self.extra.saved_states.borrow_mut();
         if let Some(state) = saved_states.pop() {
-            self.state.borrow_mut().clone_from(&state);
-            self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::RestoreContext)).unwrap();
+            self.extra.state.borrow_mut().clone_from(&state);
+            self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::RestoreContext)).unwrap();
         }
     }
 
@@ -445,8 +453,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.scale(x as f32, y as f32);
+        let transform = self.extra.state.borrow().transform;
+        self.extra.state.borrow_mut().transform = transform.scale(x as f32, y as f32);
         self.update_transform()
     }
 
@@ -457,8 +465,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         }
 
         let (sin, cos) = (angle.sin(), angle.cos());
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.mul(&Matrix2D::new(cos as f32, sin as f32,
+        let transform = self.extra.state.borrow().transform;
+        self.extra.state.borrow_mut().transform = transform.mul(&Matrix2D::new(cos as f32, sin as f32,
                                                                          -sin as f32, cos as f32,
                                                                          0.0, 0.0));
         self.update_transform()
@@ -470,8 +478,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.translate(x as f32, y as f32);
+        let transform = self.extra.state.borrow().transform;
+        self.extra.state.borrow_mut().transform = transform.translate(x as f32, y as f32);
         self.update_transform()
     }
 
@@ -482,8 +490,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.mul(&Matrix2D::new(a as f32,
+        let transform = self.extra.state.borrow().transform;
+        self.extra.state.borrow_mut().transform = transform.mul(&Matrix2D::new(a as f32,
                                                                          b as f32,
                                                                          c as f32,
                                                                          d as f32,
@@ -499,7 +507,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        self.state.borrow_mut().transform = Matrix2D::new(a as f32,
+        self.extra.state.borrow_mut().transform = Matrix2D::new(a as f32,
                                                           b as f32,
                                                           c as f32,
                                                           d as f32,
@@ -510,13 +518,13 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-resettransform
     fn ResetTransform(&self) {
-        self.state.borrow_mut().transform = Matrix2D::identity();
+        self.extra.state.borrow_mut().transform = Matrix2D::identity();
         self.update_transform()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalalpha
     fn GlobalAlpha(&self) -> f64 {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         state.global_alpha
     }
 
@@ -526,15 +534,15 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        self.state.borrow_mut().global_alpha = alpha;
-        self.ipc_renderer
+        self.extra.state.borrow_mut().global_alpha = alpha;
+        self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetGlobalAlpha(alpha as f32)))
             .unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalcompositeoperation
     fn GlobalCompositeOperation(&self) -> DOMString {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         match state.global_composition {
             CompositionOrBlending::Composition(op) => op.to_str().to_owned(),
             CompositionOrBlending::Blending(op) => op.to_str().to_owned(),
@@ -544,8 +552,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalcompositeoperation
     fn SetGlobalCompositeOperation(&self, op_str: DOMString) {
         if let Ok(op) = CompositionOrBlending::from_str(&op_str) {
-            self.state.borrow_mut().global_composition = op;
-            self.ipc_renderer
+            self.extra.state.borrow_mut().global_composition = op;
+            self.extra.ipc_renderer
                 .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetGlobalComposition(op)))
                 .unwrap()
         }
@@ -554,7 +562,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-fillrect
     fn FillRect(&self, x: f64, y: f64, width: f64, height: f64) {
         if let Some(rect) = self.create_drawable_rect(x, y, width, height) {
-            self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillRect(rect))).unwrap();
+            self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillRect(rect))).unwrap();
             self.mark_as_dirty();
         }
     }
@@ -562,7 +570,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-clearrect
     fn ClearRect(&self, x: f64, y: f64, width: f64, height: f64) {
         if let Some(rect) = self.create_drawable_rect(x, y, width, height) {
-            self.ipc_renderer
+            self.extra.ipc_renderer
                 .send(CanvasMsg::Canvas2d(Canvas2dMsg::ClearRect(rect)))
                 .unwrap();
             self.mark_as_dirty();
@@ -572,7 +580,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokerect
     fn StrokeRect(&self, x: f64, y: f64, width: f64, height: f64) {
         if let Some(rect) = self.create_drawable_rect(x, y, width, height) {
-            self.ipc_renderer
+            self.extra.ipc_renderer
                 .send(CanvasMsg::Canvas2d(Canvas2dMsg::StrokeRect(rect)))
                 .unwrap();
             self.mark_as_dirty();
@@ -581,31 +589,31 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-beginpath
     fn BeginPath(&self) {
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::BeginPath)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::BeginPath)).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-closepath
     fn ClosePath(&self) {
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::ClosePath)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::ClosePath)).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-fill
     fn Fill(&self, _: CanvasWindingRule) {
         // TODO: Process winding rule
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Fill)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Fill)).unwrap();
         self.mark_as_dirty();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-stroke
     fn Stroke(&self) {
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Stroke)).unwrap();
         self.mark_as_dirty();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-clip
     fn Clip(&self, _: CanvasWindingRule) {
         // TODO: Process winding rule
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Clip)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::Clip)).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
@@ -650,7 +658,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         let msg = CanvasMsg::Canvas2d(
             Canvas2dMsg::MoveTo(
                 Point2D::new(x as f32, y as f32)));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-lineto
@@ -662,7 +670,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         let msg = CanvasMsg::Canvas2d(
             Canvas2dMsg::LineTo(
                 Point2D::new(x as f32, y as f32)));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-rect
@@ -671,7 +679,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             let rect = Rect::new(Point2D::new(x as f32, y as f32),
                                  Size2D::new(width as f32, height as f32));
             let msg = CanvasMsg::Canvas2d(Canvas2dMsg::Rect(rect));
-            self.ipc_renderer.send(msg).unwrap();
+            self.extra.ipc_renderer.send(msg).unwrap();
         }
     }
 
@@ -686,7 +694,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             Canvas2dMsg::QuadraticCurveTo(
                 Point2D::new(cpx as f32, cpy as f32),
                 Point2D::new(x as f32, y as f32)));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-beziercurveto
@@ -701,7 +709,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 Point2D::new(cp1x as f32, cp1y as f32),
                 Point2D::new(cp2x as f32, cp2y as f32),
                 Point2D::new(x as f32, y as f32)));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-arc
@@ -720,7 +728,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 Point2D::new(x as f32, y as f32), r as f32,
                 start as f32, end as f32, ccw));
 
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
         Ok(())
     }
 
@@ -738,24 +746,24 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 Point2D::new(cp1x as f32, cp1y as f32),
                 Point2D::new(cp2x as f32, cp2y as f32),
                 r as f32));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
         Ok(())
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-imagesmoothingenabled
     fn ImageSmoothingEnabled(&self) -> bool {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         state.image_smoothing_enabled
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-imagesmoothingenabled
     fn SetImageSmoothingEnabled(&self, value: bool) -> () {
-        self.state.borrow_mut().image_smoothing_enabled = value;
+        self.extra.state.borrow_mut().image_smoothing_enabled = value;
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn StrokeStyle(&self) -> StringOrCanvasGradientOrCanvasPattern {
-        match self.state.borrow().stroke_style {
+        match self.extra.state.borrow().stroke_style {
             CanvasFillOrStrokeStyle::Color(ref rgba) => {
                 let mut result = String::new();
                 serialize(rgba, &mut result).unwrap();
@@ -773,8 +781,8 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             StringOrCanvasGradientOrCanvasPattern::eString(string) => {
                 match parse_color(&string) {
                     Ok(rgba) => {
-                        self.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Color(rgba);
-                        self.ipc_renderer
+                        self.extra.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Color(rgba);
+                        self.extra.ipc_renderer
                             .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetStrokeStyle(
                                         FillOrStrokeStyle::Color(rgba))))
                             .unwrap();
@@ -783,11 +791,11 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 }
             },
             StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient) => {
-                self.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Gradient(
+                self.extra.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Gradient(
                                                            JS::from_ref(gradient.r()));
                 let msg = CanvasMsg::Canvas2d(
                     Canvas2dMsg::SetStrokeStyle(gradient.r().to_fill_or_stroke_style()));
-                self.ipc_renderer.send(msg).unwrap();
+                self.extra.ipc_renderer.send(msg).unwrap();
             },
             _ => {}
         }
@@ -795,7 +803,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn FillStyle(&self) -> StringOrCanvasGradientOrCanvasPattern {
-        match self.state.borrow().fill_style {
+        match self.extra.state.borrow().fill_style {
             CanvasFillOrStrokeStyle::Color(ref rgba) => {
                 let mut result = String::new();
                 serialize(rgba, &mut result).unwrap();
@@ -812,22 +820,22 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         match value {
             StringOrCanvasGradientOrCanvasPattern::eString(string) => {
                 if let Ok(rgba) = parse_color(&string) {
-                    self.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Color(rgba);
-                    self.ipc_renderer
+                    self.extra.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Color(rgba);
+                    self.extra.ipc_renderer
                         .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(
                                     FillOrStrokeStyle::Color(rgba))))
                         .unwrap()
                 }
             }
             StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient) => {
-                self.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Gradient(
+                self.extra.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Gradient(
                                                         JS::from_rooted(&gradient));
                 let msg = CanvasMsg::Canvas2d(
                     Canvas2dMsg::SetFillStyle(gradient.r().to_fill_or_stroke_style()));
-                self.ipc_renderer.send(msg).unwrap();
+                self.extra.ipc_renderer.send(msg).unwrap();
             }
             StringOrCanvasGradientOrCanvasPattern::eCanvasPattern(pattern) => {
-                self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(
+                self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(
                                                        pattern.r().to_fill_or_stroke_style()))).unwrap();
             }
         }
@@ -881,7 +889,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                                   Size2D::new(sw as i32, sh as i32));
         let canvas_size = self.canvas.root().r().get_size();
         let canvas_size = Size2D::new(canvas_size.width as f64, canvas_size.height as f64);
-        self.ipc_renderer
+        self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(dest_rect, canvas_size, sender)))
             .unwrap();
         let mut data = receiver.recv().unwrap();
@@ -916,7 +924,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         let dirty_rect = Rect::new(Point2D::new(*dirtyX, *dirtyY),
                                    Size2D::new(*dirtyWidth, *dirtyHeight));
         let msg = CanvasMsg::Canvas2d(Canvas2dMsg::PutImageData(data, offset, image_data_size, dirty_rect));
-        self.ipc_renderer.send(msg).unwrap();
+        self.extra.ipc_renderer.send(msg).unwrap();
         self.mark_as_dirty();
     }
 
@@ -986,7 +994,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linewidth
     fn LineWidth(&self) -> f64 {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         state.line_width
     }
 
@@ -996,15 +1004,15 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        self.state.borrow_mut().line_width = width;
-        self.ipc_renderer
+        self.extra.state.borrow_mut().line_width = width;
+        self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineWidth(width as f32)))
             .unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linecap
     fn LineCap(&self) -> DOMString {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         match state.line_cap {
             LineCapStyle::Butt => "butt".to_owned(),
             LineCapStyle::Round => "round".to_owned(),
@@ -1015,14 +1023,14 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linecap
     fn SetLineCap(&self, cap_str: DOMString) {
         if let Ok(cap) = LineCapStyle::from_str(&cap_str) {
-            self.state.borrow_mut().line_cap = cap;
-            self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineCap(cap))).unwrap()
+            self.extra.state.borrow_mut().line_cap = cap;
+            self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineCap(cap))).unwrap()
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linejoin
     fn LineJoin(&self) -> DOMString {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         match state.line_join {
             LineJoinStyle::Round => "round".to_owned(),
             LineJoinStyle::Bevel => "bevel".to_owned(),
@@ -1033,14 +1041,14 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linejoin
     fn SetLineJoin(&self, join_str: DOMString) {
         if let Ok(join) = LineJoinStyle::from_str(&join_str) {
-            self.state.borrow_mut().line_join = join;
-            self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineJoin(join))).unwrap()
+            self.extra.state.borrow_mut().line_join = join;
+            self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetLineJoin(join))).unwrap()
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-miterlimit
     fn MiterLimit(&self) -> f64 {
-        let state = self.state.borrow();
+        let state = self.extra.state.borrow();
         state.miter_limit
     }
 
@@ -1050,66 +1058,66 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return;
         }
 
-        self.state.borrow_mut().miter_limit = limit;
-        self.ipc_renderer
+        self.extra.state.borrow_mut().miter_limit = limit;
+        self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetMiterLimit(limit as f32)))
             .unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsetx
     fn ShadowOffsetX(&self) -> f64 {
-        self.state.borrow().shadow_offset_x
+        self.extra.state.borrow().shadow_offset_x
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsetx
     fn SetShadowOffsetX(&self, value: f64) {
-        if !value.is_finite() || value == self.state.borrow().shadow_offset_x {
+        if !value.is_finite() || value == self.extra.state.borrow().shadow_offset_x {
             return;
         }
-        self.state.borrow_mut().shadow_offset_x = value;
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowOffsetX(value))).unwrap()
+        self.extra.state.borrow_mut().shadow_offset_x = value;
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowOffsetX(value))).unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsety
     fn ShadowOffsetY(&self) -> f64 {
-        self.state.borrow().shadow_offset_y
+        self.extra.state.borrow().shadow_offset_y
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsety
     fn SetShadowOffsetY(&self, value: f64) {
-        if !value.is_finite() || value == self.state.borrow().shadow_offset_y {
+        if !value.is_finite() || value == self.extra.state.borrow().shadow_offset_y {
             return;
         }
-        self.state.borrow_mut().shadow_offset_y = value;
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowOffsetY(value))).unwrap()
+        self.extra.state.borrow_mut().shadow_offset_y = value;
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowOffsetY(value))).unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowblur
     fn ShadowBlur(&self) -> f64 {
-        self.state.borrow().shadow_blur
+        self.extra.state.borrow().shadow_blur
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowblur
     fn SetShadowBlur(&self, value: f64) {
-        if !value.is_finite() || value < 0f64 || value == self.state.borrow().shadow_blur {
+        if !value.is_finite() || value < 0f64 || value == self.extra.state.borrow().shadow_blur {
             return;
         }
-        self.state.borrow_mut().shadow_blur = value;
-        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowBlur(value))).unwrap()
+        self.extra.state.borrow_mut().shadow_blur = value;
+        self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowBlur(value))).unwrap()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowcolor
     fn ShadowColor(&self) -> DOMString {
         let mut result = String::new();
-        serialize(&self.state.borrow().shadow_color, &mut result).unwrap();
+        serialize(&self.extra.state.borrow().shadow_color, &mut result).unwrap();
         result
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowcolor
     fn SetShadowColor(&self, value: DOMString) {
         if let Ok(color) = parse_color(&value) {
-            self.state.borrow_mut().shadow_color = color;
-            self.ipc_renderer
+            self.extra.state.borrow_mut().shadow_color = color;
+            self.extra.ipc_renderer
                 .send(CanvasMsg::Canvas2d(Canvas2dMsg::SetShadowColor(color)))
                 .unwrap()
         }
@@ -1118,7 +1126,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
 impl Drop for CanvasRenderingContext2D {
     fn drop(&mut self) {
-        self.ipc_renderer.send(CanvasMsg::Common(CanvasCommonMsg::Close)).unwrap();
+        self.extra.ipc_renderer.send(CanvasMsg::Common(CanvasCommonMsg::Close)).unwrap();
     }
 }
 
