@@ -25,35 +25,31 @@ pub struct WebGLTexture {
     /// The target to which this texture was bound the first time
     target: Cell<Option<u32>>,
     is_deleted: Cell<bool>,
-    #[ignore_heap_size_of = "Defined in ipc-channel"]
-    renderer: IpcSender<CanvasMsg>,
 }
 
 impl WebGLTexture {
-    fn new_inherited(renderer: IpcSender<CanvasMsg>, id: u32) -> WebGLTexture {
+    fn new_inherited(id: u32) -> WebGLTexture {
         WebGLTexture {
             webgl_object: WebGLObject::new_inherited(),
             id: id,
             target: Cell::new(None),
             is_deleted: Cell::new(false),
-            renderer: renderer,
         }
     }
 
-    pub fn maybe_new(global: GlobalRef, renderer: IpcSender<CanvasMsg>)
+    pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
                      -> Option<Root<WebGLTexture>> {
         let (sender, receiver) = ipc::channel().unwrap();
         renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::CreateTexture(sender))).unwrap();
 
         let result = receiver.recv().unwrap();
-        result.map(|texture_id| WebGLTexture::new(global, renderer, *texture_id))
+        result.map(|texture_id| WebGLTexture::new(global, *texture_id))
     }
 
-    pub fn new(global: GlobalRef, renderer: IpcSender<CanvasMsg>, id: u32) -> Root<WebGLTexture> {
-        reflect_dom_object(box WebGLTexture::new_inherited(renderer, id), global, WebGLTextureBinding::Wrap)
+    pub fn new(global: GlobalRef, id: u32) -> Root<WebGLTexture> {
+        reflect_dom_object(box WebGLTexture::new_inherited(id), global, WebGLTextureBinding::Wrap)
     }
 }
-
 
 impl WebGLTexture {
     pub fn id(&self) -> u32 {
@@ -61,7 +57,7 @@ impl WebGLTexture {
     }
 
     // NB: Only valid texture targets come here
-    pub fn bind(&self, target: u32) -> WebGLResult<()> {
+    pub fn bind(&self, renderer: &IpcSender<CanvasMsg>, target: u32) -> WebGLResult<()> {
         if let Some(previous_target) = self.target.get() {
             if target != previous_target {
                 return Err(WebGLError::InvalidOperation);
@@ -70,15 +66,15 @@ impl WebGLTexture {
             self.target.set(Some(target));
         }
 
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindTexture(self.id, target))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindTexture(self.id, target))).unwrap();
 
         Ok(())
     }
 
-    pub fn delete(&self) {
+    pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteTexture(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteTexture(self.id))).unwrap();
         }
     }
 
@@ -86,6 +82,7 @@ impl WebGLTexture {
     ///   https://www.khronos.org/webgl/public-mailing-list/archives/1008/msg00014.html
     ///
     pub fn tex_parameter(&self,
+                     renderer: &IpcSender<CanvasMsg>,
                      target: u32,
                      name: u32,
                      value: TexParameterValue) -> WebGLResult<()> {
@@ -103,7 +100,7 @@ impl WebGLTexture {
                     constants::LINEAR_MIPMAP_NEAREST |
                     constants::NEAREST_MIPMAP_LINEAR |
                     constants::LINEAR_MIPMAP_LINEAR => {
-                        self.renderer
+                        renderer
                             .send(CanvasMsg::WebGL(CanvasWebGLMsg::TexParameteri(target, name, int_value)))
                             .unwrap();
                         Ok(())
@@ -116,7 +113,7 @@ impl WebGLTexture {
                 match int_value as u32 {
                     constants::NEAREST |
                     constants::LINEAR => {
-                        self.renderer
+                        renderer
                             .send(CanvasMsg::WebGL(CanvasWebGLMsg::TexParameteri(target, name, int_value)))
                             .unwrap();
                         Ok(())
@@ -131,7 +128,7 @@ impl WebGLTexture {
                     constants::CLAMP_TO_EDGE |
                     constants::MIRRORED_REPEAT |
                     constants::REPEAT => {
-                        self.renderer
+                        renderer
                             .send(CanvasMsg::WebGL(CanvasWebGLMsg::TexParameteri(target, name, int_value)))
                             .unwrap();
                         Ok(())

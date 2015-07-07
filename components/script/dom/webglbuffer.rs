@@ -19,35 +19,31 @@ pub struct WebGLBuffer {
     /// The target to which this buffer was bound the first time
     target: Cell<Option<u32>>,
     is_deleted: Cell<bool>,
-    #[ignore_heap_size_of = "Defined in ipc-channel"]
-    renderer: IpcSender<CanvasMsg>,
 }
 
 impl WebGLBuffer {
-    fn new_inherited(renderer: IpcSender<CanvasMsg>, id: u32) -> WebGLBuffer {
+    fn new_inherited(id: u32) -> WebGLBuffer {
         WebGLBuffer {
             webgl_object: WebGLObject::new_inherited(),
             id: id,
             target: Cell::new(None),
             is_deleted: Cell::new(false),
-            renderer: renderer,
         }
     }
 
-    pub fn maybe_new(global: GlobalRef, renderer: IpcSender<CanvasMsg>)
+    pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
                      -> Option<Root<WebGLBuffer>> {
         let (sender, receiver) = ipc::channel().unwrap();
         renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::CreateBuffer(sender))).unwrap();
 
         let result = receiver.recv().unwrap();
-        result.map(|buffer_id| WebGLBuffer::new(global, renderer, *buffer_id))
+        result.map(|buffer_id| WebGLBuffer::new(global, *buffer_id))
     }
 
-    pub fn new(global: GlobalRef, renderer: IpcSender<CanvasMsg>, id: u32) -> Root<WebGLBuffer> {
-        reflect_dom_object(box WebGLBuffer::new_inherited(renderer, id), global, WebGLBufferBinding::Wrap)
+    pub fn new(global: GlobalRef, id: u32) -> Root<WebGLBuffer> {
+        reflect_dom_object(box WebGLBuffer::new_inherited(id), global, WebGLBufferBinding::Wrap)
     }
 }
-
 
 impl WebGLBuffer {
     pub fn id(&self) -> u32 {
@@ -55,7 +51,7 @@ impl WebGLBuffer {
     }
 
     // NB: Only valid buffer targets come here
-    pub fn bind(&self, target: u32) -> WebGLResult<()> {
+    pub fn bind(&self, renderer: &IpcSender<CanvasMsg>, target: u32) -> WebGLResult<()> {
         if let Some(previous_target) = self.target.get() {
             if target != previous_target {
                 return Err(WebGLError::InvalidOperation);
@@ -63,15 +59,15 @@ impl WebGLBuffer {
         } else {
             self.target.set(Some(target));
         }
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindBuffer(target, self.id))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindBuffer(target, self.id))).unwrap();
 
         Ok(())
     }
 
-    pub fn delete(&self) {
+    pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteBuffer(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteBuffer(self.id))).unwrap();
         }
     }
 }
