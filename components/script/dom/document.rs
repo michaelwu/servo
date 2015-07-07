@@ -110,11 +110,9 @@ pub enum IsHTMLDocument {
 
 // https://dom.spec.whatwg.org/#document
 #[dom_struct]
-#[derive(HeapSizeOf)]
 pub struct Document {
     node: Node,
     window: JS<Window>,
-    idmap: DOMRefCell<HashMap<Atom, Vec<JS<Element>>>>,
     implementation: MutNullableHeap<JS<DOMImplementation>>,
     location: MutNullableHeap<JS<Location>>,
     content_type: DOMString,
@@ -143,14 +141,21 @@ pub struct Document {
     /// https://html.spec.whatwg.org/multipage/#animation-frame-callback-identifier
     /// Current identifier of animation frame callback
     animation_frame_ident: Cell<i32>,
+    /// The current active HTML parser, to allow resuming after interruptions.
+    current_parser: MutNullableHeap<JS<ServoHTMLParser>>,
+    extra: Box<DocumentExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable, HeapSizeOf)]
+struct DocumentExtra {
+    idmap: DOMRefCell<HashMap<Atom, Vec<JS<Element>>>>,
     /// https://html.spec.whatwg.org/multipage/#list-of-animation-frame-callbacks
     /// List of animation frame callbacks
     #[ignore_heap_size_of = "closures are hard"]
     animation_frame_list: RefCell<HashMap<i32, Box<Fn(f64)>>>,
     /// Tracks all outstanding loads related to this document.
     loader: DOMRefCell<DocumentLoader>,
-    /// The current active HTML parser, to allow resuming after interruptions.
-    current_parser: MutNullableHeap<JS<ServoHTMLParser>>,
     /// When we should kick off a reflow. This happens during parsing.
     reflow_timeout: Cell<Option<u64>>,
 }
@@ -297,12 +302,12 @@ pub trait DocumentHelpers<'a> {
 impl<'a> DocumentHelpers<'a> for &'a Document {
     #[inline]
     fn loader(&self) -> Ref<DocumentLoader> {
-        self.loader.borrow()
+        self.extra.loader.borrow()
     }
 
     #[inline]
     fn mut_loader(&self) -> RefMut<DocumentLoader> {
-        self.loader.borrow_mut()
+        self.extra.loader.borrow_mut()
     }
 
     #[inline]
@@ -370,12 +375,12 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
 
     /// Reflows and disarms the timer if the reflow timer has expired.
     fn reflow_if_reflow_timer_expired(self) {
-        if let Some(reflow_timeout) = self.reflow_timeout.get() {
+        if let Some(reflow_timeout) = self.extra.reflow_timeout.get() {
             if time::precise_time_ns() < reflow_timeout {
                 return
             }
 
-            self.reflow_timeout.set(None);
+            self.extra.reflow_timeout.set(None);
             let window = self.window.root();
             window.r().reflow(ReflowGoal::ForDisplay,
                               ReflowQueryType::NoQuery,
@@ -387,17 +392,17 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
     /// units). This reflow happens even if the event loop is busy. This is used to display initial
     /// page content during parsing.
     fn set_reflow_timeout(self, timeout: u64) {
-        if let Some(existing_timeout) = self.reflow_timeout.get() {
+        if let Some(existing_timeout) = self.extra.reflow_timeout.get() {
             if existing_timeout < timeout {
                 return
             }
         }
-        self.reflow_timeout.set(Some(timeout))
+        self.extra.reflow_timeout.set(Some(timeout))
     }
 
     /// Disables any pending reflow timeouts.
     fn disarm_reflow_timeout(self) {
-        self.reflow_timeout.set(None)
+        self.extra.reflow_timeout.set(None)
     }
 
     /// Remove any existing association between the provided id and any elements in this document.
@@ -405,7 +410,7 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
                                 to_unregister: &Element,
                                 id: Atom) {
         debug!("Removing named element from document {:p}: {:p} id={}", self, to_unregister, id);
-        let mut idmap = self.idmap.borrow_mut();
+        let mut idmap = self.extra.idmap.borrow_mut();
         let is_empty = match idmap.get_mut(&id) {
             None => false,
             Some(elements) => {
@@ -433,7 +438,7 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
         });
         assert!(!id.is_empty());
 
-        let mut idmap = self.idmap.borrow_mut();
+        let mut idmap = self.extra.idmap.borrow_mut();
 
         let root = self.GetDocumentElement().expect(
             "The element is in the document, so there must be a document element.");
@@ -914,7 +919,7 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
         let ident = self.animation_frame_ident.get() + 1;
 
         self.animation_frame_ident.set(ident);
-        self.animation_frame_list.borrow_mut().insert(ident, callback);
+        self.extra.animation_frame_list.borrow_mut().insert(ident, callback);
 
         // TODO: Should tick animation only when document is visible
         let ConstellationChan(ref chan) = window.constellation_chan();
@@ -927,8 +932,8 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
 
     /// https://w3c.github.io/animation-timing/#dom-windowanimationtiming-cancelanimationframe
     fn cancel_animation_frame(self, ident: i32) {
-        self.animation_frame_list.borrow_mut().remove(&ident);
-        if self.animation_frame_list.borrow().len() == 0 {
+        self.extra.animation_frame_list.borrow_mut().remove(&ident);
+        if self.extra.animation_frame_list.borrow().len() == 0 {
             let window = self.window.root();
             let window = window.r();
             let ConstellationChan(ref chan) = window.constellation_chan();
@@ -942,7 +947,7 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
     fn invoke_animation_callbacks(self) {
         let animation_frame_list;
         {
-            let mut list = self.animation_frame_list.borrow_mut();
+            let mut list = self.extra.animation_frame_list.borrow_mut();
             animation_frame_list = Vec::from_iter(list.drain());
 
             let window = self.window.root();
@@ -967,22 +972,22 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
     }
 
     fn prepare_async_load(self, load: LoadType) -> PendingAsyncLoad {
-        let mut loader = self.loader.borrow_mut();
+        let mut loader = self.extra.loader.borrow_mut();
         loader.prepare_async_load(load)
     }
 
     fn load_async(self, load: LoadType, listener: AsyncResponseTarget) {
-        let mut loader = self.loader.borrow_mut();
+        let mut loader = self.extra.loader.borrow_mut();
         loader.load_async(load, listener)
     }
 
     fn load_sync(self, load: LoadType) -> Result<(Metadata, Vec<u8>), String> {
-        let mut loader = self.loader.borrow_mut();
+        let mut loader = self.extra.loader.borrow_mut();
         loader.load_sync(load)
     }
 
     fn finish_load(self, load: LoadType) {
-        let mut loader = self.loader.borrow_mut();
+        let mut loader = self.extra.loader.borrow_mut();
         loader.finish_load(load);
     }
 
@@ -1048,7 +1053,6 @@ impl Document {
         Document {
             node: Node::new_without_doc(NodeTypeId::Document),
             window: JS::from_ref(window),
-            idmap: DOMRefCell::new(HashMap::new()),
             implementation: Default::default(),
             location: Default::default(),
             content_type: match content_type {
@@ -1080,10 +1084,13 @@ impl Document {
             current_script: Default::default(),
             scripting_enabled: Cell::new(true),
             animation_frame_ident: Cell::new(0),
-            animation_frame_list: RefCell::new(HashMap::new()),
-            loader: DOMRefCell::new(doc_loader),
             current_parser: Default::default(),
-            reflow_timeout: Cell::new(None),
+            extra: box DocumentExtra {
+                idmap: DOMRefCell::new(HashMap::new()),
+                animation_frame_list: RefCell::new(HashMap::new()),
+                loader: DOMRefCell::new(doc_loader),
+                reflow_timeout: Cell::new(None),
+            }
         }
     }
 
@@ -1249,7 +1256,7 @@ impl<'a> DocumentMethods for &'a Document {
     // https://dom.spec.whatwg.org/#dom-nonelementparentnode-getelementbyid
     fn GetElementById(self, id: DOMString) -> Option<Root<Element>> {
         let id = Atom::from_slice(&id);
-        self.idmap.borrow().get(&id).map(|ref elements| (*elements)[0].root())
+        self.extra.idmap.borrow().get(&id).map(|ref elements| (*elements)[0].root())
     }
 
     // https://dom.spec.whatwg.org/#dom-document-createelement

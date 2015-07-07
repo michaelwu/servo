@@ -25,8 +25,6 @@ pub fn heap_size_of_eventtarget(target: &EventTarget) -> usize {
     match target.type_id() {
         &EventTargetTypeId::Node(NodeTypeId::CharacterData(_)) =>
             heap_size_of_self_and_children(CharacterDataCast::to_ref(target).unwrap()),
-        &EventTargetTypeId::Node(NodeTypeId::Document) =>
-            heap_size_of_self_and_children(DocumentCast::to_ref(target).unwrap()),
         &EventTargetTypeId::Node(_) =>
             heap_size_of_self_and_children(NodeCast::to_ref(target).unwrap()),
         _ => 0,
