@@ -31,8 +31,6 @@ pub struct WebGLShader {
     info_log: RefCell<Option<String>>,
     is_deleted: Cell<bool>,
     compilation_status: Cell<ShaderCompilationStatus>,
-    #[ignore_heap_size_of = "Defined in ipc-channel"]
-    renderer: IpcSender<CanvasMsg>,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -44,7 +42,7 @@ const SHADER_OUTPUT_FORMAT: Output = Output::Essl;
 static GLSLANG_INITIALIZATION: Once = ONCE_INIT;
 
 impl WebGLShader {
-    fn new_inherited(renderer: IpcSender<CanvasMsg>, id: u32, shader_type: u32) -> WebGLShader {
+    fn new_inherited(id: u32, shader_type: u32) -> WebGLShader {
         GLSLANG_INITIALIZATION.call_once(|| ::angle::hl::initialize().unwrap());
         WebGLShader {
             webgl_object: WebGLObject::new_inherited(),
@@ -54,29 +52,26 @@ impl WebGLShader {
             info_log: RefCell::new(None),
             is_deleted: Cell::new(false),
             compilation_status: Cell::new(ShaderCompilationStatus::NotCompiled),
-            renderer: renderer,
         }
     }
 
     pub fn maybe_new(global: GlobalRef,
-                     renderer: IpcSender<CanvasMsg>,
+                     renderer: &IpcSender<CanvasMsg>,
                      shader_type: u32) -> Option<Root<WebGLShader>> {
         let (sender, receiver) = ipc::channel().unwrap();
         renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::CreateShader(shader_type, sender))).unwrap();
 
         let result = receiver.recv().unwrap();
-        result.map(|shader_id| WebGLShader::new(global, renderer, *shader_id, shader_type))
+        result.map(|shader_id| WebGLShader::new(global, *shader_id, shader_type))
     }
 
     pub fn new(global: GlobalRef,
-               renderer: IpcSender<CanvasMsg>,
                id: u32,
                shader_type: u32) -> Root<WebGLShader> {
         reflect_dom_object(
-            box WebGLShader::new_inherited(renderer, id, shader_type), global, WebGLShaderBinding::Wrap)
+            box WebGLShader::new_inherited(id, shader_type), global, WebGLShaderBinding::Wrap)
     }
 }
-
 
 impl WebGLShader {
     pub fn id(&self) -> u32 {
@@ -88,7 +83,7 @@ impl WebGLShader {
     }
 
     /// glCompileShader
-    pub fn compile(&self) {
+    pub fn compile(&self, renderer: &IpcSender<CanvasMsg>) {
         if self.compilation_status.get() != ShaderCompilationStatus::NotCompiled {
             debug!("Compiling already compiled shader {}", self.id);
         }
@@ -103,7 +98,7 @@ impl WebGLShader {
                     // will succeed.
                     // It could be interesting to retrieve the info log from the paint task though
                     let msg = CanvasWebGLMsg::CompileShader(self.id, translated_source);
-                    self.renderer.send(CanvasMsg::WebGL(msg)).unwrap();
+                    renderer.send(CanvasMsg::WebGL(msg)).unwrap();
                     self.compilation_status.set(ShaderCompilationStatus::Succeeded);
                 },
                 Err(error) => {
@@ -118,10 +113,10 @@ impl WebGLShader {
 
     /// Mark this shader as deleted (if it wasn't previously)
     /// and delete it as if calling glDeleteShader.
-    pub fn delete(&self) {
+    pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteShader(self.id))).unwrap()
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteShader(self.id))).unwrap()
         }
     }
 
@@ -131,14 +126,14 @@ impl WebGLShader {
     }
 
     /// glGetShaderParameter
-    pub fn parameter(&self, param_id: u32) -> WebGLResult<WebGLShaderParameter> {
+    pub fn parameter(&self, renderer: &IpcSender<CanvasMsg>, param_id: u32) -> WebGLResult<WebGLShaderParameter> {
         match param_id {
             constants::SHADER_TYPE | constants::DELETE_STATUS | constants::COMPILE_STATUS => {},
             _ => return Err(WebGLError::InvalidEnum),
         }
 
         let (sender, receiver) = ipc::channel().unwrap();
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetShaderParameter(self.id, param_id, sender))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetShaderParameter(self.id, param_id, sender))).unwrap();
         Ok(receiver.recv().unwrap())
     }
 

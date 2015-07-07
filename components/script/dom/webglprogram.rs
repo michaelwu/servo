@@ -22,58 +22,54 @@ pub struct WebGLProgram {
     is_deleted: Cell<bool>,
     fragment_shader: MutNullableHeap<JS<WebGLShader>>,
     vertex_shader: MutNullableHeap<JS<WebGLShader>>,
-    #[ignore_heap_size_of = "Defined in ipc-channel"]
-    renderer: IpcSender<CanvasMsg>,
 }
 
 impl WebGLProgram {
-    fn new_inherited(renderer: IpcSender<CanvasMsg>, id: u32) -> WebGLProgram {
+    fn new_inherited(id: u32) -> WebGLProgram {
         WebGLProgram {
             webgl_object: WebGLObject::new_inherited(),
             id: id,
             is_deleted: Cell::new(false),
             fragment_shader: Default::default(),
             vertex_shader: Default::default(),
-            renderer: renderer,
         }
     }
 
-    pub fn maybe_new(global: GlobalRef, renderer: IpcSender<CanvasMsg>)
+    pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
                      -> Option<Root<WebGLProgram>> {
         let (sender, receiver) = ipc::channel().unwrap();
         renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::CreateProgram(sender))).unwrap();
 
         let result = receiver.recv().unwrap();
-        result.map(|program_id| WebGLProgram::new(global, renderer, *program_id))
+        result.map(|program_id| WebGLProgram::new(global, *program_id))
     }
 
-    pub fn new(global: GlobalRef, renderer: IpcSender<CanvasMsg>, id: u32) -> Root<WebGLProgram> {
-        reflect_dom_object(box WebGLProgram::new_inherited(renderer, id), global, WebGLProgramBinding::Wrap)
+    pub fn new(global: GlobalRef, id: u32) -> Root<WebGLProgram> {
+        reflect_dom_object(box WebGLProgram::new_inherited(id), global, WebGLProgramBinding::Wrap)
     }
 }
 
-
 impl WebGLProgram {
     /// glDeleteProgram
-    pub fn delete(&self) {
+    pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteProgram(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteProgram(self.id))).unwrap();
         }
     }
 
     /// glLinkProgram
-    pub fn link(&self) {
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::LinkProgram(self.id))).unwrap();
+    pub fn link(&self, renderer: &IpcSender<CanvasMsg>) {
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::LinkProgram(self.id))).unwrap();
     }
 
     /// glUseProgram
-    pub fn use_program(&self) {
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::UseProgram(self.id))).unwrap();
+    pub fn use_program(&self, renderer: &IpcSender<CanvasMsg>) {
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::UseProgram(self.id))).unwrap();
     }
 
     /// glAttachShader
-    pub fn attach_shader(&self, shader: &WebGLShader) -> WebGLResult<()> {
+    pub fn attach_shader(&self, renderer: &IpcSender<CanvasMsg>, shader: &WebGLShader) -> WebGLResult<()> {
         let shader_slot = match shader.gl_type() {
             constants::FRAGMENT_SHADER => &self.fragment_shader,
             constants::VERTEX_SHADER => &self.vertex_shader,
@@ -88,13 +84,13 @@ impl WebGLProgram {
 
         shader_slot.set(Some(JS::from_ref(shader)));
 
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::AttachShader(self.id, shader.id()))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::AttachShader(self.id, shader.id()))).unwrap();
 
         Ok(())
     }
 
     /// glGetAttribLocation
-    pub fn get_attrib_location(&self, name: String) -> WebGLResult<Option<i32>> {
+    pub fn get_attrib_location(&self, renderer: &IpcSender<CanvasMsg>, name: String) -> WebGLResult<Option<i32>> {
         if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
             return Err(WebGLError::InvalidValue);
         }
@@ -105,12 +101,12 @@ impl WebGLProgram {
         }
 
         let (sender, receiver) = ipc::channel().unwrap();
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetAttribLocation(self.id, name, sender))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetAttribLocation(self.id, name, sender))).unwrap();
         Ok(receiver.recv().unwrap())
     }
 
     /// glGetUniformLocation
-    pub fn get_uniform_location(&self, name: String) -> WebGLResult<Option<i32>> {
+    pub fn get_uniform_location(&self, renderer: &IpcSender<CanvasMsg>, name: String) -> WebGLResult<Option<i32>> {
         if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
             return Err(WebGLError::InvalidValue);
         }
@@ -121,7 +117,7 @@ impl WebGLProgram {
         }
 
         let (sender, receiver) = ipc::channel().unwrap();
-        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetUniformLocation(self.id, name, sender))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetUniformLocation(self.id, name, sender))).unwrap();
         Ok(receiver.recv().unwrap())
     }
 }

@@ -284,7 +284,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     fn AttachShader(&self, program: Option<&WebGLProgram>, shader: Option<&WebGLShader>) {
         if let Some(program) = program {
             if let Some(shader) = shader {
-                handle_potential_webgl_error!(self, program.attach_shader(shader));
+                handle_potential_webgl_error!(self, program.attach_shader(&self.ipc_renderer, shader));
             }
         }
     }
@@ -299,7 +299,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
         }
 
         if let Some(buffer) = buffer {
-            handle_potential_webgl_error!(self, buffer.bind(target))
+            handle_potential_webgl_error!(self, buffer.bind(&self.ipc_renderer, target))
         } else {
             // Unbind the current buffer
             self.ipc_renderer
@@ -315,7 +315,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
         }
 
         if let Some(framebuffer) = framebuffer {
-            framebuffer.bind(target)
+            framebuffer.bind(&self.ipc_renderer, target)
         } else {
             // Bind the default framebuffer
             let cmd = CanvasWebGLMsg::BindFramebuffer(target, WebGLFramebufferBindingRequest::Default);
@@ -330,7 +330,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
         }
 
         if let Some(renderbuffer) = renderbuffer {
-            renderbuffer.bind(target)
+            renderbuffer.bind(&self.ipc_renderer, target)
         } else {
             // Unbind the currently bound renderbuffer
             self.ipc_renderer
@@ -349,7 +349,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
         };
 
         if let Some(texture) = texture {
-            match texture.bind(target) {
+            match texture.bind(&self.ipc_renderer, target) {
                 Ok(_) => slot.set(Some(JS::from_ref(texture))),
                 Err(err) => return self.webgl_error(err),
             }
@@ -496,7 +496,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn CompileShader(&self, shader: Option<&WebGLShader>) {
         if let Some(shader) = shader {
-            shader.compile()
+            shader.compile(&self.ipc_renderer)
         }
     }
 
@@ -504,75 +504,75 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // generated objects, either here or in the webgl task
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.5
     fn CreateBuffer(&self) -> Option<Root<WebGLBuffer>> {
-        WebGLBuffer::maybe_new(self.global.root().r(), self.ipc_renderer.clone())
+        WebGLBuffer::maybe_new(self.global.root().r(), &self.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.6
     fn CreateFramebuffer(&self) -> Option<Root<WebGLFramebuffer>> {
-        WebGLFramebuffer::maybe_new(self.global.root().r(), self.ipc_renderer.clone())
+        WebGLFramebuffer::maybe_new(self.global.root().r(), &self.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.7
     fn CreateRenderbuffer(&self) -> Option<Root<WebGLRenderbuffer>> {
-        WebGLRenderbuffer::maybe_new(self.global.root().r(), self.ipc_renderer.clone())
+        WebGLRenderbuffer::maybe_new(self.global.root().r(), &self.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.8
     fn CreateTexture(&self) -> Option<Root<WebGLTexture>> {
-        WebGLTexture::maybe_new(self.global.root().r(), self.ipc_renderer.clone())
+        WebGLTexture::maybe_new(self.global.root().r(), &self.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn CreateProgram(&self) -> Option<Root<WebGLProgram>> {
-        WebGLProgram::maybe_new(self.global.root().r(), self.ipc_renderer.clone())
+        WebGLProgram::maybe_new(self.global.root().r(), &self.ipc_renderer)
     }
 
     // TODO(ecoal95): Check if constants are cross-platform or if we must make a translation
     // between WebGL constants and native ones.
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn CreateShader(&self, shader_type: u32) -> Option<Root<WebGLShader>> {
-        WebGLShader::maybe_new(self.global.root().r(), self.ipc_renderer.clone(), shader_type)
+        WebGLShader::maybe_new(self.global.root().r(), &self.ipc_renderer, shader_type)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.5
     fn DeleteBuffer(&self, buffer: Option<&WebGLBuffer>) {
         if let Some(buffer) = buffer {
-            buffer.delete()
+            buffer.delete(&self.ipc_renderer)
         }
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.6
     fn DeleteFramebuffer(&self, framebuffer: Option<&WebGLFramebuffer>) {
         if let Some(framebuffer) = framebuffer {
-            framebuffer.delete()
+            framebuffer.delete(&self.ipc_renderer)
         }
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.7
     fn DeleteRenderbuffer(&self, renderbuffer: Option<&WebGLRenderbuffer>) {
         if let Some(renderbuffer) = renderbuffer {
-            renderbuffer.delete()
+            renderbuffer.delete(&self.ipc_renderer)
         }
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.8
     fn DeleteTexture(&self, texture: Option<&WebGLTexture>) {
         if let Some(texture) = texture {
-            texture.delete()
+            texture.delete(&self.ipc_renderer)
         }
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn DeleteProgram(&self, program: Option<&WebGLProgram>) {
         if let Some(program) = program {
-            program.delete()
+            program.delete(&self.ipc_renderer)
         }
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn DeleteShader(&self, shader: Option<&WebGLShader>) {
         if let Some(shader) = shader {
-            shader.delete()
+            shader.delete(&self.ipc_renderer)
         }
     }
 
@@ -608,7 +608,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.10
     fn GetAttribLocation(&self, program: Option<&WebGLProgram>, name: DOMString) -> i32 {
         if let Some(program) = program {
-            handle_potential_webgl_error!(self, program.get_attrib_location(name), None).unwrap_or(-1)
+            handle_potential_webgl_error!(self, program.get_attrib_location(&self.ipc_renderer, name), None).unwrap_or(-1)
         } else {
             -1
         }
@@ -626,7 +626,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn GetShaderParameter(&self, _: *mut JSContext, shader: Option<&WebGLShader>, param_id: u32) -> JSVal {
         if let Some(shader) = shader {
-            match handle_potential_webgl_error!(self, shader.parameter(param_id), WebGLShaderParameter::Invalid) {
+            match handle_potential_webgl_error!(self, shader.parameter(&self.ipc_renderer, param_id), WebGLShaderParameter::Invalid) {
                 WebGLShaderParameter::Int(val) => Int32Value(val),
                 WebGLShaderParameter::Bool(val) => BooleanValue(val),
                 WebGLShaderParameter::Invalid => NullValue(),
@@ -641,7 +641,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
                           program: Option<&WebGLProgram>,
                           name: DOMString) -> Option<Root<WebGLUniformLocation>> {
         if let Some(program) = program {
-            handle_potential_webgl_error!(self, program.get_uniform_location(name), None)
+            handle_potential_webgl_error!(self, program.get_uniform_location(&self.ipc_renderer, name), None)
                 .map(|location| WebGLUniformLocation::new(self.global.root().r(), location))
         } else {
             None
@@ -741,7 +741,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn LinkProgram(&self, program: Option<&WebGLProgram>) {
         if let Some(program) = program {
-            program.link()
+            program.link(&self.ipc_renderer)
         }
     }
 
@@ -789,7 +789,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn UseProgram(&self, program: Option<&WebGLProgram>) {
         if let Some(program) = program {
-            program.use_program()
+            program.use_program(&self.ipc_renderer)
         }
     }
 
@@ -897,7 +897,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
             constants::TEXTURE_CUBE_MAP => {
                 if let Some(texture) = self.bound_texture_for(target) {
                     let texture = texture.root();
-                    let result = texture.r().tex_parameter(target, name, TexParameterValue::Float(value));
+                    let result = texture.r().tex_parameter(&self.ipc_renderer, target, name, TexParameterValue::Float(value));
                     handle_potential_webgl_error!(self, result);
                 } else {
                     return self.webgl_error(InvalidOperation);
@@ -915,7 +915,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
             constants::TEXTURE_CUBE_MAP => {
                 if let Some(texture) = self.bound_texture_for(target) {
                     let texture = texture.root();
-                    let result = texture.r().tex_parameter(target, name, TexParameterValue::Int(value));
+                    let result = texture.r().tex_parameter(&self.ipc_renderer, target, name, TexParameterValue::Int(value));
                     handle_potential_webgl_error!(self, result);
                 } else {
                     return self.webgl_error(InvalidOperation);
