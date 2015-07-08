@@ -17,14 +17,14 @@ use util::str::DOMString;
 #[dom_struct]
 pub struct WorkerLocation {
     reflector_: Reflector,
-    url: Url,
+    url: Box<Url>,
 }
 
 impl WorkerLocation {
     fn new_inherited(url: Url) -> WorkerLocation {
         WorkerLocation {
             reflector_: Reflector::new(),
-            url: url,
+            url: box url,
         }
     }
 

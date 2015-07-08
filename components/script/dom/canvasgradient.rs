@@ -18,6 +18,11 @@ use dom::canvasrenderingcontext2d::parse_color;
 #[dom_struct]
 pub struct CanvasGradient {
     reflector_: Reflector,
+    extra: Box<CanvasGradientExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct CanvasGradientExtra {
     style: CanvasGradientStyle,
     stops: DOMRefCell<Vec<CanvasGradientStop>>,
 }
@@ -32,8 +37,10 @@ impl CanvasGradient {
     fn new_inherited(style: CanvasGradientStyle) -> CanvasGradient {
         CanvasGradient {
             reflector_: Reflector::new(),
-            style: style,
-            stops: DOMRefCell::new(Vec::new()),
+            extra: box CanvasGradientExtra {
+                style: style,
+                stops: DOMRefCell::new(Vec::new()),
+            },
         }
     }
 
@@ -55,7 +62,7 @@ impl CanvasGradientMethods for CanvasGradient {
             _ => return Err(Syntax)
         };
 
-        self.stops.borrow_mut().push(CanvasGradientStop {
+        self.extra.stops.borrow_mut().push(CanvasGradientStop {
             offset: (*offset) as f64,
             color: color,
         });
@@ -69,8 +76,8 @@ pub trait ToFillOrStrokeStyle {
 
 impl<'a> ToFillOrStrokeStyle for &'a CanvasGradient {
     fn to_fill_or_stroke_style(self) -> FillOrStrokeStyle {
-        let gradient_stops = self.stops.borrow().clone();
-        match self.style {
+        let gradient_stops = self.extra.stops.borrow().clone();
+        match self.extra.style {
             CanvasGradientStyle::Linear(ref gradient) =>  {
                 FillOrStrokeStyle::LinearGradient(
                     LinearGradientStyle::new(gradient.x0, gradient.y0,

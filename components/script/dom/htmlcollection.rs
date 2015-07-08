@@ -28,14 +28,14 @@ pub struct Collection(JS<Node>, Box<CollectionFilter + 'static>);
 pub struct HTMLCollection {
     reflector_: Reflector,
     #[ignore_heap_size_of = "Contains a trait object; can't measure due to #6870"]
-    collection: Collection,
+    collection: Box<Collection>,
 }
 
 impl HTMLCollection {
     fn new_inherited(collection: Collection) -> HTMLCollection {
         HTMLCollection {
             reflector_: Reflector::new(),
-            collection: collection,
+            collection: box collection,
         }
     }
 

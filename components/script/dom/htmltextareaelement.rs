@@ -39,12 +39,17 @@ use util::str::DOMString;
 #[dom_struct]
 pub struct HTMLTextAreaElement {
     htmlelement: HTMLElement,
-    #[ignore_heap_size_of = "#7193"]
-    textinput: DOMRefCell<TextInput<ConstellationChan>>,
     cols: Cell<u32>,
     rows: Cell<u32>,
     // https://html.spec.whatwg.org/multipage/#concept-textarea-dirty
     value_changed: Cell<bool>,
+    extra: Box<HTMLTextAreaElementExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct HTMLTextAreaElementExtra {
+    #[ignore_heap_size_of = "#7193"]
+    textinput: DOMRefCell<TextInput<ConstellationChan>>,
 }
 
 impl HTMLTextAreaElementDerived for EventTarget {
@@ -71,7 +76,7 @@ impl LayoutHTMLTextAreaElementHelpers for LayoutJS<HTMLTextAreaElement> {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_value_for_layout(self) -> String {
-        (*self.unsafe_get()).textinput.borrow_for_layout().get_content()
+        (*self.unsafe_get()).extra.textinput.borrow_for_layout().get_content()
     }
 }
 
@@ -100,10 +105,12 @@ impl HTMLTextAreaElement {
         HTMLTextAreaElement {
             htmlelement:
                 HTMLElement::new_inherited(HTMLElementTypeId::HTMLTextAreaElement, localName, prefix, document),
-            textinput: DOMRefCell::new(TextInput::new(Lines::Multiple, "".to_owned(), chan)),
             cols: Cell::new(DEFAULT_COLS),
             rows: Cell::new(DEFAULT_ROWS),
             value_changed: Cell::new(false),
+            extra: box HTMLTextAreaElementExtra {
+                textinput: DOMRefCell::new(TextInput::new(Lines::Multiple, "".to_owned(), chan)),
+            },
         }
     }
 
@@ -198,13 +205,13 @@ impl HTMLTextAreaElementMethods for HTMLTextAreaElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-textarea-value
     fn Value(&self) -> DOMString {
-        self.textinput.borrow().get_content()
+        self.extra.textinput.borrow().get_content()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-textarea-value
     fn SetValue(&self, value: DOMString) {
         // TODO move the cursor to the end of the field
-        self.textinput.borrow_mut().set_content(value);
+        self.extra.textinput.borrow_mut().set_content(value);
         self.value_changed.set(true);
 
         self.force_relayout();
@@ -338,7 +345,7 @@ impl VirtualMethods for HTMLTextAreaElement {
         } else if &*event.Type() == "keydown" && !event.DefaultPrevented() {
             let keyevent: Option<&KeyboardEvent> = KeyboardEventCast::to_ref(event);
             keyevent.map(|kevent| {
-                match self.textinput.borrow_mut().handle_keydown(kevent) {
+                match self.extra.textinput.borrow_mut().handle_keydown(kevent) {
                     KeyReaction::TriggerDefaultAction => (),
                     KeyReaction::DispatchInput => {
                         self.value_changed.set(true);

@@ -116,7 +116,7 @@ impl AsyncResponseListener for ParserContext {
                 self.is_image_document.set(true);
                 let page = format!("<html><body><img src='{}' /></body></html>",
                                    self.url.serialize());
-                parser.pending_input.borrow_mut().push(page);
+                parser.extra.pending_input.borrow_mut().push(page);
                 parser.parse_sync();
             }
             Some(ContentType(Mime(TopLevel::Text, SubLevel::Plain, _))) => {
@@ -129,7 +129,7 @@ impl AsyncResponseListener for ParserContext {
                 // Spec for text/plain handling is:
                 // https://html.spec.whatwg.org/multipage/#read-text
                 let page = format!("<pre>\u{000A}<plaintext>");
-                parser.pending_input.borrow_mut().push(page);
+                parser.extra.pending_input.borrow_mut().push(page);
                 parser.parse_sync();
             },
             _ => {}
@@ -172,10 +172,6 @@ impl PreInvoke for ParserContext {
 #[dom_struct]
 pub struct ServoHTMLParser {
     reflector_: Reflector,
-    #[ignore_heap_size_of = "Defined in html5ever"]
-    tokenizer: DOMRefCell<Tokenizer>,
-    /// Input chunks received but not yet passed to the parser.
-    pending_input: DOMRefCell<Vec<String>>,
     /// The document associated with this parser.
     document: JS<Document>,
     /// True if this parser should avoid passing any further data to the tokenizer.
@@ -185,18 +181,28 @@ pub struct ServoHTMLParser {
     /// The pipeline associated with this parse, unavailable if this parse does not
     /// correspond to a page load.
     pipeline: Option<PipelineId>,
+    extra: Box<ServoHTMLParserExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct ServoHTMLParserExtra {
+    #[ignore_heap_size_of = "Defined in html5ever"]
+    tokenizer: DOMRefCell<Tokenizer>,
+    /// Input chunks received but not yet passed to the parser.
+    pending_input: DOMRefCell<Vec<String>>,
 }
 
 impl<'a> Parser for &'a ServoHTMLParser {
     fn parse_chunk(self, input: String) {
         self.document.root().r().set_current_parser(Some(self));
-        self.pending_input.borrow_mut().push(input);
+        self.extra.pending_input.borrow_mut().push(input);
         self.parse_sync();
     }
 
     fn finish(self) {
         assert!(!self.suspended.get());
-        assert!(self.pending_input.borrow().is_empty());
+        assert!(self.extra.pending_input.borrow().is_empty());
 
         self.tokenizer().borrow_mut().end();
         debug!("finished parsing");
@@ -229,12 +235,14 @@ impl ServoHTMLParser {
 
         let parser = ServoHTMLParser {
             reflector_: Reflector::new(),
-            tokenizer: DOMRefCell::new(tok),
-            pending_input: DOMRefCell::new(vec!()),
             document: JS::from_ref(document),
             suspended: Cell::new(false),
             last_chunk_received: Cell::new(false),
             pipeline: pipeline,
+            extra: box ServoHTMLParserExtra {
+                tokenizer: DOMRefCell::new(tok),
+                pending_input: DOMRefCell::new(vec!()),
+            },
         };
 
         reflect_dom_object(box parser, GlobalRef::Window(window.r()),
@@ -267,12 +275,14 @@ impl ServoHTMLParser {
 
         let parser = ServoHTMLParser {
             reflector_: Reflector::new(),
-            tokenizer: DOMRefCell::new(tok),
-            pending_input: DOMRefCell::new(vec!()),
             document: JS::from_ref(document),
             suspended: Cell::new(false),
             last_chunk_received: Cell::new(true),
             pipeline: None,
+            extra: box ServoHTMLParserExtra {
+                tokenizer: DOMRefCell::new(tok),
+                pending_input: DOMRefCell::new(vec!()),
+            },
         };
 
         reflect_dom_object(box parser, GlobalRef::Window(window.r()),
@@ -281,7 +291,7 @@ impl ServoHTMLParser {
 
     #[inline]
     pub fn tokenizer(&self) -> &DOMRefCell<Tokenizer> {
-        &self.tokenizer
+        &self.extra.tokenizer
     }
 }
 
@@ -297,19 +307,19 @@ impl ServoHTMLParser {
                 return;
             }
 
-            if self.pending_input.borrow().is_empty() && !first {
+            if self.extra.pending_input.borrow().is_empty() && !first {
                 break;
             }
 
             let document = self.document.root();
             document.r().reflow_if_reflow_timer_expired();
 
-            let mut pending_input = self.pending_input.borrow_mut();
+            let mut pending_input = self.extra.pending_input.borrow_mut();
             if !pending_input.is_empty() {
                 let chunk = pending_input.remove(0);
-                self.tokenizer.borrow_mut().feed(chunk.into());
+                self.extra.tokenizer.borrow_mut().feed(chunk.into());
             } else {
-                self.tokenizer.borrow_mut().run();
+                self.extra.tokenizer.borrow_mut().run();
             }
 
             first = false;

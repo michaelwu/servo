@@ -31,7 +31,7 @@ pub enum FormDatum {
 #[dom_struct]
 pub struct FormData {
     reflector_: Reflector,
-    data: DOMRefCell<HashMap<DOMString, Vec<FormDatum>>>,
+    data: Box<DOMRefCell<HashMap<DOMString, Vec<FormDatum>>>>,
     global: GlobalField,
     form: Option<JS<HTMLFormElement>>
 }
@@ -40,7 +40,7 @@ impl FormData {
     fn new_inherited(form: Option<&HTMLFormElement>, global: GlobalRef) -> FormData {
         FormData {
             reflector_: Reflector::new(),
-            data: DOMRefCell::new(HashMap::new()),
+            data: box DOMRefCell::new(HashMap::new()),
             global: GlobalField::from_rooted(&global),
             form: form.map(|f| JS::from_ref(f)),
         }
