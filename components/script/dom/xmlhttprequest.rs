@@ -69,7 +69,7 @@ use dom::bindings::codegen::UnionTypes::StringOrURLSearchParams::{eString, eURLS
 
 pub type SendParam = StringOrURLSearchParams;
 
-#[derive(JSTraceable, PartialEq, Copy, Clone)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 enum XMLHttpRequestState {
     Unsent = 0,
     Opened = 1,

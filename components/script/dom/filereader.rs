@@ -80,7 +80,7 @@ impl BlobBody {
 pub struct GenerationId(u32);
 
 #[repr(u16)]
-#[derive(Copy, Clone, Debug, PartialEq, JSTraceable)]
+#[derive(Copy, Clone, Debug, PartialEq, NumFromPrimitive, JSTraceable)]
 pub enum FileReaderReadyState {
     Empty = FileReaderConstants::EMPTY,
     Loading = FileReaderConstants::LOADING,

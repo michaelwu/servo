@@ -17,7 +17,7 @@ use std::borrow::ToOwned;
 use std::cmp::{min, max};
 use std::cell::{Cell};
 
-#[derive(JSTraceable)]
+#[derive(JSTraceable, NumFromPrimitive)]
 pub enum BlobTypeId {
     Blob,
     File,

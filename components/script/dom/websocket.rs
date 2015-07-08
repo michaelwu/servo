@@ -38,7 +38,7 @@ use websocket::header::Origin;
 use websocket::result::WebSocketResult;
 use websocket::ws::util::url::parse_url;
 
-#[derive(JSTraceable, PartialEq, Copy, Clone)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 enum WebSocketRequestState {
     Connecting = 0,
     Open = 1,

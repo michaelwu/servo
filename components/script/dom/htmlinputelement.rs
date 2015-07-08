@@ -44,7 +44,7 @@ use std::cell::Cell;
 const DEFAULT_SUBMIT_VALUE: &'static str = "Submit";
 const DEFAULT_RESET_VALUE: &'static str = "Reset";
 
-#[derive(JSTraceable, PartialEq, Copy, Clone)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 #[allow(dead_code)]
 enum InputType {
     InputSubmit,
