@@ -20,6 +20,11 @@ pub struct URL {
     reflector_: Reflector,
 
     // https://url.spec.whatwg.org/#concept-urlutils-url
+    extra: Box<URLExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct URLExtra {
     url: RefCell<Url>,
 
     // https://url.spec.whatwg.org/#concept-urlutils-get-the-base
@@ -30,8 +35,10 @@ impl URL {
     fn new_inherited(url: Url, base: Option<Url>) -> URL {
         URL {
             reflector_: Reflector::new(),
-            url: RefCell::new(url),
-            base: base,
+            extra: box URLExtra {
+                url: RefCell::new(url),
+                base: base,
+            }
         }
     }
 
@@ -90,44 +97,44 @@ impl URL {
 impl URLMethods for URL {
     // https://url.spec.whatwg.org/#dom-url-hash
     fn Hash(&self) -> USVString {
-        UrlHelper::Hash(&self.url.borrow())
+        UrlHelper::Hash(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-hash
     fn SetHash(&self, value: USVString) {
-        UrlHelper::SetHash(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetHash(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-host
     fn Host(&self) -> USVString {
-        UrlHelper::Host(&self.url.borrow())
+        UrlHelper::Host(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-host
     fn SetHost(&self, value: USVString) {
-        UrlHelper::SetHost(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetHost(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-hostname
     fn Hostname(&self) -> USVString {
-        UrlHelper::Hostname(&self.url.borrow())
+        UrlHelper::Hostname(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-hostname
     fn SetHostname(&self, value: USVString) {
-        UrlHelper::SetHostname(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetHostname(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-href
     fn Href(&self) -> USVString {
-        UrlHelper::Href(&self.url.borrow())
+        UrlHelper::Href(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-href
     fn SetHref(&self, value: USVString) -> ErrorResult {
-        match parse_with_base(value, self.base.as_ref()) {
+        match parse_with_base(value, self.extra.base.as_ref()) {
             Ok(url) => {
-                *self.url.borrow_mut() = url;
+                *self.extra.url.borrow_mut() = url;
                 Ok(())
             },
             Err(error) => {
@@ -138,52 +145,52 @@ impl URLMethods for URL {
 
     // https://url.spec.whatwg.org/#dom-url-password
     fn Password(&self) -> USVString {
-        UrlHelper::Password(&self.url.borrow())
+        UrlHelper::Password(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-password
     fn SetPassword(&self, value: USVString) {
-        UrlHelper::SetPassword(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetPassword(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-pathname
     fn Pathname(&self) -> USVString {
-        UrlHelper::Pathname(&self.url.borrow())
+        UrlHelper::Pathname(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-pathname
     fn SetPathname(&self, value: USVString) {
-        UrlHelper::SetPathname(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetPathname(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-port
     fn Port(&self) -> USVString {
-        UrlHelper::Port(&self.url.borrow())
+        UrlHelper::Port(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-port
     fn SetPort(&self, value: USVString) {
-        UrlHelper::SetPort(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetPort(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-protocol
     fn Protocol(&self) -> USVString {
-        UrlHelper::Protocol(&self.url.borrow())
+        UrlHelper::Protocol(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-protocol
     fn SetProtocol(&self, value: USVString) {
-        UrlHelper::SetProtocol(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetProtocol(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-search
     fn Search(&self) -> USVString {
-        UrlHelper::Search(&self.url.borrow())
+        UrlHelper::Search(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-search
     fn SetSearch(&self, value: USVString) {
-        UrlHelper::SetSearch(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetSearch(&mut self.extra.url.borrow_mut(), value);
     }
 
     // https://url.spec.whatwg.org/#dom-url-href
@@ -193,12 +200,12 @@ impl URLMethods for URL {
 
     // https://url.spec.whatwg.org/#dom-url-username
     fn Username(&self) -> USVString {
-        UrlHelper::Username(&self.url.borrow())
+        UrlHelper::Username(&self.extra.url.borrow())
     }
 
     // https://url.spec.whatwg.org/#dom-url-username
     fn SetUsername(&self, value: USVString) {
-        UrlHelper::SetUsername(&mut self.url.borrow_mut(), value);
+        UrlHelper::SetUsername(&mut self.extra.url.borrow_mut(), value);
     }
 }
 

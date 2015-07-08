@@ -27,6 +27,12 @@ pub struct Collection(JS<Node>, Box<CollectionFilter + 'static>);
 #[dom_struct]
 pub struct HTMLCollection {
     reflector_: Reflector,
+    extra: Box<HTMLCollectionExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+#[must_root]
+struct HTMLCollectionExtra {
     #[ignore_heap_size_of = "Contains a trait object; can't measure due to #6870"]
     collection: Collection,
 }
@@ -35,7 +41,9 @@ impl HTMLCollection {
     fn new_inherited(collection: Collection) -> HTMLCollection {
         HTMLCollection {
             reflector_: Reflector::new(),
-            collection: collection,
+            extra: box HTMLCollectionExtra {
+                collection: collection,
+            },
         }
     }
 
@@ -161,8 +169,8 @@ impl HTMLCollection {
     }
 
     pub fn elements_iter(&self) -> HTMLCollectionElementsIter {
-        let ref filter = self.collection.1;
-        let root = self.collection.0.root();
+        let ref filter = self.extra.collection.1;
+        let root = self.extra.collection.0.root();
         let mut node_iter = root.traverse_preorder();
         let _ = node_iter.next();  // skip the root node
         HTMLCollectionElementsIter {

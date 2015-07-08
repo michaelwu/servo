@@ -37,6 +37,11 @@ pub type TrustedWorkerAddress = Trusted<Worker>;
 pub struct Worker {
     eventtarget: EventTarget,
     global: GlobalField,
+    extra: Box<WorkerExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+struct WorkerExtra {
     #[ignore_heap_size_of = "Defined in std"]
     /// Sender to the Receiver associated with the DedicatedWorkerGlobalScope
     /// this Worker created.
@@ -50,7 +55,9 @@ impl Worker {
         Worker {
             eventtarget: EventTarget::new_inherited(),
             global: GlobalField::from_rooted(&global),
-            sender: sender,
+            extra: box WorkerExtra {
+                sender: sender,
+            },
         }
     }
 
@@ -152,7 +159,7 @@ impl WorkerMethods for Worker {
     fn PostMessage(&self, cx: *mut JSContext, message: HandleValue) -> ErrorResult {
         let data = try!(StructuredCloneData::write(cx, message));
         let address = Trusted::new(cx, self, self.global.root().r().script_chan().clone());
-        self.sender.send((address, WorkerScriptMsg::DOMMessage(data))).unwrap();
+        self.extra.sender.send((address, WorkerScriptMsg::DOMMessage(data))).unwrap();
         Ok(())
     }
 

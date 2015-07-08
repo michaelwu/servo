@@ -132,14 +132,19 @@ pub struct WebSocket {
     ready_state: Cell<WebSocketRequestState>,
     buffered_amount: Cell<u32>,
     clearing_buffer: Cell<bool>, //Flag to tell if there is a running task to clear buffered_amount
-    #[ignore_heap_size_of = "Defined in std"]
-    sender: RefCell<Option<Arc<Mutex<Sender<WebSocketStream>>>>>,
     failed: Cell<bool>, //Flag to tell if websocket was closed due to failure
     full: Cell<bool>, //Flag to tell if websocket queue is full
     clean_close: Cell<bool>, //Flag to tell if the websocket closed cleanly (not due to full or fail)
     code: Cell<u16>, //Closing code
     reason: DOMRefCell<DOMString>, //Closing reason
     binary_type: Cell<BinaryType>,
+    extra: Box<WebSocketExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct WebSocketExtra {
+    #[ignore_heap_size_of = "Defined in std"]
+    sender: RefCell<Option<Arc<Mutex<Sender<WebSocketStream>>>>>,
 }
 
 /// *Establish a WebSocket Connection* as defined in RFC 6455.
@@ -175,12 +180,14 @@ impl WebSocket {
             buffered_amount: Cell::new(0),
             clearing_buffer: Cell::new(false),
             failed: Cell::new(false),
-            sender: RefCell::new(None),
             full: Cell::new(false),
             clean_close: Cell::new(true),
             code: Cell::new(0),
             reason: DOMRefCell::new("".to_owned()),
             binary_type: Cell::new(BinaryType::Blob),
+            extra: box WebSocketExtra {
+                sender: RefCell::new(None),
+            },
         }
 
     }
@@ -350,7 +357,7 @@ impl WebSocketMethods for WebSocket {
           TODO: The send function needs to flag when full by using the following
           self.full.set(true). This needs to be done when the buffer is full
         */
-        let mut other_sender = self.sender.borrow_mut();
+        let mut other_sender = self.extra.sender.borrow_mut();
         let my_sender = other_sender.as_mut().unwrap();
 
         self.buffered_amount.set(self.buffered_amount.get() + (data.0.as_bytes().len() as u32));
@@ -377,7 +384,7 @@ impl WebSocketMethods for WebSocket {
         fn send_close(this: &WebSocket) {
             this.ready_state.set(WebSocketRequestState::Closing);
 
-            let mut sender = this.sender.borrow_mut();
+            let mut sender = this.extra.sender.borrow_mut();
             //TODO: Also check if the buffer is full
             if let Some(sender) = sender.as_mut() {
                 let code: u16 = this.code.get();
@@ -438,7 +445,7 @@ impl Runnable for ConnectionEstablishedTask {
     fn handler(self: Box<Self>) {
         let ws = self.addr.root();
 
-        *ws.r().sender.borrow_mut() = Some(self.sender);
+        *ws.r().extra.sender.borrow_mut() = Some(self.sender);
 
         // Step 1: Protocols.
 

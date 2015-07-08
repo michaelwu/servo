@@ -160,14 +160,19 @@ impl Deref for AttrValue {
 #[dom_struct]
 pub struct Attr {
     reflector_: Reflector,
+
+    /// the element that owns this attribute.
+    owner: MutNullableHeap<JS<Element>>,
+    extra: Box<AttrExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct AttrExtra {
     local_name: Atom,
     value: DOMRefCell<AttrValue>,
     name: Atom,
     namespace: Namespace,
     prefix: Option<Atom>,
-
-    /// the element that owns this attribute.
-    owner: MutNullableHeap<JS<Element>>,
 }
 
 impl Attr {
@@ -175,12 +180,14 @@ impl Attr {
                      prefix: Option<Atom>, owner: Option<&Element>) -> Attr {
         Attr {
             reflector_: Reflector::new(),
-            local_name: local_name,
-            value: DOMRefCell::new(value),
-            name: name,
-            namespace: namespace,
-            prefix: prefix,
             owner: MutNullableHeap::new(owner),
+            extra: box AttrExtra {
+                local_name: local_name,
+                value: DOMRefCell::new(value),
+                name: name,
+                namespace: namespace,
+                prefix: prefix,
+            },
         }
     }
 
@@ -195,17 +202,17 @@ impl Attr {
 
     #[inline]
     pub fn name(&self) -> &Atom {
-        &self.name
+        &self.extra.name
     }
 
     #[inline]
     pub fn namespace(&self) -> &Namespace {
-        &self.namespace
+        &self.extra.namespace
     }
 
     #[inline]
     pub fn prefix(&self) -> &Option<Atom> {
-        &self.prefix
+        &self.extra.prefix
     }
 }
 
@@ -223,9 +230,9 @@ impl AttrMethods for Attr {
     // https://dom.spec.whatwg.org/#dom-attr-value
     fn SetValue(&self, value: DOMString) {
         match self.owner() {
-            None => *self.value.borrow_mut() = AttrValue::String(value),
+            None => *self.extra.value.borrow_mut() = AttrValue::String(value),
             Some(owner) => {
-                let value = owner.r().parse_attribute(&self.namespace, self.local_name(), value);
+                let value = owner.r().parse_attribute(&self.extra.namespace, self.local_name(), value);
                 self.set_value(value, owner.r());
             }
         }
@@ -253,12 +260,12 @@ impl AttrMethods for Attr {
 
     // https://dom.spec.whatwg.org/#dom-attr-name
     fn Name(&self) -> DOMString {
-        (*self.name).to_owned()
+        (*self.extra.name).to_owned()
     }
 
     // https://dom.spec.whatwg.org/#dom-attr-namespaceuri
     fn GetNamespaceURI(&self) -> Option<DOMString> {
-        let Namespace(ref atom) = self.namespace;
+        let Namespace(ref atom) = self.extra.namespace;
         match &**atom {
             "" => None,
             url => Some(url.to_owned()),
@@ -285,33 +292,33 @@ impl AttrMethods for Attr {
 impl Attr {
     pub fn set_value(&self, mut value: AttrValue, owner: &Element) {
         assert!(Some(owner) == self.owner().r());
-        mem::swap(&mut *self.value.borrow_mut(), &mut value);
-        if self.namespace == ns!("") {
+        mem::swap(&mut *self.extra.value.borrow_mut(), &mut value);
+        if self.extra.namespace == ns!("") {
             vtable_for(owner.upcast()).attribute_mutated(
                 self, AttributeMutation::Set(Some(&value)));
         }
     }
 
     pub fn value(&self) -> Ref<AttrValue> {
-        self.value.borrow()
+        self.extra.value.borrow()
     }
 
     pub fn local_name(&self) -> &Atom {
-        &self.local_name
+        &self.extra.local_name
     }
 
     /// Sets the owner element. Should be called after the attribute is added
     /// or removed from its older parent.
     pub fn set_owner(&self, owner: Option<&Element>) {
-        let ref ns = self.namespace;
+        let ref ns = self.extra.namespace;
         match (self.owner().r(), owner) {
             (None, Some(new)) => {
                 // Already in the list of attributes of new owner.
-                assert!(new.get_attribute(&ns, &self.local_name) == Some(Root::from_ref(self)))
+                assert!(new.get_attribute(&ns, &self.extra.local_name) == Some(Root::from_ref(self)))
             }
             (Some(old), None) => {
                 // Already gone from the list of attributes of old owner.
-                assert!(old.get_attribute(&ns, &self.local_name).is_none())
+                assert!(old.get_attribute(&ns, &self.extra.local_name).is_none())
             }
             (old, new) => assert!(old == new)
         }
@@ -323,7 +330,7 @@ impl Attr {
     }
 
     pub fn summarize(&self) -> AttrInfo {
-        let Namespace(ref ns) = self.namespace;
+        let Namespace(ref ns) = self.extra.namespace;
         AttrInfo {
             namespace: (**ns).to_owned(),
             name: self.Name(),
@@ -347,7 +354,7 @@ impl AttrHelpersForLayout for LayoutJS<Attr> {
     #[inline]
     unsafe fn value_forever(&self) -> &'static AttrValue {
         // This transmute is used to cheat the lifetime restriction.
-        mem::transmute::<&AttrValue, &AttrValue>((*self.unsafe_get()).value.borrow_for_layout())
+        mem::transmute::<&AttrValue, &AttrValue>((*self.unsafe_get()).extra.value.borrow_for_layout())
     }
 
     #[inline]
@@ -357,7 +364,7 @@ impl AttrHelpersForLayout for LayoutJS<Attr> {
 
     #[inline]
     unsafe fn value_atom_forever(&self) -> Option<Atom> {
-        let value = (*self.unsafe_get()).value.borrow_for_layout();
+        let value = (*self.unsafe_get()).extra.value.borrow_for_layout();
         match *value {
             AttrValue::Atom(ref val) => Some(val.clone()),
             _ => None,
@@ -375,11 +382,11 @@ impl AttrHelpersForLayout for LayoutJS<Attr> {
 
     #[inline]
     unsafe fn local_name_atom_forever(&self) -> Atom {
-        (*self.unsafe_get()).local_name.clone()
+        (*self.unsafe_get()).extra.local_name.clone()
     }
 
     #[inline]
     unsafe fn value_for_layout(&self) -> &AttrValue {
-        (*self.unsafe_get()).value.borrow_for_layout()
+        (*self.unsafe_get()).extra.value.borrow_for_layout()
     }
 }
