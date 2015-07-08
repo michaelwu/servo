@@ -40,7 +40,7 @@ pub struct Worker {
     #[ignore_heap_size_of = "Defined in std"]
     /// Sender to the Receiver associated with the DedicatedWorkerGlobalScope
     /// this Worker created.
-    sender: Sender<(TrustedWorkerAddress, WorkerScriptMsg)>,
+    sender: Box<Sender<(TrustedWorkerAddress, WorkerScriptMsg)>>,
 }
 
 impl Worker {
@@ -50,7 +50,7 @@ impl Worker {
         Worker {
             eventtarget: EventTarget::new_inherited(),
             global: GlobalField::from_rooted(&global),
-            sender: sender,
+            sender: box sender,
         }
     }
 

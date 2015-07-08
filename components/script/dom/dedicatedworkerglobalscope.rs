@@ -138,14 +138,14 @@ impl<'a> AutoWorkerReset<'a> {
     fn new(workerscope: &'a DedicatedWorkerGlobalScope, worker: TrustedWorkerAddress) -> AutoWorkerReset<'a> {
         AutoWorkerReset {
             workerscope: workerscope,
-            old_worker: replace(&mut *workerscope.worker.borrow_mut(), Some(worker)),
+            old_worker: replace(&mut *workerscope.extra.worker.borrow_mut(), Some(worker)),
         }
     }
 }
 
 impl<'a> Drop for AutoWorkerReset<'a> {
     fn drop(&mut self) {
-        *self.workerscope.worker.borrow_mut() = self.old_worker.clone();
+        *self.workerscope.extra.worker.borrow_mut() = self.old_worker.clone();
     }
 }
 
@@ -160,6 +160,11 @@ enum MixedMessage {
 pub struct DedicatedWorkerGlobalScope {
     workerglobalscope: WorkerGlobalScope,
     id: PipelineId,
+    extra: Box<DedicatedWorkerGlobalScopeExtra>,
+}
+
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct DedicatedWorkerGlobalScopeExtra {
     #[ignore_heap_size_of = "Defined in std"]
     receiver: Receiver<(TrustedWorkerAddress, WorkerScriptMsg)>,
     #[ignore_heap_size_of = "Defined in std"]
@@ -190,11 +195,13 @@ impl DedicatedWorkerGlobalScope {
             workerglobalscope: WorkerGlobalScope::new_inherited(
                 init, worker_url, runtime, from_devtools_receiver, timer_event_chan),
             id: id,
-            receiver: receiver,
-            own_sender: own_sender,
-            timer_event_port: timer_event_port,
-            parent_sender: parent_sender,
-            worker: DOMRefCell::new(None),
+            extra: box DedicatedWorkerGlobalScopeExtra {
+                receiver: receiver,
+                own_sender: own_sender,
+                timer_event_port: timer_event_port,
+                worker: DOMRefCell::new(None),
+                parent_sender: parent_sender,
+            },
         }
     }
 
@@ -277,8 +284,8 @@ impl DedicatedWorkerGlobalScope {
 
     pub fn script_chan(&self) -> Box<ScriptChan + Send> {
         box WorkerThreadWorkerChan {
-            sender: self.own_sender.clone(),
-            worker: self.worker.borrow().as_ref().unwrap().clone(),
+            sender: self.extra.own_sender.clone(),
+            worker: self.extra.worker.borrow().as_ref().unwrap().clone(),
         }
     }
 
@@ -290,7 +297,7 @@ impl DedicatedWorkerGlobalScope {
         let (tx, rx) = channel();
         let chan = box SendableWorkerScriptChan {
             sender: tx,
-            worker: self.worker.borrow().as_ref().unwrap().clone(),
+            worker: self.extra.worker.borrow().as_ref().unwrap().clone(),
         };
         (chan, box rx)
     }
@@ -302,8 +309,8 @@ impl DedicatedWorkerGlobalScope {
     #[allow(unsafe_code)]
     fn receive_event(&self) -> Result<MixedMessage, RecvError> {
         let scope = self.upcast::<WorkerGlobalScope>();
-        let worker_port = &self.receiver;
-        let timer_event_port = &self.timer_event_port;
+        let worker_port = &self.extra.receiver;
+        let timer_event_port = &self.extra.timer_event_port;
         let devtools_port = scope.from_devtools_receiver();
 
         let sel = Select::new();
@@ -394,8 +401,8 @@ impl DedicatedWorkerGlobalScopeMethods for DedicatedWorkerGlobalScope {
     // https://html.spec.whatwg.org/multipage/#dom-dedicatedworkerglobalscope-postmessage
     fn PostMessage(&self, cx: *mut JSContext, message: HandleValue) -> ErrorResult {
         let data = try!(StructuredCloneData::write(cx, message));
-        let worker = self.worker.borrow().as_ref().unwrap().clone();
-        self.parent_sender.send(CommonScriptMsg::RunnableMsg(WorkerEvent,
+        let worker = self.extra.worker.borrow().as_ref().unwrap().clone();
+        self.extra.parent_sender.send(CommonScriptMsg::RunnableMsg(WorkerEvent,
             box WorkerMessageHandler::new(worker, data))).unwrap();
         Ok(())
     }
