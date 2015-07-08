@@ -27,7 +27,7 @@ use std::borrow::ToOwned;
 use std::cell::Cell;
 use util::str::DOMString;
 
-#[derive(JSTraceable, PartialEq, Copy, Clone)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 #[allow(dead_code)]
 #[derive(HeapSizeOf)]
 enum ButtonType {

@@ -47,7 +47,7 @@ use websocket::ws::sender::Sender as Sender_Object;
 use websocket::ws::util::url::parse_url;
 use websocket::{Client, Message};
 
-#[derive(JSTraceable, PartialEq, Copy, Clone, Debug, HeapSizeOf)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, Debug, HeapSizeOf, NumFromPrimitive)]
 enum WebSocketRequestState {
     Connecting = 0,
     Open = 1,

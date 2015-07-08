@@ -60,7 +60,7 @@ impl ReadMetaData {
 pub struct GenerationId(u32);
 
 #[repr(u16)]
-#[derive(Copy, Clone, Debug, PartialEq, JSTraceable, HeapSizeOf)]
+#[derive(Copy, Clone, Debug, PartialEq, NumFromPrimitive, JSTraceable, HeapSizeOf)]
 pub enum FileReaderReadyState {
     Empty = FileReaderConstants::EMPTY,
     Loading = FileReaderConstants::LOADING,
