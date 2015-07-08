@@ -60,7 +60,7 @@ use util::task::spawn_named;
 
 pub type SendParam = StringOrURLSearchParams;
 
-#[derive(JSTraceable, PartialEq, Copy, Clone, HeapSizeOf)]
+#[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive, HeapSizeOf)]
 enum XMLHttpRequestState {
     Unsent = 0,
     Opened = 1,

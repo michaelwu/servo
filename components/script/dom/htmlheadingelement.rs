@@ -9,7 +9,7 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[derive(JSTraceable, HeapSizeOf)]
+#[derive(JSTraceable, NumFromPrimitive, HeapSizeOf)]
 pub enum HeadingLevel {
     Heading1,
     Heading2,

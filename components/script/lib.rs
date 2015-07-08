@@ -32,6 +32,7 @@
 
 #![doc = "The script crate contains all matters DOM."]
 
+#![plugin(num_macros)]
 #![plugin(string_cache_plugin)]
 #![plugin(plugins)]
 

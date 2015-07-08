@@ -16,7 +16,7 @@ use std::default::Default;
 use time;
 use util::str::DOMString;
 
-#[derive(JSTraceable, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(JSTraceable, NumFromPrimitive, Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u16)]
 #[derive(HeapSizeOf)]
 pub enum EventPhase {

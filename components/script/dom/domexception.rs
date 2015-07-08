@@ -12,7 +12,7 @@ use std::borrow::ToOwned;
 use util::str::DOMString;
 
 #[repr(u16)]
-#[derive(JSTraceable, Copy, Clone, Debug, HeapSizeOf)]
+#[derive(JSTraceable, Copy, Clone, Debug, HeapSizeOf, NumFromPrimitive)]
 pub enum DOMErrorName {
     IndexSizeError = DOMExceptionConstants::INDEX_SIZE_ERR,
     HierarchyRequestError = DOMExceptionConstants::HIERARCHY_REQUEST_ERR,
