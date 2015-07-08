@@ -28,7 +28,7 @@ pub enum BlobTypeId {
 pub struct Blob {
     reflector_: Reflector,
     type_: BlobTypeId,
-    bytes: Option<Vec<u8>>,
+    bytes: Box<Option<Vec<u8>>>,
     typeString: DOMString,
     global: GlobalField,
     isClosed_: Cell<bool>
@@ -46,7 +46,7 @@ impl Blob {
         Blob {
             reflector_: Reflector::new(),
             type_: type_,
-            bytes: bytes,
+            bytes: box bytes,
             typeString: typeString.to_owned(),
             global: GlobalField::from_rooted(&global),
             isClosed_: Cell::new(false)
@@ -92,7 +92,7 @@ impl<'a> BlobHelpers for &'a Blob {
 impl<'a> BlobMethods for &'a Blob {
     // https://dev.w3.org/2006/webapi/FileAPI/#dfn-size
     fn Size(self) -> u64{
-        match self.bytes {
+        match *self.bytes {
             None => 0,
             Some(ref bytes) => bytes.len() as u64
         }
@@ -139,7 +139,7 @@ impl<'a> BlobMethods for &'a Blob {
         };
         let span: i64 = max(relativeEnd - relativeStart, 0);
         let global = self.global.root();
-        match self.bytes {
+        match *self.bytes {
             None => Blob::new(global.r(), None, &relativeContentType),
             Some(ref vec) => {
                 let start = relativeStart.to_usize().unwrap();

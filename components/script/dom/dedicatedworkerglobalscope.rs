@@ -81,14 +81,14 @@ impl<'a> AutoWorkerReset<'a> {
     fn new(workerscope: &'a DedicatedWorkerGlobalScope, worker: TrustedWorkerAddress) -> AutoWorkerReset<'a> {
         AutoWorkerReset {
             workerscope: workerscope,
-            old_worker: replace(&mut *workerscope.worker.borrow_mut(), Some(worker)),
+            old_worker: replace(&mut *workerscope.extra.worker.borrow_mut(), Some(worker)),
         }
     }
 }
 
 impl<'a> Drop for AutoWorkerReset<'a> {
     fn drop(&mut self) {
-        *self.workerscope.worker.borrow_mut() = self.old_worker.clone();
+        *self.workerscope.extra.worker.borrow_mut() = self.old_worker.clone();
     }
 }
 
@@ -97,6 +97,11 @@ impl<'a> Drop for AutoWorkerReset<'a> {
 pub struct DedicatedWorkerGlobalScope {
     workerglobalscope: WorkerGlobalScope,
     id: PipelineId,
+    extra: Box<DedicatedWorkerGlobalScopeExtra>,
+}
+
+#[derive(JSTraceable)]
+pub struct DedicatedWorkerGlobalScopeExtra {
     receiver: Receiver<(TrustedWorkerAddress, ScriptMsg)>,
     own_sender: Sender<(TrustedWorkerAddress, ScriptMsg)>,
     worker: DOMRefCell<Option<TrustedWorkerAddress>>,
@@ -118,10 +123,12 @@ impl DedicatedWorkerGlobalScope {
             workerglobalscope: WorkerGlobalScope::new_inherited(
                 init, worker_url, runtime, devtools_port),
             id: id,
-            receiver: receiver,
-            own_sender: own_sender,
-            parent_sender: parent_sender,
-            worker: DOMRefCell::new(None),
+            extra: box DedicatedWorkerGlobalScopeExtra {
+                receiver: receiver,
+                own_sender: own_sender,
+                worker: DOMRefCell::new(None),
+                parent_sender: parent_sender,
+            },
         }
     }
 
@@ -220,7 +227,7 @@ impl DedicatedWorkerGlobalScope {
             }
 
             loop {
-                let worker_port = &global.r().receiver;
+                let worker_port = &global.r().extra.receiver;
                 let devtools_port = scope.devtools_port();
 
                 let event = {
@@ -286,8 +293,8 @@ pub trait DedicatedWorkerGlobalScopeHelpers {
 impl<'a> DedicatedWorkerGlobalScopeHelpers for &'a DedicatedWorkerGlobalScope {
     fn script_chan(self) -> Box<ScriptChan+Send> {
         box SendableWorkerScriptChan {
-            sender: self.own_sender.clone(),
-            worker: self.worker.borrow().as_ref().unwrap().clone(),
+            sender: self.extra.own_sender.clone(),
+            worker: self.extra.worker.borrow().as_ref().unwrap().clone(),
         }
     }
 
@@ -299,7 +306,7 @@ impl<'a> DedicatedWorkerGlobalScopeHelpers for &'a DedicatedWorkerGlobalScope {
         let (tx, rx) = channel();
         let chan = box SendableWorkerScriptChan {
             sender: tx,
-            worker: self.worker.borrow().as_ref().unwrap().clone(),
+            worker: self.extra.worker.borrow().as_ref().unwrap().clone(),
         };
         (chan, box rx)
     }
@@ -352,8 +359,8 @@ impl<'a> PrivateDedicatedWorkerGlobalScopeHelpers for &'a DedicatedWorkerGlobalS
         let file_name = errorevent.Filename();
         let line_num = errorevent.Lineno();
         let col_num = errorevent.Colno();
-        let worker = self.worker.borrow().as_ref().unwrap().clone();
-        self.parent_sender.send(ScriptMsg::RunnableMsg(
+        let worker = self.extra.worker.borrow().as_ref().unwrap().clone();
+        self.extra.parent_sender.send(ScriptMsg::RunnableMsg(
             box WorkerErrorHandler::new(worker, msg, file_name, line_num, col_num))).unwrap();
  }
 }
@@ -362,8 +369,8 @@ impl<'a> DedicatedWorkerGlobalScopeMethods for &'a DedicatedWorkerGlobalScope {
     // https://html.spec.whatwg.org/multipage/#dom-dedicatedworkerglobalscope-postmessage
     fn PostMessage(self, cx: *mut JSContext, message: HandleValue) -> ErrorResult {
         let data = try!(StructuredCloneData::write(cx, message));
-        let worker = self.worker.borrow().as_ref().unwrap().clone();
-        self.parent_sender.send(ScriptMsg::RunnableMsg(
+        let worker = self.extra.worker.borrow().as_ref().unwrap().clone();
+        self.extra.parent_sender.send(ScriptMsg::RunnableMsg(
             box WorkerMessageHandler::new(worker, data))).unwrap();
         Ok(())
     }

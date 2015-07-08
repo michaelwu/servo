@@ -58,14 +58,19 @@ pub struct WorkerGlobalScopeInit {
 pub struct WorkerGlobalScope {
     eventtarget: EventTarget,
     worker_id: WorkerId,
-    worker_url: Url,
     runtime: Rc<Runtime>,
     next_worker_id: Cell<WorkerId>,
-    resource_task: ResourceTask,
     location: MutNullableHeap<JS<WorkerLocation>>,
     navigator: MutNullableHeap<JS<WorkerNavigator>>,
     console: MutNullableHeap<JS<Console>>,
     crypto: MutNullableHeap<JS<Crypto>>,
+    extra: Box<WorkerGlobalScopeExtra>,
+}
+
+#[derive(JSTraceable)]
+pub struct WorkerGlobalScopeExtra {
+    worker_url: Url,
+    resource_task: ResourceTask,
     timers: TimerManager,
     mem_profiler_chan: mem::ProfilerChan,
     devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
@@ -95,41 +100,43 @@ impl WorkerGlobalScope {
             eventtarget: EventTarget::new_inherited(),
             next_worker_id: Cell::new(WorkerId(0)),
             worker_id: init.worker_id,
-            worker_url: worker_url,
             runtime: runtime,
-            resource_task: init.resource_task,
             location: Default::default(),
             navigator: Default::default(),
             console: Default::default(),
             crypto: Default::default(),
-            timers: TimerManager::new(),
-            mem_profiler_chan: init.mem_profiler_chan,
-            devtools_chan: init.devtools_chan,
-            devtools_sender: init.devtools_sender,
-            devtools_receiver: devtools_receiver,
-            devtools_wants_updates: Cell::new(false),
-            constellation_chan: init.constellation_chan,
+            extra: box WorkerGlobalScopeExtra {
+                worker_url: worker_url,
+                resource_task: init.resource_task,
+                timers: TimerManager::new(),
+                mem_profiler_chan: init.mem_profiler_chan,
+                devtools_chan: init.devtools_chan,
+                devtools_sender: init.devtools_sender,
+                devtools_receiver: devtools_receiver,
+                devtools_wants_updates: Cell::new(false),
+                constellation_chan: init.constellation_chan,
+            },
         }
     }
 
     pub fn mem_profiler_chan(&self) -> mem::ProfilerChan {
-        self.mem_profiler_chan.clone()
+        self.extra.mem_profiler_chan.clone()
     }
 
     pub fn devtools_chan(&self) -> Option<IpcSender<ScriptToDevtoolsControlMsg>> {
-        self.devtools_chan.clone()
+        self.extra.devtools_chan.clone()
     }
 
     pub fn devtools_sender(&self) -> Option<IpcSender<DevtoolScriptControlMsg>> {
-        self.devtools_sender.clone()
+        self.extra.devtools_sender.clone()
     }
 
     pub fn devtools_port(&self) -> &Receiver<DevtoolScriptControlMsg> {
-        &self.devtools_receiver
+        &self.extra.devtools_receiver
     }
 
     pub fn constellation_chan(&self) -> ConstellationChan {
-        self.constellation_chan.clone()
+        self.extra.constellation_chan.clone()
     }
 
     #[inline]
@@ -142,11 +149,11 @@ impl WorkerGlobalScope {
     }
 
     pub fn resource_task<'a>(&'a self) -> &'a ResourceTask {
-        &   self.resource_task
+        &self.extra.resource_task
     }
 
     pub fn get_url<'a>(&'a self) -> &'a Url {
-        &self.worker_url
+        &self.extra.worker_url
     }
 
     pub fn get_worker_id(&self) -> WorkerId {
@@ -170,7 +177,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
     // https://html.spec.whatwg.org/multipage/#dom-workerglobalscope-location
     fn Location(self) -> Root<WorkerLocation> {
         self.location.or_init(|| {
-            WorkerLocation::new(self, self.worker_url.clone())
+            WorkerLocation::new(self, self.extra.worker_url.clone())
         })
     }
 
@@ -178,7 +185,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
     fn ImportScripts(self, url_strings: Vec<DOMString>) -> ErrorResult {
         let mut urls = Vec::with_capacity(url_strings.len());
         for url in url_strings.into_iter() {
-            let url = UrlParser::new().base_url(&self.worker_url)
+            let url = UrlParser::new().base_url(&self.extra.worker_url)
                                       .parse(&url);
             match url {
                 Ok(url) => urls.push(url),
@@ -187,7 +194,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
         }
 
         for url in urls.into_iter() {
-            let (url, source) = match load_whole_resource(&self.resource_task, url) {
+            let (url, source) = match load_whole_resource(&self.extra.resource_task, url) {
                 Err(_) => return Err(Network),
                 Ok((metadata, bytes)) => {
                     (metadata.final_url, String::from_utf8(bytes).unwrap())
@@ -234,7 +241,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-setinterval
     fn SetTimeout(self, _cx: *mut JSContext, callback: Rc<Function>, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
+        self.extra.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
                                             args,
                                             timeout,
                                             IsInterval::NonInterval,
@@ -244,7 +251,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-setinterval
     fn SetTimeout_(self, _cx: *mut JSContext, callback: DOMString, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
+        self.extra.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
                                             args,
                                             timeout,
                                             IsInterval::NonInterval,
@@ -254,12 +261,12 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-clearinterval
     fn ClearTimeout(self, handle: i32) {
-        self.timers.clear_timeout_or_interval(handle);
+        self.extra.timers.clear_timeout_or_interval(handle);
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-setinterval
     fn SetInterval(self, _cx: *mut JSContext, callback: Rc<Function>, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
+        self.extra.timers.set_timeout_or_interval(TimerCallback::FunctionTimerCallback(callback),
                                             args,
                                             timeout,
                                             IsInterval::Interval,
@@ -269,7 +276,7 @@ impl<'a> WorkerGlobalScopeMethods for &'a WorkerGlobalScope {
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-setinterval
     fn SetInterval_(self, _cx: *mut JSContext, callback: DOMString, timeout: i32, args: Vec<HandleValue>) -> i32 {
-        self.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
+        self.extra.timers.set_timeout_or_interval(TimerCallback::StringTimerCallback(callback),
                                             args,
                                             timeout,
                                             IsInterval::Interval,
@@ -331,7 +338,7 @@ impl<'a> WorkerGlobalScopeHelpers for &'a WorkerGlobalScope {
     }
 
     fn handle_fire_timer(self, timer_id: TimerId) {
-        self.timers.fire_timer(timer_id, self);
+        self.extra.timers.fire_timer(timer_id, self);
     }
 
     fn get_cx(self) -> *mut JSContext {
@@ -339,6 +346,6 @@ impl<'a> WorkerGlobalScopeHelpers for &'a WorkerGlobalScope {
     }
 
     fn set_devtools_wants_updates(self, value: bool) {
-        self.devtools_wants_updates.set(value);
+        self.extra.devtools_wants_updates.set(value);
     }
 }

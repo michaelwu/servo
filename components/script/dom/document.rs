@@ -119,7 +119,6 @@ pub struct Document {
     last_modified: Option<DOMString>,
     encoding_name: DOMRefCell<DOMString>,
     is_html_document: bool,
-    url: Url,
     quirks_mode: Cell<QuirksMode>,
     images: MutNullableHeap<JS<HTMLCollection>>,
     embeds: MutNullableHeap<JS<HTMLCollection>>,
@@ -150,6 +149,7 @@ pub struct Document {
 #[derive(JSTraceable, HeapSizeOf)]
 struct DocumentExtra {
     idmap: DOMRefCell<HashMap<Atom, Vec<JS<Element>>>>,
+    url: Url,
     /// https://html.spec.whatwg.org/multipage/#list-of-animation-frame-callbacks
     /// List of animation frame callbacks
     #[ignore_heap_size_of = "closures are hard"]
@@ -342,7 +342,7 @@ impl<'a> DocumentHelpers<'a> for &'a Document {
 
     // https://dom.spec.whatwg.org/#dom-document-url
     fn url(self) -> Url {
-        self.url.clone()
+        self.extra.url.clone()
     }
 
     fn quirks_mode(self) -> QuirksMode {
@@ -1065,7 +1065,6 @@ impl Document {
                 }
             },
             last_modified: last_modified,
-            url: url,
             // https://dom.spec.whatwg.org/#concept-document-quirks
             quirks_mode: Cell::new(NoQuirks),
             // https://dom.spec.whatwg.org/#concept-document-encoding
@@ -1087,6 +1086,7 @@ impl Document {
             current_parser: Default::default(),
             extra: box DocumentExtra {
                 idmap: DOMRefCell::new(HashMap::new()),
+                url: url,
                 animation_frame_list: RefCell::new(HashMap::new()),
                 loader: DOMRefCell::new(doc_loader),
                 reflow_timeout: Cell::new(None),

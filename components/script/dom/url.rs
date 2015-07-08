@@ -21,14 +21,14 @@ pub struct URL {
     reflector_: Reflector,
 
     // https://url.spec.whatwg.org/#concept-urlutils-url
-    url: Url,
+    url: Box<Url>,
 }
 
 impl URL {
     fn new_inherited(url: Url) -> URL {
         URL {
             reflector_: Reflector::new(),
-            url: url,
+            url: box url,
         }
     }
 

@@ -68,6 +68,12 @@ pub struct HTMLInputElement {
     indeterminate: Cell<bool>,
     value_changed: Cell<bool>,
     size: Cell<u32>,
+    extra: Box<HTMLInputElementExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable)]
+pub struct HTMLInputElementExtra {
     textinput: DOMRefCell<TextInput<ConstellationChan>>,
     activation_state: DOMRefCell<InputActivationState>,
 }
@@ -126,8 +132,10 @@ impl HTMLInputElement {
             checked_changed: Cell::new(false),
             value_changed: Cell::new(false),
             size: Cell::new(DEFAULT_INPUT_SIZE),
-            textinput: DOMRefCell::new(TextInput::new(Single, "".to_owned(), chan)),
-            activation_state: DOMRefCell::new(InputActivationState::new())
+            extra: box HTMLInputElementExtra {
+                textinput: DOMRefCell::new(TextInput::new(Single, "".to_owned(), chan)),
+                activation_state: DOMRefCell::new(InputActivationState::new())
+            },
         }
     }
 
@@ -161,7 +169,7 @@ impl LayoutHTMLInputElementHelpers for LayoutJS<HTMLInputElement> {
     unsafe fn get_value_for_layout(self) -> String {
         #[allow(unsafe_code)]
         unsafe fn get_raw_textinput_value(input: LayoutJS<HTMLInputElement>) -> String {
-            let textinput = (*input.unsafe_get()).textinput.borrow_for_layout().get_content();
+            let textinput = (*input.unsafe_get()).extra.textinput.borrow_for_layout().get_content();
             if !textinput.is_empty() {
                 textinput
             } else {
@@ -264,12 +272,12 @@ impl<'a> HTMLInputElementMethods for &'a HTMLInputElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-input-value
     fn Value(self) -> DOMString {
-        self.textinput.borrow().get_content()
+        self.extra.textinput.borrow().get_content()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-input-value
     fn SetValue(self, value: DOMString) {
-        self.textinput.borrow_mut().set_content(value);
+        self.extra.textinput.borrow_mut().set_content(value);
         self.value_changed.set(true);
         self.force_relayout();
     }
@@ -501,7 +509,7 @@ impl<'a> VirtualMethods for &'a HTMLInputElement {
             }
             &atom!("value") => {
                 if !self.value_changed.get() {
-                    self.textinput.borrow_mut().set_content((**attr.value()).to_owned());
+                    self.extra.textinput.borrow_mut().set_content((**attr.value()).to_owned());
                 }
             }
             &atom!("name") => {
@@ -553,7 +561,7 @@ impl<'a> VirtualMethods for &'a HTMLInputElement {
             }
             &atom!("value") => {
                 if !self.value_changed.get() {
-                    self.textinput.borrow_mut().set_content("".to_owned());
+                    self.extra.textinput.borrow_mut().set_content("".to_owned());
                 }
             }
             &atom!("name") => {
@@ -622,7 +630,7 @@ impl<'a> VirtualMethods for &'a HTMLInputElement {
                 keyevent.map(|keyevent| {
                     // This can't be inlined, as holding on to textinput.borrow_mut()
                     // during self.implicit_submission will cause a panic.
-                    let action = self.textinput.borrow_mut().handle_keydown(keyevent);
+                    let action = self.extra.textinput.borrow_mut().handle_keydown(keyevent);
                     match action {
                         TriggerDefaultAction => {
                             self.implicit_submission(keyevent.CtrlKey(),
@@ -668,7 +676,7 @@ impl<'a> Activatable for &'a HTMLInputElement {
     // https://html.spec.whatwg.org/multipage/#run-pre-click-activation-steps
     #[allow(unsafe_code)]
     fn pre_click_activation(&self) {
-        let mut cache = self.activation_state.borrow_mut();
+        let mut cache = self.extra.activation_state.borrow_mut();
         let ty = self.input_type.get();
         cache.old_type = ty;
         cache.was_mutable = self.mutable();
@@ -718,7 +726,7 @@ impl<'a> Activatable for &'a HTMLInputElement {
 
     // https://html.spec.whatwg.org/multipage/#run-canceled-activation-steps
     fn canceled_activation(&self) {
-        let cache = self.activation_state.borrow();
+        let cache = self.extra.activation_state.borrow();
         let ty = self.input_type.get();
         if cache.old_type != ty  {
             // Type changed, abandon ship
@@ -770,7 +778,7 @@ impl<'a> Activatable for &'a HTMLInputElement {
     // https://html.spec.whatwg.org/multipage/#run-post-click-activation-steps
     fn activation_behavior(&self, _event: &Event, _target: &EventTarget) {
         let ty = self.input_type.get();
-        if self.activation_state.borrow().old_type != ty {
+        if self.extra.activation_state.borrow().old_type != ty {
             // Type changed, abandon ship
             // https://www.w3.org/Bugs/Public/show_bug.cgi?id=27414
             return;

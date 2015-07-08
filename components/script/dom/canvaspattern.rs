@@ -14,6 +14,11 @@ use euclid::size::Size2D;
 #[dom_struct]
 pub struct CanvasPattern {
     reflector_: Reflector,
+    extra: Box<CanvasPatternExtra>,
+}
+
+#[derive(JSTraceable)]
+pub struct CanvasPatternExtra {
     surface_data: Vec<u8>,
     surface_size: Size2D<i32>,
     repeat_x: bool,
@@ -31,10 +36,12 @@ impl CanvasPattern {
 
         CanvasPattern {
             reflector_: Reflector::new(),
-            surface_data: surface_data,
-            surface_size: surface_size,
-            repeat_x: x,
-            repeat_y: y,
+            extra: box CanvasPatternExtra {
+                surface_data: surface_data,
+                surface_size: surface_size,
+                repeat_x: x,
+                repeat_y: y,
+            }
         }
     }
     pub fn new(global: GlobalRef,
@@ -50,6 +57,6 @@ impl CanvasPattern {
 impl<'a> ToFillOrStrokeStyle for &'a CanvasPattern {
     fn to_fill_or_stroke_style(self) -> FillOrStrokeStyle {
         FillOrStrokeStyle::Surface(
-            SurfaceStyle::new(self.surface_data.clone(), self.surface_size, self.repeat_x, self.repeat_y))
+            SurfaceStyle::new(self.extra.surface_data.clone(), self.extra.surface_size, self.extra.repeat_x, self.extra.repeat_y))
     }
 }

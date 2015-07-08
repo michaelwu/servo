@@ -32,14 +32,14 @@ pub enum CollectionTypeId {
 #[dom_struct]
 pub struct HTMLCollection {
     reflector_: Reflector,
-    collection: CollectionTypeId,
+    collection: Box<CollectionTypeId>,
 }
 
 impl HTMLCollection {
     fn new_inherited(collection: CollectionTypeId) -> HTMLCollection {
         HTMLCollection {
             reflector_: Reflector::new(),
-            collection: collection,
+            collection: box collection,
         }
     }
 
@@ -178,7 +178,7 @@ impl HTMLCollection {
 impl<'a> HTMLCollectionMethods for &'a HTMLCollection {
     // https://dom.spec.whatwg.org/#dom-htmlcollection-length
     fn Length(self) -> u32 {
-        match self.collection {
+        match *self.collection {
             CollectionTypeId::Static(ref elems) => elems.len() as u32,
             CollectionTypeId::Live(ref root, ref filter) => {
                 let root = root.root();
@@ -192,7 +192,7 @@ impl<'a> HTMLCollectionMethods for &'a HTMLCollection {
     // https://dom.spec.whatwg.org/#dom-htmlcollection-item
     fn Item(self, index: u32) -> Option<Root<Element>> {
         let index = index as usize;
-        match self.collection {
+        match *self.collection {
             CollectionTypeId::Static(ref elems) => elems
                 .get(index).map(|t| t.root()),
             CollectionTypeId::Live(ref root, ref filter) => {
@@ -212,7 +212,7 @@ impl<'a> HTMLCollectionMethods for &'a HTMLCollection {
         }
 
         // Step 2.
-        match self.collection {
+        match *self.collection {
             CollectionTypeId::Static(ref elems) => elems.iter()
                 .map(|elem| elem.root())
                 .find(|elem| {

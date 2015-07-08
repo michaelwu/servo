@@ -20,6 +20,11 @@ use util::str::DOMString;
 #[dom_struct]
 pub struct URLSearchParams {
     reflector_: Reflector,
+    extra: Box<URLSearchParamsExtra>,
+}
+
+#[derive(JSTraceable)]
+pub struct URLSearchParamsExtra {
     // https://url.spec.whatwg.org/#concept-urlsearchparams-list
     list: DOMRefCell<Vec<(DOMString, DOMString)>>,
 }
@@ -28,7 +33,9 @@ impl URLSearchParams {
     fn new_inherited() -> URLSearchParams {
         URLSearchParams {
             reflector_: Reflector::new(),
-            list: DOMRefCell::new(vec![]),
+            extra: box URLSearchParamsExtra {
+                list: DOMRefCell::new(vec![]),
+            },
         }
     }
 
@@ -45,11 +52,11 @@ impl URLSearchParams {
         match init {
             Some(eString(init)) => {
                 // Step 2.
-                *query.r().list.borrow_mut() = parse(init.as_bytes());
+                *query.r().extra.list.borrow_mut() = parse(init.as_bytes());
             },
             Some(eURLSearchParams(init)) => {
                 // Step 3.
-                *query.r().list.borrow_mut() = init.r().list.borrow().clone();
+                *query.r().extra.list.borrow_mut() = init.r().extra.list.borrow().clone();
             },
             None => {}
         }
@@ -62,7 +69,7 @@ impl<'a> URLSearchParamsMethods for &'a URLSearchParams {
     // https://url.spec.whatwg.org/#dom-urlsearchparams-append
     fn Append(self, name: DOMString, value: DOMString) {
         // Step 1.
-        self.list.borrow_mut().push((name, value));
+        self.extra.list.borrow_mut().push((name, value));
         // Step 2.
         self.update_steps();
     }
@@ -70,14 +77,14 @@ impl<'a> URLSearchParamsMethods for &'a URLSearchParams {
     // https://url.spec.whatwg.org/#dom-urlsearchparams-delete
     fn Delete(self, name: DOMString) {
         // Step 1.
-        self.list.borrow_mut().retain(|&(ref k, _)| k != &name);
+        self.extra.list.borrow_mut().retain(|&(ref k, _)| k != &name);
         // Step 2.
         self.update_steps();
     }
 
     // https://url.spec.whatwg.org/#dom-urlsearchparams-get
     fn Get(self, name: DOMString) -> Option<DOMString> {
-        let list = self.list.borrow();
+        let list = self.extra.list.borrow();
         list.iter().filter_map(|&(ref k, ref v)| {
             if k == &name {
                 Some(v.clone())
@@ -89,13 +96,13 @@ impl<'a> URLSearchParamsMethods for &'a URLSearchParams {
 
     // https://url.spec.whatwg.org/#dom-urlsearchparams-has
     fn Has(self, name: DOMString) -> bool {
-        let list = self.list.borrow();
+        let list = self.extra.list.borrow();
         list.iter().find(|&&(ref k, _)| k == &name).is_some()
     }
 
     // https://url.spec.whatwg.org/#dom-urlsearchparams-set
     fn Set(self, name: DOMString, value: DOMString) {
-        let mut list = self.list.borrow_mut();
+        let mut list = self.extra.list.borrow_mut();
         let mut index = None;
         let mut i = 0;
         list.retain(|&(ref k, _)| {
@@ -130,7 +137,7 @@ pub trait URLSearchParamsHelpers {
 impl<'a> URLSearchParamsHelpers for &'a URLSearchParams {
     // https://url.spec.whatwg.org/#concept-urlencoded-serializer
     fn serialize(self, encoding: Option<EncodingRef>) -> DOMString {
-        let list = self.list.borrow();
+        let list = self.extra.list.borrow();
         serialize_with_encoding(list.iter(), encoding)
     }
 }

@@ -24,6 +24,11 @@ no_jsmanaged_fields!(OsRng);
 #[dom_struct]
 pub struct Crypto {
     reflector_: Reflector,
+    extra: Box<CryptoExtra>,
+}
+
+#[derive(JSTraceable)]
+pub struct CryptoExtra {
     rng: DOMRefCell<OsRng>,
 }
 
@@ -31,7 +36,9 @@ impl Crypto {
     fn new_inherited() -> Crypto {
         Crypto {
             reflector_: Reflector::new(),
-            rng: DOMRefCell::new(OsRng::new().unwrap()),
+            extra: box CryptoExtra {
+                rng: DOMRefCell::new(OsRng::new().unwrap()),
+            },
         }
     }
 
@@ -61,7 +68,7 @@ impl<'a> CryptoMethods for &'a Crypto {
             slice::from_raw_parts_mut(data, length as usize)
         };
 
-        self.rng.borrow_mut().fill_bytes(&mut buffer);
+        self.extra.rng.borrow_mut().fill_bytes(&mut buffer);
 
         Ok(input)
     }

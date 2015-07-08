@@ -45,7 +45,7 @@ pub struct Worker {
     global: GlobalField,
     /// Sender to the Receiver associated with the DedicatedWorkerGlobalScope
     /// this Worker created.
-    sender: Sender<(TrustedWorkerAddress, ScriptMsg)>,
+    sender: Box<Sender<(TrustedWorkerAddress, ScriptMsg)>>,
 }
 
 impl Worker {
@@ -53,7 +53,7 @@ impl Worker {
         Worker {
             eventtarget: EventTarget::new_inherited(),
             global: GlobalField::from_rooted(&global),
-            sender: sender,
+            sender: box sender,
         }
     }
 
