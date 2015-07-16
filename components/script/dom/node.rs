@@ -113,7 +113,7 @@ pub struct Node {
     ///
     /// Must be sent back to the layout task to be destroyed when this
     /// node is finalized.
-    layout_data: LayoutDataRef,
+    layout_data: RefCell<Option<LayoutData>>,
 
     unique_id: DOMRefCell<String>,
 }
@@ -196,7 +196,7 @@ impl NodeFlags {
 impl Drop for Node {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
-        self.layout_data.dispose(self);
+        self.dispose_layoutdata();
     }
 }
 
@@ -228,60 +228,19 @@ pub struct LayoutData {
 #[allow(unsafe_code)]
 unsafe impl Send for LayoutData {}
 
-#[derive(HeapSizeOf)]
-pub struct LayoutDataRef {
-    data_cell: RefCell<Option<LayoutData>>,
-}
+no_jsmanaged_fields!(LayoutData);
 
-no_jsmanaged_fields!(LayoutDataRef);
-
-impl LayoutDataRef {
-    pub fn new() -> LayoutDataRef {
-        LayoutDataRef {
-            data_cell: RefCell::new(None),
-        }
-    }
-
+impl Node {
     /// Sends layout data, if any, back to the layout task to be destroyed.
-    pub fn dispose(&self, node: &Node) {
+    fn dispose_layoutdata(&self) {
         debug_assert!(task_state::get().is_script());
-        if let Some(layout_data) = mem::replace(&mut *self.data_cell.borrow_mut(), None) {
-            let win = window_from_node(node);
+        if let Some(layout_data) = mem::replace(&mut *self.layout_data.borrow_mut(), None) {
+            let win = window_from_node(self);
             let LayoutChan(chan) = win.layout_chan();
             chan.send(Msg::ReapLayoutData(layout_data)).unwrap()
         }
     }
 
-    /// Borrows the layout data immutably, *assuming that there are no mutators*. Bad things will
-    /// happen if you try to mutate the layout data while this is held. This is the only thread-
-    /// safe layout data accessor.
-    #[inline]
-    #[allow(unsafe_code)]
-    pub unsafe fn borrow_unchecked(&self) -> *const Option<LayoutData> {
-        debug_assert!(task_state::get().is_layout());
-        self.data_cell.as_unsafe_cell().get() as *const _
-    }
-
-    /// Borrows the layout data immutably. This function is *not* thread-safe.
-    #[inline]
-    pub fn borrow(&self) -> Ref<Option<LayoutData>> {
-        debug_assert!(task_state::get().is_layout());
-        self.data_cell.borrow()
-    }
-
-    /// Borrows the layout data mutably. This function is *not* thread-safe.
-    ///
-    /// FIXME(pcwalton): We should really put this behind a `MutLayoutView` phantom type, to
-    /// prevent CSS selector matching from mutably accessing nodes it's not supposed to and racing
-    /// on it. This has already resulted in one bug!
-    #[inline]
-    pub fn borrow_mut(&self) -> RefMut<Option<LayoutData>> {
-        debug_assert!(task_state::get().is_layout());
-        self.data_cell.borrow_mut()
-    }
-}
-
-impl Node {
     /// Adds a new child to the end of this node's list of children.
     ///
     /// Fails unless `new_child` is disconnected from the tree.
@@ -364,7 +323,7 @@ impl Node {
         for node in child.traverse_preorder() {
             node.set_flag(IS_IN_DOC, false);
             vtable_for(&&*node).unbind_from_tree(parent_in_doc);
-            node.layout_data.dispose(&node);
+            node.dispose_layoutdata();
         }
 
         let document = child.owner_doc();
@@ -409,7 +368,7 @@ impl<'a> Iterator for QuerySelectorIterator {
 
 impl Node {
     pub fn teardown(&self) {
-        self.layout_data.dispose(self);
+        self.dispose_layoutdata();
         for kid in self.children() {
             kid.r().teardown();
         }
@@ -1087,19 +1046,22 @@ impl LayoutNodeHelpers for LayoutJS<Node> {
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn layout_data(&self) -> Ref<Option<LayoutData>> {
+        debug_assert!(task_state::get().is_layout());
         (*self.unsafe_get()).layout_data.borrow()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn layout_data_mut(&self) -> RefMut<Option<LayoutData>> {
+        debug_assert!(task_state::get().is_layout());
         (*self.unsafe_get()).layout_data.borrow_mut()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn layout_data_unchecked(&self) -> *const Option<LayoutData> {
-        (*self.unsafe_get()).layout_data.borrow_unchecked()
+        debug_assert!(task_state::get().is_layout());
+        (*self.unsafe_get()).layout_data.as_unsafe_cell().get() as *const _
     }
 
     #[inline]
@@ -1391,7 +1353,7 @@ impl Node {
             children_count: Cell::new(0u32),
             flags: Cell::new(NodeFlags::new(type_id)),
 
-            layout_data: LayoutDataRef::new(),
+            layout_data: RefCell::new(None),
 
             unique_id: DOMRefCell::new(String::new()),
         }
