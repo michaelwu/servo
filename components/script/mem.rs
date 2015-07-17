@@ -22,11 +22,5 @@ fn heap_size_of_self_and_children<T: HeapSizeOf>(obj: &T) -> usize {
 pub fn heap_size_of_eventtarget(target: &EventTarget) -> usize {
     //TODO: add more specific matches for concrete element types as derive(HeapSizeOf) is
     //      added to each one.
-    match target.type_id() {
-        &EventTargetTypeId::Node(NodeTypeId::CharacterData(_)) =>
-            heap_size_of_self_and_children(CharacterDataCast::to_ref(target).unwrap()),
-        &EventTargetTypeId::Node(_) =>
-            heap_size_of_self_and_children(NodeCast::to_ref(target).unwrap()),
-        _ => 0,
-    }
+    0
 }
