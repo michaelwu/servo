@@ -116,6 +116,12 @@ pub struct EventListenerEntry {
 #[dom_struct]
 pub struct EventTarget {
     reflector_: Reflector,
+    extra: Box<EventTargetExtra>,
+}
+
+#[must_root]
+#[derive(JSTraceable, HeapSizeOf)]
+pub struct EventTargetExtra {
     handlers: DOMRefCell<HashMap<DOMString, Vec<EventListenerEntry>, DefaultState<FnvHasher>>>,
 }
 
@@ -123,19 +129,21 @@ impl EventTarget {
     pub fn new_inherited() -> EventTarget {
         EventTarget {
             reflector_: Reflector::new(),
-            handlers: DOMRefCell::new(Default::default()),
+            extra: box EventTargetExtra {
+                handlers: DOMRefCell::new(Default::default()),
+            },
         }
     }
 
     pub fn get_listeners(&self, type_: &str) -> Option<Vec<EventListenerType>> {
-        self.handlers.borrow().get(type_).map(|listeners| {
+        self.extra.handlers.borrow().get(type_).map(|listeners| {
             listeners.iter().map(|entry| entry.listener.clone()).collect()
         })
     }
 
     pub fn get_listeners_for(&self, type_: &str, desired_phase: ListenerPhase)
         -> Option<Vec<EventListenerType>> {
-        self.handlers.borrow().get(type_).map(|listeners| {
+        self.extra.handlers.borrow().get(type_).map(|listeners| {
             let filtered = listeners.iter().filter(|entry| entry.phase == desired_phase);
             filtered.map(|entry| entry.listener.clone()).collect()
         })
@@ -154,7 +162,7 @@ impl EventTarget {
     pub fn set_inline_event_listener(&self,
                                  ty: DOMString,
                                  listener: Option<Rc<EventHandler>>) {
-        let mut handlers = self.handlers.borrow_mut();
+        let mut handlers = self.extra.handlers.borrow_mut();
         let entries = match handlers.entry(ty) {
             Occupied(entry) => entry.into_mut(),
             Vacant(entry) => entry.insert(vec!()),
@@ -188,7 +196,7 @@ impl EventTarget {
     }
 
     pub fn get_inline_event_listener(&self, ty: DOMString) -> Option<Rc<EventHandler>> {
-        let handlers = self.handlers.borrow();
+        let handlers = self.extra.handlers.borrow();
         let entries = handlers.get(&ty);
         entries.and_then(|entries| entries.iter().filter_map(|entry| {
             match entry.listener {
@@ -254,7 +262,7 @@ impl EventTarget {
     }
 
     pub fn has_handlers(&self) -> bool {
-        !self.handlers.borrow().is_empty()
+        !self.extra.handlers.borrow().is_empty()
     }
 }
 
@@ -266,7 +274,7 @@ impl EventTargetMethods for EventTarget {
                         capture: bool) {
         match listener {
             Some(listener) => {
-                let mut handlers = self.handlers.borrow_mut();
+                let mut handlers = self.extra.handlers.borrow_mut();
                 let entry = match handlers.entry(ty) {
                     Occupied(entry) => entry.into_mut(),
                     Vacant(entry) => entry.insert(vec!()),
@@ -292,7 +300,7 @@ impl EventTargetMethods for EventTarget {
                            capture: bool) {
         match listener {
             Some(ref listener) => {
-                let mut handlers = self.handlers.borrow_mut();
+                let mut handlers = self.extra.handlers.borrow_mut();
                 let entry = handlers.get_mut(&ty);
                 for entry in entry {
                     let phase = if capture { ListenerPhase::Capturing } else { ListenerPhase::Bubbling };
