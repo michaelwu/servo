@@ -1266,54 +1266,48 @@ impl Window {
 }
 
 impl Window {
-    pub fn new(runtime: Rc<Runtime>,
-               page: Rc<Page>,
-               script_chan: MainThreadScriptChan,
-               image_cache_chan: ImageCacheChan,
-               control_chan: Sender<ConstellationControlMsg>,
-               compositor: IpcSender<ScriptToCompositorMsg>,
-               image_cache_task: ImageCacheTask,
-               resource_task: Arc<ResourceTask>,
-               storage_task: StorageTask,
-               mem_profiler_chan: mem::ProfilerChan,
-               devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
-               constellation_chan: ConstellationChan,
-               layout_chan: LayoutChan,
-               id: PipelineId,
-               parent_info: Option<(PipelineId, SubpageId)>,
-               window_size: Option<WindowSizeData>)
-               -> Root<Window> {
-        let layout_rpc: Box<LayoutRPC> = {
-            let (rpc_send, rpc_recv) = channel();
-            let LayoutChan(ref lchan) = layout_chan;
-            lchan.send(Msg::GetRPC(rpc_send)).unwrap();
-            rpc_recv.recv().unwrap()
-        };
-
-        let win = box Window {
+    pub fn new_inherited(runtime: Rc<Runtime>,
+                         page: Rc<Page>,
+                         script_chan: MainThreadScriptChan,
+                         image_cache_chan: ImageCacheChan,
+                         control_chan: Sender<ConstellationControlMsg>,
+                         compositor: IpcSender<ScriptToCompositorMsg>,
+                         image_cache_task: ImageCacheTask,
+                         resource_task: Arc<ResourceTask>,
+                         storage_task: StorageTask,
+                         mem_profiler_chan: mem::ProfilerChan,
+                         devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
+                         constellation_chan: ConstellationChan,
+                         layout_chan: LayoutChan,
+                         id: PipelineId,
+                         parent_info: Option<(PipelineId, SubpageId)>,
+                         window_size: Option<WindowSizeData>,
+                         layout_rpc: Box<LayoutRPC>)
+                         -> Window {
+        Window {
             eventtarget: EventTarget::new_inherited(),
             console: Default::default(),
             crypto: Default::default(),
-            page: page,
             navigator: Default::default(),
+            page: page,
             performance: Default::default(),
             screen: Default::default(),
             session_storage: Default::default(),
             local_storage: Default::default(),
             next_worker_id: Cell::new(WorkerId(0)),
+            devtools_wants_updates: Cell::new(false),
+            next_subpage_id: Cell::new(SubpageId(0)),
             id: id,
             parent_info: parent_info,
-            js_runtime: DOMRefCell::new(Some(runtime.clone())),
             last_reflow_id: Cell::new(0),
-            next_subpage_id: Cell::new(SubpageId(0)),
+            js_runtime: DOMRefCell::new(Some(runtime.clone())),
 
-            devtools_wants_updates: Cell::new(false),
             extra: box WindowExtra {
                 script_chan: script_chan,
                 control_chan: control_chan,
                 image_cache_task: image_cache_task,
                 image_cache_chan: image_cache_chan,
-                compositor: DOMRefCell::new(compositor),
+                compositor: compositor,
                 browsing_context: DOMRefCell::new(None),
                 navigation_start: time::get_time().sec as u64,
                 navigation_start_precise: time::precise_time_ns() as f64,
@@ -1338,7 +1332,51 @@ impl Window {
                 window_size: Cell::new(window_size),
                 webdriver_script_chan: RefCell::new(None),
             },
+        }
+    }
+
+    pub fn new(runtime: Rc<Runtime>,
+               page: Rc<Page>,
+               script_chan: MainThreadScriptChan,
+               image_cache_chan: ImageCacheChan,
+               control_chan: Sender<ConstellationControlMsg>,
+               compositor: IpcSender<ScriptToCompositorMsg>,
+               image_cache_task: ImageCacheTask,
+               resource_task: Arc<ResourceTask>,
+               storage_task: StorageTask,
+               mem_profiler_chan: mem::ProfilerChan,
+               devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
+               constellation_chan: ConstellationChan,
+               layout_chan: LayoutChan,
+               id: PipelineId,
+               parent_info: Option<(PipelineId, SubpageId)>,
+               window_size: Option<WindowSizeData>)
+               -> Root<Window> {
+        let layout_rpc: Box<LayoutRPC> = {
+            let (rpc_send, rpc_recv) = channel();
+            let LayoutChan(ref lchan) = layout_chan;
+            lchan.send(Msg::GetRPC(rpc_send)).unwrap();
+            rpc_recv.recv().unwrap()
         };
+
+        let win =
+            box Window::new_inherited(runtime.clone(),
+                                      page,
+                                      script_chan,
+                                      image_cache_chan,
+                                      control_chan,
+                                      compositor,
+                                      image_cache_task,
+                                      resource_task,
+                                      storage_task,
+                                      mem_profiler_chan,
+                                      devtools_chan,
+                                      constellation_chan,
+                                      layout_chan,
+                                      id,
+                                      parent_info,
+                                      window_size,
+                                      layout_rpc);
 
         WindowBinding::Wrap(runtime.cx(), win)
     }
