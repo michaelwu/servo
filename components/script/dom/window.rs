@@ -1080,31 +1080,24 @@ impl<'a> WindowHelpers for &'a Window {
 }
 
 impl Window {
-    pub fn new(runtime: Rc<Runtime>,
-               page: Rc<Page>,
-               script_chan: Box<ScriptChan+Send>,
-               image_cache_chan: ImageCacheChan,
-               control_chan: ScriptControlChan,
-               compositor: ScriptListener,
-               image_cache_task: ImageCacheTask,
-               resource_task: Arc<ResourceTask>,
-               storage_task: StorageTask,
-               mem_profiler_chan: mem::ProfilerChan,
-               devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
-               constellation_chan: ConstellationChan,
-               layout_chan: LayoutChan,
-               id: PipelineId,
-               parent_info: Option<(PipelineId, SubpageId)>,
-               window_size: Option<WindowSizeData>)
-               -> Root<Window> {
-        let layout_rpc: Box<LayoutRPC> = {
-            let (rpc_send, rpc_recv) = channel();
-            let LayoutChan(ref lchan) = layout_chan;
-            lchan.send(Msg::GetRPC(rpc_send)).unwrap();
-            rpc_recv.recv().unwrap()
-        };
-
-        let win = box Window {
+    pub fn new_inherited(page: Rc<Page>,
+                         id: PipelineId,
+                         parent_info: Option<(PipelineId, SubpageId)>,
+                         runtime: Rc<Runtime>,
+                         script_chan: Box<ScriptChan+Send>,
+                         control_chan: ScriptControlChan,
+                         image_cache_task: ImageCacheTask,
+                         image_cache_chan: ImageCacheChan,
+                         compositor: ScriptListener,
+                         mem_profiler_chan: mem::ProfilerChan,
+                         devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
+                         layout_chan: LayoutChan,
+                         layout_rpc: Box<LayoutRPC>,
+                         resource_task: Arc<ResourceTask>,
+                         storage_task: StorageTask,
+                         constellation_chan: ConstellationChan,
+                         window_size: Option<WindowSizeData>) -> Window {
+        Window {
             eventtarget: EventTarget::new_inherited(),
             console: Default::default(),
             crypto: Default::default(),
@@ -1151,7 +1144,51 @@ impl Window {
                 window_size: Cell::new(window_size),
                 webdriver_script_chan: RefCell::new(None),
             },
+        }
+    }
+
+    pub fn new(runtime: Rc<Runtime>,
+               page: Rc<Page>,
+               script_chan: Box<ScriptChan+Send>,
+               image_cache_chan: ImageCacheChan,
+               control_chan: ScriptControlChan,
+               compositor: ScriptListener,
+               image_cache_task: ImageCacheTask,
+               resource_task: Arc<ResourceTask>,
+               storage_task: StorageTask,
+               mem_profiler_chan: mem::ProfilerChan,
+               devtools_chan: Option<IpcSender<ScriptToDevtoolsControlMsg>>,
+               constellation_chan: ConstellationChan,
+               layout_chan: LayoutChan,
+               id: PipelineId,
+               parent_info: Option<(PipelineId, SubpageId)>,
+               window_size: Option<WindowSizeData>)
+               -> Root<Window> {
+        let layout_rpc: Box<LayoutRPC> = {
+            let (rpc_send, rpc_recv) = channel();
+            let LayoutChan(ref lchan) = layout_chan;
+            lchan.send(Msg::GetRPC(rpc_send)).unwrap();
+            rpc_recv.recv().unwrap()
         };
+
+        let win =
+            box Window::new_inherited(page,
+                                      id,
+                                      parent_info,
+                                      runtime.clone(),
+                                      script_chan,
+                                      control_chan,
+                                      image_cache_task,
+                                      image_cache_chan,
+                                      compositor,
+                                      mem_profiler_chan,
+                                      devtools_chan,
+                                      layout_chan,
+                                      layout_rpc,
+                                      resource_task,
+                                      storage_task,
+                                      constellation_chan,
+                                      window_size);
 
         WindowBinding::Wrap(runtime.cx(), win)
     }
