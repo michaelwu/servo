@@ -929,7 +929,7 @@ impl<'a> PrivateXMLHttpRequestHelpers for &'a XMLHttpRequest {
                     _ => "error",
                 };
 
-                let upload_complete: &Cell<bool> = &self.upload_complete;
+                let upload_complete = &self.upload_complete;
                 if !upload_complete.get() {
                     upload_complete.set(true);
                     self.dispatch_upload_progress_event("progress".to_owned(), None);
