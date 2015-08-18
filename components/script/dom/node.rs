@@ -847,8 +847,7 @@ impl Node {
 
     pub fn get_unique_id(&self) -> String {
         if self.unique_id.borrow().is_empty() {
-            let mut unique_id = self.unique_id.borrow_mut();
-            *unique_id = uuid::Uuid::new_v4().to_simple_string();
+            *self.unique_id.borrow_mut() = uuid::Uuid::new_v4().to_simple_string();
         }
         self.unique_id.borrow().clone()
     }
