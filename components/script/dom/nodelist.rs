@@ -12,7 +12,6 @@ use dom::node::{ChildrenMutation, Node};
 use dom::window::Window;
 use std::cell::Cell;
 
-#[derive(JSTraceable, HeapSizeOf)]
 #[must_root]
 pub enum NodeListType {
     Simple(Vec<JS<Node>>),
