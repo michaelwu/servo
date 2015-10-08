@@ -46,8 +46,7 @@ impl HTMLTableCellElement {
                          document: &Document)
                          -> HTMLTableCellElement {
         HTMLTableCellElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLTableCellElement(type_id),
-                                                    tag_name, prefix, document),
+            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLTableCellElement(type_id), tag_name, prefix, document),
             background_color: Cell::new(None),
             colspan: Cell::new(None),
             width: Cell::new(LengthOrPercentageOrAuto::Auto),

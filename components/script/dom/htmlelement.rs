@@ -63,8 +63,7 @@ impl HTMLElement {
                          prefix: Option<DOMString>,
                          document: &Document) -> HTMLElement {
         HTMLElement {
-            element:
-                Element::new_inherited(ElementTypeId::HTMLElement(type_id), tag_name, ns!(HTML), prefix, document),
+            element: Element::new_inherited(ElementTypeId::HTMLElement(type_id), tag_name, ns!(HTML), prefix, document),
             style_decl: Default::default(),
             dataset: Default::default(),
         }
