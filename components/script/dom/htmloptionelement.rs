@@ -36,9 +36,7 @@ impl HTMLOptionElement {
                      prefix: Option<DOMString>,
                      document: &Document) -> HTMLOptionElement {
         HTMLOptionElement {
-            htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE,
-                                                      localName, prefix, document),
+            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
             selectedness: Cell::new(false),
             dirtiness: Cell::new(false),
         }

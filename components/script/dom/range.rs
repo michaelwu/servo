@@ -36,9 +36,7 @@ impl Range {
                      end_container: &Node, end_offset: u32) -> Range {
         Range {
             reflector_: Reflector::new(),
-            inner: Rc::new(RefCell::new(RangeInner::new(
-                BoundaryPoint::new(start_container, start_offset),
-                BoundaryPoint::new(end_container, end_offset)))),
+            inner: Rc::new(RefCell::new(RangeInner::new(BoundaryPoint::new(start_container, start_offset), BoundaryPoint::new(end_container, end_offset)))),
         }
     }
 

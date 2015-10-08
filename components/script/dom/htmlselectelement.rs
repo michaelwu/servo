@@ -33,9 +33,7 @@ impl HTMLSelectElement {
                      prefix: Option<DOMString>,
                      document: &Document) -> HTMLSelectElement {
         HTMLSelectElement {
-            htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE,
-                                                      localName, prefix, document)
+            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
         }
     }
 

@@ -57,8 +57,7 @@ impl HTMLElement {
                                     prefix: Option<DOMString>, document: &Document)
                                     -> HTMLElement {
         HTMLElement {
-            element:
-                Element::new_inherited_with_state(state, tag_name, ns!(HTML), prefix, document),
+            element: Element::new_inherited_with_state(state, tag_name, ns!(HTML), prefix, document),
             style_decl: Default::default(),
             dataset: Default::default(),
         }
