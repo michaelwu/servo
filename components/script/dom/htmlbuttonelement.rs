@@ -45,9 +45,7 @@ impl HTMLButtonElement {
                      prefix: Option<DOMString>,
                      document: &Document) -> HTMLButtonElement {
         HTMLButtonElement {
-            htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE,
-                                                      localName, prefix, document),
+            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
             //TODO: implement button_type in attribute_mutated
             button_type: Cell::new(ButtonType::Submit)
         }

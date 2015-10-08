@@ -79,7 +79,7 @@ pub struct FileReader {
 impl FileReader {
     pub fn new_inherited(global: GlobalRef) -> FileReader {
         FileReader {
-            eventtarget: EventTarget::new_inherited(),//?
+            eventtarget: EventTarget::new_inherited(),
             global: GlobalField::from_rooted(&global),
             ready_state: Cell::new(FileReaderReadyState::Empty),
             error: MutNullableHeap::new(None),

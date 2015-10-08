@@ -113,9 +113,7 @@ impl HTMLInputElement {
     fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLInputElement {
         let chan = document.window().r().constellation_chan();
         HTMLInputElement {
-            htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE,
-                                                      localName, prefix, document),
+            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
             input_type: Cell::new(InputType::InputText),
             checked: Cell::new(false),
             placeholder: DOMRefCell::new("".to_owned()),

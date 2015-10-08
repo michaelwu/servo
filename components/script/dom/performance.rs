@@ -26,9 +26,7 @@ impl Performance {
                      navigation_start_precise: f64) -> Performance {
         Performance {
             reflector_: Reflector::new(),
-            timing: JS::from_rooted(&PerformanceTiming::new(window,
-                                                            navigation_start,
-                                                            navigation_start_precise)),
+            timing: JS::from_rooted(&PerformanceTiming::new(window, navigation_start, navigation_start_precise)),
         }
     }
 

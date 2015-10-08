@@ -91,9 +91,7 @@ impl HTMLTextAreaElement {
                      document: &Document) -> HTMLTextAreaElement {
         let chan = document.window().r().constellation_chan();
         HTMLTextAreaElement {
-            htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE,
-                                                      localName, prefix, document),
+            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
             cols: Cell::new(DEFAULT_COLS),
             rows: Cell::new(DEFAULT_ROWS),
             value_changed: Cell::new(false),
