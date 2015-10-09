@@ -88,14 +88,14 @@ impl NodeList {
     }
 }
 
-#[derive(JSTraceable, HeapSizeOf)]
-#[must_root]
+#[dom_struct]
 pub struct ChildrenList {
     node: JS<Node>,
-    #[ignore_heap_size_of = "Defined in rust-mozjs"]
     last_visited: MutNullableHeap<JS<Node>>,
     last_index: Cell<u32>,
 }
+
+anonymous_dom_object!(ChildrenList);
 
 impl ChildrenList {
     fn new(node: &Node) -> ChildrenList {
