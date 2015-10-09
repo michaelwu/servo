@@ -20,6 +20,7 @@ use dom::bindings::global::global_object_for_js_object;
 use dom::bindings::js::RootedReference;
 use dom::bindings::js::{JS, MutNullableHeap, Root};
 use dom::bindings::num::Finite;
+use dom::bindings::magic::MagicDOMClass;
 use dom::bindings::utils::{GlobalStaticData, Reflectable};
 use dom::bindings::utils::{TopDOMClass, WindowProxyHandler};
 use dom::browsercontext::BrowsingContext;

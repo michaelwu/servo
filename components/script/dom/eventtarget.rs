@@ -11,6 +11,7 @@ use dom::bindings::codegen::InheritTypes::EventTargetTypeId;
 use dom::bindings::error::Error::InvalidState;
 use dom::bindings::error::{Fallible, report_pending_exception};
 use dom::bindings::utils::{Reflectable, Reflector};
+use dom::bindings::magic::MagicDOMClass;
 use dom::event::Event;
 use dom::eventdispatcher::dispatch_event;
 use dom::virtualmethods::VirtualMethods;

@@ -35,6 +35,7 @@ use dom::bindings::error::Error::{InvalidCharacter, Syntax};
 use dom::bindings::error::{ErrorResult, Fallible};
 use dom::bindings::js::{JS, LayoutJS, MutNullableHeap};
 use dom::bindings::js::{Root, RootedReference};
+use dom::bindings::js::DOMVec;
 use dom::bindings::utils::XMLName::InvalidXMLName;
 use dom::bindings::utils::{TopDOMClass, namespace_from_domstring};
 use dom::bindings::utils::{validate_and_extract, xml_name_type};

@@ -18,6 +18,7 @@ use dom::bindings::codegen::InheritTypes::{HTMLTextAreaElementCast, NodeCast, No
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root};
 use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::magic::MagicDOMClass;
 use dom::document::Document;
 use dom::element::Element;
 use dom::event::{Event, EventBubbles, EventCancelable};
