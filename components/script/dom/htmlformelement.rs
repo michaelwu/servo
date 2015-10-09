@@ -14,6 +14,7 @@ use dom::bindings::conversions::{Castable, DerivedFrom};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root};
 use dom::bindings::utils::Reflectable;
+use dom::bindings::magic::MagicDOMClass;
 use dom::document::Document;
 use dom::element::Element;
 use dom::event::{Event, EventBubbles, EventCancelable};

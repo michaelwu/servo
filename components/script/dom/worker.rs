@@ -14,6 +14,7 @@ use dom::bindings::refcounted::Trusted;
 use dom::bindings::structuredclone::StructuredCloneData;
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::MagicDOMClass;
 use dom::dedicatedworkerglobalscope::{DedicatedWorkerGlobalScope, WorkerScriptMsg};
 use dom::errorevent::ErrorEvent;
 use dom::event::{Event, EventBubbles, EventCancelable};

@@ -31,6 +31,7 @@ use dom::bindings::js::{JS, LayoutJS, MutNullableHeap};
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::trace::RootedVec;
 use dom::bindings::utils::{Reflectable, namespace_from_domstring, reflect_dom_object};
+use dom::bindings::magic::{MagicDOMClass, InitRoot};
 use dom::characterdata::CharacterData;
 use dom::comment::Comment;
 use dom::document::{Document, DocumentSource, IsHTMLDocument};
