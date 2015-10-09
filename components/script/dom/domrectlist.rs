@@ -5,6 +5,7 @@
 use dom::bindings::codegen::Bindings::DOMRectListBinding;
 use dom::bindings::codegen::Bindings::DOMRectListBinding::DOMRectListMethods;
 use dom::bindings::global::GlobalRef;
+use dom::bindings::js::DOMVec;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::utils::{Reflector, reflect_dom_object};
 use dom::domrect::DOMRect;

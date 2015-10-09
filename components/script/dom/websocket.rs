@@ -14,6 +14,7 @@ use dom::bindings::refcounted::Trusted;
 use dom::bindings::str::USVString;
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::MagicDOMClass;
 use dom::blob::Blob;
 use dom::closeevent::CloseEvent;
 use dom::event::{Event, EventBubbles, EventCancelable};
