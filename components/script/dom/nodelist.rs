@@ -5,7 +5,7 @@
 use dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use dom::bindings::codegen::Bindings::NodeListBinding;
 use dom::bindings::codegen::Bindings::NodeListBinding::NodeListMethods;
-use dom::bindings::global::GlobalRef;
+use dom::bindings::global::{GlobalRef, global_object_for_dom_object};
 use dom::bindings::js::{JS, MutNullableHeap, Root, RootedReference};
 use dom::bindings::utils::{Reflector, reflect_dom_object};
 use dom::node::{ChildrenMutation, Node};
@@ -15,7 +15,7 @@ use std::cell::Cell;
 #[must_root]
 pub enum NodeListType {
     Simple(Vec<JS<Node>>),
-    Children(ChildrenList),
+    Children(JS<ChildrenList>),
 }
 
 // https://dom.spec.whatwg.org/#interface-nodelist
@@ -46,7 +46,8 @@ impl NodeList {
     }
 
     pub fn new_child_list(window: &Window, node: &Node) -> Root<NodeList> {
-        NodeList::new(window, NodeListType::Children(ChildrenList::new(node)))
+        let list = ChildrenList::new(node);
+        NodeList::new(window, NodeListType::Children(JS::from_rooted(&list)))
     }
 }
 
@@ -79,32 +80,33 @@ impl NodeListMethods for NodeList {
 
 
 impl NodeList {
-    pub fn as_children_list(&self) -> &ChildrenList {
+    pub fn as_children_list(&self) -> Root<ChildrenList> {
         if let NodeListType::Children(ref list) = self.list_type {
-            list
+            list.root()
         } else {
             panic!("called as_children_list() on a simple node list")
         }
     }
 }
 
-#[derive(JSTraceable, HeapSizeOf)]
-#[must_root]
+#[dom_struct]
 pub struct ChildrenList {
     node: JS<Node>,
-    #[ignore_heap_size_of = "Defined in rust-mozjs"]
     last_visited: MutNullableHeap<JS<Node>>,
     last_index: Cell<u32>,
 }
 
+anonymous_dom_object!(ChildrenList);
+
 impl ChildrenList {
-    fn new(node: &Node) -> ChildrenList {
+    fn new(node: &Node) -> Root<ChildrenList> {
         let last_visited = node.GetFirstChild();
-        ChildrenList {
-            node: JS::from_ref(node),
-            last_visited: MutNullableHeap::new(last_visited.r()),
-            last_index: Cell::new(0u32),
-        }
+        let global = global_object_for_dom_object(node);
+        let mut obj = alloc_dom_object::<ChildrenList>(global.r());
+        obj.node.init(JS::from_ref(node));
+        obj.last_visited.init(last_visited.r());
+        obj.last_index.init(0);
+        obj.into_root()
     }
 
     pub fn len(&self) -> u32 {
