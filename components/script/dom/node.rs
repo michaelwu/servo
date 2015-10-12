@@ -115,7 +115,7 @@ magic_dom_struct! {
         ///
         /// Must be sent back to the layout task to be destroyed when this
         /// node is finalized.
-        layout_data: Layout<Option<LayoutData>>,
+        layout_data: Layout<Option<Box<RefCell<LayoutData>>>>,
 
         unique_id: Layout<String>,
     }
