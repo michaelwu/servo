@@ -15,7 +15,7 @@ use ipc_channel::ipc::{self, IpcSender};
 use std::cell::{Cell, RefCell};
 use std::sync::{ONCE_INIT, Once};
 
-#[derive(Clone, Copy, PartialEq, Debug, JSTraceable, HeapSizeOf)]
+#[derive(Clone, Copy, PartialEq, Debug, NumFromPrimitive, JSTraceable, HeapSizeOf)]
 pub enum ShaderCompilationStatus {
     NotCompiled,
     Succeeded,
