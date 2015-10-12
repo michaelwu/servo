@@ -20,7 +20,7 @@ use dom::bindings::global::global_object_for_js_object;
 use dom::bindings::js::RootedReference;
 use dom::bindings::js::{JS, MutNullableHeap, Root};
 use dom::bindings::num::Finite;
-use dom::bindings::magic::MagicDOMClass;
+use dom::bindings::magic::{MagicDOMClass, alloc_dom_global, GlobalObjectSlots};
 use dom::bindings::utils::{GlobalStaticData, Reflectable};
 use dom::bindings::utils::{TopDOMClass, WindowProxyHandler};
 use dom::browsercontext::BrowsingContext;
@@ -115,6 +115,7 @@ pub struct Window {
     console: MutNullableHeap<JS<Console>>,
     crypto: MutNullableHeap<JS<Crypto>>,
     navigator: MutNullableHeap<JS<Navigator>>,
+    global_slots: GlobalObjectSlots,
     page: Rc<Page>,
     performance: MutNullableHeap<JS<Performance>>,
     screen: MutNullableHeap<JS<Screen>>,
@@ -1360,26 +1361,25 @@ impl Window {
             rpc_recv.recv().unwrap()
         };
 
-        let win =
-            box Window::new_inherited(runtime.clone(),
-                                      page,
-                                      script_chan,
-                                      image_cache_chan,
-                                      control_chan,
-                                      compositor,
-                                      image_cache_task,
-                                      resource_task,
-                                      storage_task,
-                                      mem_profiler_chan,
-                                      devtools_chan,
-                                      constellation_chan,
-                                      layout_chan,
-                                      id,
-                                      parent_info,
-                                      window_size,
-                                      layout_rpc);
-
-        WindowBinding::Wrap(runtime.cx(), win)
+        let win = alloc_dom_global::<Window>(runtime.cx());
+        win.new_inherited(runtime.clone(),
+                          page,
+                          script_chan,
+                          image_cache_chan,
+                          control_chan,
+                          compositor,
+                          image_cache_task,
+                          resource_task,
+                          storage_task,
+                          mem_profiler_chan,
+                          devtools_chan,
+                          constellation_chan,
+                          layout_chan,
+                          id,
+                          parent_info,
+                          window_size,
+                          layout_rpc);
+        win.into_root()
     }
 }
 

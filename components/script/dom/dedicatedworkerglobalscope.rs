@@ -14,6 +14,7 @@ use dom::bindings::codegen::InheritTypes::{WorkerGlobalScopeCast, WorkerGlobalSc
 use dom::bindings::error::ErrorResult;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root, RootCollection};
+use dom::bindings::magic::alloc_dom_global;
 use dom::bindings::refcounted::LiveDOMReferences;
 use dom::bindings::structuredclone::StructuredCloneData;
 use dom::bindings::utils::{Reflectable, TopDOMClass};
@@ -186,10 +187,11 @@ impl DedicatedWorkerGlobalScope {
                own_sender: Sender<(TrustedWorkerAddress, WorkerScriptMsg)>,
                receiver: Receiver<(TrustedWorkerAddress, WorkerScriptMsg)>)
                -> Root<DedicatedWorkerGlobalScope> {
-        let scope = box DedicatedWorkerGlobalScope::new_inherited(
+        let mut scope = alloc_dom_global::<DedicatedWorkerGlobalScope>(runtime.cx());
+        scope.new_inherited(
             init, worker_url, id, from_devtools_receiver, runtime.clone(), parent_sender,
             own_sender, receiver);
-        DedicatedWorkerGlobalScopeBinding::Wrap(runtime.cx(), scope)
+        scope.into_root()
     }
 
     pub fn run_worker_scope(init: WorkerGlobalScopeInit,

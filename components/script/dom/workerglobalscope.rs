@@ -10,6 +10,7 @@ use dom::bindings::error::Error::{JSFailed, Network, Syntax};
 use dom::bindings::error::{ErrorResult, Fallible, report_pending_exception};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::magic::GlobalObjectSlots;
 use dom::bindings::utils::Reflectable;
 use dom::console::Console;
 use dom::crypto::Crypto;
@@ -54,6 +55,7 @@ pub struct WorkerGlobalScope {
     #[ignore_heap_size_of = "Defined in std"]
     runtime: Rc<Runtime>,
     next_worker_id: Cell<WorkerId>,
+    global_slots: GlobalObjectSlots,
     location: MutNullableHeap<JS<WorkerLocation>>,
     navigator: MutNullableHeap<JS<WorkerNavigator>>,
     console: MutNullableHeap<JS<Console>>,
