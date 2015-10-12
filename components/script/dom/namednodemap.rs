@@ -8,29 +8,28 @@ use dom::bindings::codegen::Bindings::NamedNodeMapBinding::NamedNodeMapMethods;
 use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, namespace_from_domstring, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::namespace_from_domstring;
 use dom::element::Element;
 use dom::window::Window;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct NamedNodeMap {
-    reflector_: Reflector,
-    owner: JS<Element>,
+magic_dom_struct! {
+    pub struct NamedNodeMap {
+        owner: JS<Element>,
+    }
 }
 
 impl NamedNodeMap {
-    fn new_inherited(elem: &Element) -> NamedNodeMap {
-        NamedNodeMap {
-            reflector_: Reflector::new(),
-            owner: JS::from_ref(elem),
-        }
+    fn new_inherited(&mut self, elem: &Element) {
+        self.owner.init(JS::from_ref(elem));
     }
 
     pub fn new(window: &Window, elem: &Element) -> Root<NamedNodeMap> {
-        reflect_dom_object(box NamedNodeMap::new_inherited(elem),
-                           GlobalRef::Window(window), NamedNodeMapBinding::Wrap)
+        let mut obj = alloc_dom_object::<NamedNodeMap>(GlobalRef::Window(window));
+        obj.new_inherited(elem);
+        obj.into_root()
     }
 }
 

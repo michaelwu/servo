@@ -6,7 +6,7 @@ use dom::bindings::codegen::Bindings::ImageDataBinding;
 use dom::bindings::codegen::Bindings::ImageDataBinding::ImageDataMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use euclid::size::Size2D;
 use js::jsapi::{Heap, JSContext, JSObject};
 use js::jsapi::{JS_GetUint8ClampedArrayData, JS_NewUint8ClampedArray};
@@ -16,23 +16,20 @@ use std::ptr;
 use std::slice;
 use std::vec::Vec;
 
-#[dom_struct]
-#[allow(raw_pointer_derive)]
+magic_dom_struct! {
+    #[allow(raw_pointer_derive)]
 pub struct ImageData {
-    reflector_: Reflector,
-    width: u32,
-    height: u32,
-    data: *mut JSObject,
+        width: u32,
+        height: u32,
+        data: *mut JSObject,
+    }
 }
 
 impl ImageData {
-    pub fn new_inherited(width: u32, height: u32, data: *mut JSObject) -> ImageData {
-        ImageData {
-            reflector_: Reflector::new(),
-            width: width,
-            height: height,
-            data: data,
-        }
+    pub fn new_inherited(&mut self, width: u32, height: u32, data: *mut JSObject) {
+        self.width.init(width);
+        self.height.init(height);
+        self.data.init(data);
     }
 
     #[allow(unsafe_code)]
@@ -48,8 +45,9 @@ impl ImageData {
             js_object
         };
 
-        reflect_dom_object(box ImageData::new_inherited(width, height, data),
-                           global, ImageDataBinding::Wrap)
+        let mut obj = alloc_dom_object::<ImageData>(global);
+        obj.new_inherited(width, height, data);
+        obj.into_root()
     }
 
     #[allow(unsafe_code)]

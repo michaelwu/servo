@@ -8,7 +8,7 @@ use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderi
 use dom::bindings::codegen::Bindings::WebGLTextureBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::webglobject::WebGLObject;
 use ipc_channel::ipc::{self, IpcSender};
 use std::cell::Cell;
@@ -18,23 +18,22 @@ pub enum TexParameterValue {
     Int(i32),
 }
 
-#[dom_struct]
-pub struct WebGLTexture {
-    webgl_object: WebGLObject,
-    id: u32,
-    /// The target to which this texture was bound the first time
-    target: Cell<Option<u32>>,
-    is_deleted: Cell<bool>,
+magic_dom_struct! {
+    pub struct WebGLTexture {
+        webgl_object: Base<WebGLObject>,
+        id: u32,
+        /// The target to which this texture was bound the first time
+        target: Mut<Option<u32>>,
+        is_deleted: Mut<bool>,
+    }
 }
 
 impl WebGLTexture {
-    fn new_inherited(id: u32) -> WebGLTexture {
-        WebGLTexture {
-            webgl_object: WebGLObject::new_inherited(),
-            id: id,
-            target: Cell::new(None),
-            is_deleted: Cell::new(false),
-        }
+    fn new_inherited(&mut self, id: u32) {
+        self.webgl_object.new_inherited();
+        self.id.init(id);
+        self.target.init(None);
+        self.is_deleted.init(false);
     }
 
     pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
@@ -47,7 +46,9 @@ impl WebGLTexture {
     }
 
     pub fn new(global: GlobalRef, id: u32) -> Root<WebGLTexture> {
-        reflect_dom_object(box WebGLTexture::new_inherited(id), global, WebGLTextureBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLTexture>(global);
+        obj.new_inherited(id);
+        obj.into_root()
     }
 }
 

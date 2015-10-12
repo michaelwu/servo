@@ -7,24 +7,25 @@ use dom::bindings::codegen::Bindings::DOMPointReadOnlyBinding::DOMPointReadOnlyM
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::dompointreadonly::{DOMPointReadOnly, DOMPointWriteMethods};
 
 // http://dev.w3.org/fxtf/geometry/Overview.html#dompoint
-#[dom_struct]
-pub struct DOMPoint {
-    point: DOMPointReadOnly
+magic_dom_struct! {
+    pub struct DOMPoint {
+        point: Base<DOMPointReadOnly>
+    }
 }
 
 impl DOMPoint {
-    fn new_inherited(x: f64, y: f64, z: f64, w: f64) -> DOMPoint {
-        DOMPoint {
-            point: DOMPointReadOnly::new_inherited(x, y, z, w),
-        }
+    fn new_inherited(&mut self, x: f64, y: f64, z: f64, w: f64) {
+        self.point.new_inherited(x, y, z, w);
     }
 
     pub fn new(global: GlobalRef, x: f64, y: f64, z: f64, w: f64) -> Root<DOMPoint> {
-        reflect_dom_object(box DOMPoint::new_inherited(x, y, z, w), global, Wrap)
+        let mut obj = alloc_dom_object::<DOMPoint>(global);
+        obj.new_inherited(x, y, z, w);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

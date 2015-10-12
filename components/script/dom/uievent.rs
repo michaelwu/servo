@@ -9,8 +9,9 @@ use dom::bindings::codegen::InheritTypes::{EventCast, EventTypeId, UIEventDerive
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::js::{JS, MutNullableHeap, RootedReference};
-use dom::bindings::utils::{TopDOMClass, reflect_dom_object};
+use dom::bindings::js::{JS, RootedReference};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::TopDOMClass;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use dom::window::Window;
 use std::cell::Cell;
@@ -18,11 +19,12 @@ use std::default::Default;
 use util::str::DOMString;
 
 // https://dvcs.w3.org/hg/dom3events/raw-file/tip/html/DOM3-Events.html#interface-UIEvent
-#[dom_struct]
-pub struct UIEvent {
-    event: Event,
-    view: MutNullableHeap<JS<Window>>,
-    detail: Cell<i32>
+magic_dom_struct! {
+    pub struct UIEvent {
+        event: Base<Event>,
+        view: Mut<Option<JS<Window>>>,
+        detail: Mut<i32>
+    }
 }
 
 impl UIEventDerived for Event {
@@ -35,18 +37,16 @@ impl UIEventDerived for Event {
 }
 
 impl UIEvent {
-    pub fn new_inherited() -> UIEvent {
-        UIEvent {
-            event: Event::new_inherited(),
-            view: Default::default(),
-            detail: Cell::new(0),
-        }
+    pub fn new_inherited(&mut self) {
+        self.event.new_inherited();
+        self.view.init(Default::default());
+        self.detail.init(0);
     }
 
     pub fn new_uninitialized(window: &Window) -> Root<UIEvent> {
-        reflect_dom_object(box UIEvent::new_inherited(),
-                           GlobalRef::Window(window),
-                           UIEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<UIEvent>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 
     pub fn new(window: &Window,

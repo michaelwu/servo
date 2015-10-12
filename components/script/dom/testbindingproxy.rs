@@ -5,13 +5,11 @@
 // check-tidy: no specs after this line
 
 use dom::bindings::codegen::Bindings::TestBindingProxyBinding::TestBindingProxyMethods;
-use dom::bindings::utils::Reflector;
 use util::str::DOMString;
 
 
-#[dom_struct]
-pub struct TestBindingProxy {
-    reflector_: Reflector
+magic_dom_struct! {
+    pub struct TestBindingProxy;
 }
 
 impl TestBindingProxyMethods for TestBindingProxy {

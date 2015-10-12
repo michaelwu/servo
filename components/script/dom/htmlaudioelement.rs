@@ -14,9 +14,10 @@ use dom::htmlmediaelement::HTMLMediaElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLAudioElement {
-    htmlmediaelement: HTMLMediaElement
+magic_dom_struct! {
+    pub struct HTMLAudioElement {
+        htmlmediaelement: Base<HTMLMediaElement>
+    }
 }
 
 impl HTMLAudioElementDerived for EventTarget {
@@ -29,20 +30,18 @@ impl HTMLAudioElementDerived for EventTarget {
 }
 
 impl HTMLAudioElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLAudioElement {
-        HTMLAudioElement {
-            htmlmediaelement:
-                HTMLMediaElement::new_inherited(HTMLMediaElementTypeId::HTMLAudioElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlmediaelement.new_inherited(HTMLMediaElementTypeId::HTMLAudioElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLAudioElement> {
-        let element = HTMLAudioElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLAudioElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLAudioElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

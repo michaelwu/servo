@@ -6,25 +6,21 @@ use dom::bindings::codegen::Bindings::ScreenBinding;
 use dom::bindings::codegen::Bindings::ScreenBinding::ScreenMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::window::Window;
 
-#[dom_struct]
-pub struct Screen {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct Screen;
 }
 
 impl Screen {
-    fn new_inherited() -> Screen {
-        Screen {
-            reflector_: Reflector::new(),
-        }
+    fn new_inherited(&mut self) {
     }
 
     pub fn new(window: &Window) -> Root<Screen> {
-        reflect_dom_object(box Screen::new_inherited(),
-                           GlobalRef::Window(window),
-                           ScreenBinding::Wrap)
+        let mut obj = alloc_dom_object::<Screen>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 }
 

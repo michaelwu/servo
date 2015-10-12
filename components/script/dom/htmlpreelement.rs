@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLPreElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLPreElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLPreElementDerived for EventTarget {
@@ -27,20 +28,18 @@ impl HTMLPreElementDerived for EventTarget {
 }
 
 impl HTMLPreElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLPreElement {
-        HTMLPreElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLPreElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLPreElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLPreElement> {
-        let element = HTMLPreElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLPreElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLPreElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

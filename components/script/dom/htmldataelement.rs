@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLDataElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLDataElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLDataElementDerived for EventTarget {
@@ -27,19 +28,18 @@ impl HTMLDataElementDerived for EventTarget {
 }
 
 impl HTMLDataElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLDataElement {
-        HTMLDataElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLDataElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLDataElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLDataElement> {
-        let element = HTMLDataElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLDataElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLDataElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTableColElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLTableColElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLTableColElementDerived for EventTarget {
@@ -27,20 +28,18 @@ impl HTMLTableColElementDerived for EventTarget {
 }
 
 impl HTMLTableColElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLTableColElement {
-        HTMLTableColElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLTableColElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLTableColElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLTableColElement> {
-        let element = HTMLTableColElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableColElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableColElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

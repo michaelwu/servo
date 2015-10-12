@@ -6,15 +6,15 @@ use canvas_traits::{FillOrStrokeStyle, RepetitionStyle, SurfaceStyle};
 use dom::bindings::codegen::Bindings::CanvasPatternBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::canvasgradient::ToFillOrStrokeStyle;
 use euclid::size::Size2D;
 
 // https://html.spec.whatwg.org/multipage/#canvaspattern
-#[dom_struct]
-pub struct CanvasPattern {
-    reflector_: Reflector,
-    extra: Box<CanvasPatternExtra>,
+magic_dom_struct! {
+    pub struct CanvasPattern {
+        extra: Box<CanvasPatternExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -26,7 +26,7 @@ pub struct CanvasPatternExtra {
 }
 
 impl CanvasPattern {
-    fn new_inherited(surface_data: Vec<u8>, surface_size: Size2D<i32>, repeat: RepetitionStyle) -> CanvasPattern {
+    fn new_inherited(&mut self, surface_data: Vec<u8>, surface_size: Size2D<i32>, repeat: RepetitionStyle) {
         let (x, y) = match repeat {
             RepetitionStyle::Repeat => (true, true),
             RepetitionStyle::RepeatX => (true, false),
@@ -34,23 +34,21 @@ impl CanvasPattern {
             RepetitionStyle::NoRepeat => (false, false),
         };
 
-        CanvasPattern {
-            reflector_: Reflector::new(),
-            extra: box CanvasPatternExtra {
-                surface_data: surface_data,
-                surface_size: surface_size,
-                repeat_x: x,
-                repeat_y: y,
-            }
-        }
+        self.extra.init(box CanvasPatternExtra {
+            surface_data: surface_data,
+            surface_size: surface_size,
+            repeat_x: x,
+            repeat_y: y,
+        });
     }
     pub fn new(global: GlobalRef,
                surface_data: Vec<u8>,
                surface_size: Size2D<i32>,
                repeat: RepetitionStyle)
                -> Root<CanvasPattern> {
-        reflect_dom_object(box CanvasPattern::new_inherited(surface_data, surface_size, repeat),
-                           global, CanvasPatternBinding::Wrap)
+        let mut obj = alloc_dom_object::<CanvasPattern>(global);
+        obj.new_inherited(surface_data, surface_size, repeat);
+        obj.into_root()
     }
 }
 

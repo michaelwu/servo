@@ -18,9 +18,10 @@ use dom::virtualmethods::VirtualMethods;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLAppletElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLAppletElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLAppletElementDerived for EventTarget {
@@ -32,21 +33,19 @@ impl HTMLAppletElementDerived for EventTarget {
 }
 
 impl HTMLAppletElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLAppletElement {
-        HTMLAppletElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLAppletElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLAppletElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLAppletElement> {
-        let element = HTMLAppletElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLAppletElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLAppletElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

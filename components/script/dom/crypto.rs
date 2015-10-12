@@ -8,7 +8,7 @@ use dom::bindings::codegen::Bindings::CryptoBinding::CryptoMethods;
 use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use js::jsapi::{JSContext, JSObject};
 use js::jsapi::{JS_GetArrayBufferViewType, JS_GetObjectAsArrayBufferView, Type};
 use rand::{OsRng, Rng};
@@ -17,10 +17,10 @@ use std::{ptr, slice};
 no_jsmanaged_fields!(OsRng);
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto
-#[dom_struct]
-pub struct Crypto {
-    reflector_: Reflector,
-    extra: Box<CryptoExtra>,
+magic_dom_struct! {
+    pub struct Crypto {
+        extra: Box<CryptoExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -29,17 +29,16 @@ pub struct CryptoExtra {
 }
 
 impl Crypto {
-    fn new_inherited() -> Crypto {
-        Crypto {
-            reflector_: Reflector::new(),
-            extra: box CryptoExtra {
-                rng: DOMRefCell::new(OsRng::new().unwrap()),
-            },
-        }
+    fn new_inherited(&mut self) {
+        self.extra.init(box CryptoExtra {
+            rng: DOMRefCell::new(OsRng::new().unwrap()),
+        });
     }
 
     pub fn new(global: GlobalRef) -> Root<Crypto> {
-        reflect_dom_object(box Crypto::new_inherited(), global, CryptoBinding::Wrap)
+        let mut obj = alloc_dom_object::<Crypto>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
 }
 

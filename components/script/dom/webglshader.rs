@@ -9,7 +9,7 @@ use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderi
 use dom::bindings::codegen::Bindings::WebGLShaderBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::webglobject::WebGLObject;
 use ipc_channel::ipc::{self, IpcSender};
 use std::cell::{Cell, RefCell};
@@ -22,15 +22,16 @@ pub enum ShaderCompilationStatus {
     Failed,
 }
 
-#[dom_struct]
-pub struct WebGLShader {
-    webgl_object: WebGLObject,
-    id: u32,
-    gl_type: u32,
-    source: RefCell<Option<String>>,
-    info_log: RefCell<Option<String>>,
-    is_deleted: Cell<bool>,
-    compilation_status: Cell<ShaderCompilationStatus>,
+magic_dom_struct! {
+    pub struct WebGLShader {
+        webgl_object: Base<WebGLObject>,
+        id: u32,
+        gl_type: u32,
+        source: Layout<Option<String>>,
+        info_log: Layout<Option<String>>,
+        is_deleted: Mut<bool>,
+        compilation_status: Mut<ShaderCompilationStatus>,
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -42,17 +43,15 @@ const SHADER_OUTPUT_FORMAT: Output = Output::Essl;
 static GLSLANG_INITIALIZATION: Once = ONCE_INIT;
 
 impl WebGLShader {
-    fn new_inherited(id: u32, shader_type: u32) -> WebGLShader {
+    fn new_inherited(&mut self, id: u32, shader_type: u32) {
         GLSLANG_INITIALIZATION.call_once(|| ::angle::hl::initialize().unwrap());
-        WebGLShader {
-            webgl_object: WebGLObject::new_inherited(),
-            id: id,
-            gl_type: shader_type,
-            source: RefCell::new(None),
-            info_log: RefCell::new(None),
-            is_deleted: Cell::new(false),
-            compilation_status: Cell::new(ShaderCompilationStatus::NotCompiled),
-        }
+        self.webgl_object.new_inherited();
+        self.id.init(id);
+        self.gl_type.init(shader_type);
+        self.source.init(None);
+        self.info_log.init(None);
+        self.is_deleted.init(false);
+        self.compilation_status.init(ShaderCompilationStatus::NotCompiled);
     }
 
     pub fn maybe_new(global: GlobalRef,
@@ -68,8 +67,9 @@ impl WebGLShader {
     pub fn new(global: GlobalRef,
                id: u32,
                shader_type: u32) -> Root<WebGLShader> {
-        reflect_dom_object(
-            box WebGLShader::new_inherited(id, shader_type), global, WebGLShaderBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLShader>(global);
+        obj.new_inherited(id, shader_type);
+        obj.into_root()
     }
 }
 

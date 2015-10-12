@@ -33,7 +33,7 @@ use dom::bindings::codegen::UnionTypes::NodeOrString;
 use dom::bindings::error::Error::NoModificationAllowed;
 use dom::bindings::error::Error::{InvalidCharacter, Syntax};
 use dom::bindings::error::{ErrorResult, Fallible};
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap};
+use dom::bindings::js::{JS, LayoutJS};
 use dom::bindings::js::{Root, RootedReference};
 use dom::bindings::js::DOMVec;
 use dom::bindings::utils::XMLName::InvalidXMLName;
@@ -81,17 +81,18 @@ use style::values::specified::{self, CSSColor, CSSRGBA};
 use url::UrlParser;
 use util::str::{DOMString, LengthOrPercentageOrAuto};
 
-#[dom_struct]
-pub struct Element {
-    node: Node,
-    local_name: Atom,
-    namespace: Namespace,
-    prefix: Option<DOMString>,
-    attrs: DOMRefCell<Vec<JS<Attr>>>,
-    id_attribute: DOMRefCell<Option<Atom>>,
-    style_attribute: DOMRefCell<Option<PropertyDeclarationBlock>>,
-    attr_list: MutNullableHeap<JS<NamedNodeMap>>,
-    class_list: MutNullableHeap<JS<DOMTokenList>>,
+magic_dom_struct! {
+    pub struct Element {
+        node: Base<Node>,
+        local_name: Atom,
+        namespace: Namespace,
+        prefix: Option<DOMString>,
+        attrs: Layout<DOMVec<JS<Attr>>>,
+        id_attribute: Layout<Option<Atom>>,
+        style_attribute: Layout<Option<PropertyDeclarationBlock>>,
+        attr_list: Mut<Option<JS<NamedNodeMap>>>,
+        class_list: Mut<Option<JS<DOMTokenList>>>,
+    }
 }
 
 impl ElementDerived for EventTarget {
@@ -126,28 +127,27 @@ impl Element {
         create_element(name, prefix, document, creator)
     }
 
-    pub fn new_inherited(type_id: ElementTypeId, local_name: DOMString,
+    pub fn new_inherited(&mut self, type_id: ElementTypeId, local_name: DOMString,
                          namespace: Namespace, prefix: Option<DOMString>,
-                         document: &Document) -> Element {
-        Element {
-            node: Node::new_inherited(NodeTypeId::Element(type_id), document),
-            local_name: Atom::from_slice(&local_name),
-            namespace: namespace,
-            prefix: prefix,
-            attrs: DOMRefCell::new(vec!()),
-            id_attribute: DOMRefCell::new(None),
-            style_attribute: DOMRefCell::new(None),
-            attr_list: Default::default(),
-            class_list: Default::default(),
-        }
+                         document: &Document) {
+        self.node.new_inherited(NodeTypeId::Element(type_id), document);
+        self.local_name.init(Atom::from_slice(&local_name));
+        self.namespace.init(namespace);
+        self.prefix.init(prefix);
+        self.attrs.init(vec!());
+        self.id_attribute.init(None);
+        self.style_attribute.init(None);
+        self.attr_list.init(Default::default());
+        self.class_list.init(Default::default());
     }
 
     pub fn new(local_name: DOMString,
                namespace: Namespace,
                prefix: Option<DOMString>,
                document: &Document) -> Root<Element> {
-        let element = Element::new_inherited(ElementTypeId::Element, local_name, namespace, prefix, document);
-        Node::reflect_node(box element, document, ElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<Element>(document);
+        obj.new_inherited(ElementTypeId::Element, local_name, namespace, prefix, document);
+        obj.into_root()
     }
 }
 

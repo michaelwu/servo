@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLBRElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLBRElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLBRElementDerived for EventTarget {
@@ -27,17 +28,16 @@ impl HTMLBRElementDerived for EventTarget {
 }
 
 impl HTMLBRElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLBRElement {
-        HTMLBRElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLBRElement, localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLBRElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLBRElement> {
-        let element = HTMLBRElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLBRElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLBRElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

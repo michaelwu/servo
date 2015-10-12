@@ -15,7 +15,7 @@ use dom::bindings::error::Error::NotSupported;
 use dom::bindings::error::{ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root};
-use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::utils::{TopDOMClass};
 use dom::customevent::CustomEvent;
 use dom::document::Document;
 use dom::element::{self, AttributeMutation};
@@ -55,12 +55,13 @@ enum SandboxAllowance {
     AllowPopups = 0x20
 }
 
-#[dom_struct]
-pub struct HTMLIFrameElement {
-    htmlelement: HTMLElement,
-    subpage_id: Cell<Option<SubpageId>>,
-    containing_page_pipeline_id: Cell<Option<PipelineId>>,
-    sandbox: Cell<Option<u8>>,
+magic_dom_struct! {
+    pub struct HTMLIFrameElement {
+        htmlelement: Base<HTMLElement>,
+        subpage_id: Mut<Option<SubpageId>>,
+        containing_page_pipeline_id: Mut<Option<PipelineId>>,
+        sandbox: Mut<Option<u8>>,
+    }
 }
 
 impl HTMLIFrameElementDerived for EventTarget {
@@ -145,7 +146,7 @@ impl HTMLIFrameElement {
             let window = window_from_node(self);
             let cx = window.r().get_cx();
             let _ar = JSAutoRequest::new(cx);
-            let _ac = JSAutoCompartment::new(cx, window.reflector().get_jsobject().get());
+            let _ac = JSAutoCompartment::new(cx, window.get_jsobj());
             let mut detail = RootedValue::new(cx, UndefinedValue());
             event.detail().to_jsval(cx, detail.handle_mut());
             let custom_event = CustomEvent::new(GlobalRef::Window(window.r()),
@@ -185,24 +186,22 @@ impl HTMLIFrameElement {
         }
     }
 
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLIFrameElement {
-        HTMLIFrameElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLIFrameElement, localName, prefix, document),
-            subpage_id: Cell::new(None),
-            containing_page_pipeline_id: Cell::new(None),
-            sandbox: Cell::new(None),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLIFrameElement, localName, prefix, document);
+        self.subpage_id.init(None);
+        self.containing_page_pipeline_id.init(None);
+        self.sandbox.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLIFrameElement> {
-        let element = HTMLIFrameElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLIFrameElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLIFrameElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     #[inline]

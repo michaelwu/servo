@@ -7,26 +7,25 @@ use dom::bindings::codegen::Bindings::ConsoleBinding;
 use dom::bindings::codegen::Bindings::ConsoleBinding::ConsoleMethods;
 use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use util::str::DOMString;
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Console
-#[dom_struct]
-pub struct Console {
-    reflector_: Reflector,
-    global: GlobalField,
+magic_dom_struct! {
+    pub struct Console {
+        global: GlobalField,
+    }
 }
 
 impl Console {
-    fn new_inherited(global: GlobalRef) -> Console {
-        Console {
-            reflector_: Reflector::new(),
-            global: GlobalField::from_rooted(&global),
-        }
+    fn new_inherited(&mut self, global: GlobalRef) {
+        self.global.init(GlobalField::from_rooted(&global));
     }
 
     pub fn new(global: GlobalRef) -> Root<Console> {
-        reflect_dom_object(box Console::new_inherited(global), global, ConsoleBinding::Wrap)
+        let mut obj = alloc_dom_object::<Console>(global);
+        obj.new_inherited(global);
+        obj.into_root()
     }
 }
 

@@ -18,9 +18,10 @@ use dom::virtualmethods::VirtualMethods;
 use url::{Url, UrlParser};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLBaseElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLBaseElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLBaseElementDerived for EventTarget {
@@ -32,18 +33,17 @@ impl HTMLBaseElementDerived for EventTarget {
 }
 
 impl HTMLBaseElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLBaseElement {
-        HTMLBaseElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLBaseElement, localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLBaseElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLBaseElement> {
-        let element = HTMLBaseElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLBaseElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLBaseElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     /// https://html.spec.whatwg.org/multipage/#frozen-base-url

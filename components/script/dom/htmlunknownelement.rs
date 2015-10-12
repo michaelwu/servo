@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLUnknownElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLUnknownElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLUnknownElementDerived for EventTarget {
@@ -27,20 +28,18 @@ impl HTMLUnknownElementDerived for EventTarget {
 }
 
 impl HTMLUnknownElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLUnknownElement {
-        HTMLUnknownElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLUnknownElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLUnknownElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLUnknownElement> {
-        let element = HTMLUnknownElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLUnknownElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLUnknownElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

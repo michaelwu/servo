@@ -8,8 +8,8 @@ use dom::bindings::codegen::Bindings::HTMLAreaElementBinding::HTMLAreaElementMet
 use dom::bindings::codegen::InheritTypes::{ElementCast, ElementTypeId, EventTargetTypeId};
 use dom::bindings::codegen::InheritTypes::{HTMLAreaElementDerived, HTMLElementCast};
 use dom::bindings::codegen::InheritTypes::{HTMLElementTypeId, NodeTypeId};
-use dom::bindings::js::{JS, MutNullableHeap, Root};
-use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::js::{JS, Root};
+use dom::bindings::utils::{TopDOMClass};
 use dom::document::Document;
 use dom::domtokenlist::DOMTokenList;
 use dom::eventtarget::EventTarget;
@@ -20,10 +20,11 @@ use std::default::Default;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLAreaElement {
-    htmlelement: HTMLElement,
-    rel_list: MutNullableHeap<JS<DOMTokenList>>,
+magic_dom_struct! {
+    pub struct HTMLAreaElement {
+        htmlelement: Base<HTMLElement>,
+        rel_list: Mut<Option<JS<DOMTokenList>>>,
+    }
 }
 
 impl HTMLAreaElementDerived for EventTarget {
@@ -35,19 +36,18 @@ impl HTMLAreaElementDerived for EventTarget {
 }
 
 impl HTMLAreaElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLAreaElement {
-        HTMLAreaElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLAreaElement, localName, prefix, document),
-            rel_list: Default::default(),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLAreaElement, localName, prefix, document);
+        self.rel_list.init(Default::default());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLAreaElement> {
-        let element = HTMLAreaElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLAreaElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLAreaElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

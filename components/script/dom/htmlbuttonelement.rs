@@ -37,10 +37,11 @@ enum ButtonType {
     ButtonMenu
 }
 
-#[dom_struct]
-pub struct HTMLButtonElement {
-    htmlelement: HTMLElement,
-    button_type: Cell<ButtonType>
+magic_dom_struct! {
+    pub struct HTMLButtonElement {
+        htmlelement: Base<HTMLElement>,
+        button_type: Mut<ButtonType>
+    }
 }
 
 impl HTMLButtonElementDerived for EventTarget {
@@ -52,23 +53,21 @@ impl HTMLButtonElementDerived for EventTarget {
 }
 
 impl HTMLButtonElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLButtonElement {
-        HTMLButtonElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLButtonElement, localName, prefix, document),
-            //TODO: implement button_type in attribute_mutated
-            button_type: Cell::new(ButtonType::ButtonSubmit)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLButtonElement, localName, prefix, document);
+        //TODO: implement button_type in attribute_mutated
+        self.button_type.init(ButtonType::ButtonSubmit);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLButtonElement> {
-        let element = HTMLButtonElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLButtonElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLButtonElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

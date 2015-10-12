@@ -7,28 +7,27 @@ use canvas_traits::{CanvasMsg, CanvasWebGLMsg, WebGLError, WebGLResult};
 use dom::bindings::codegen::Bindings::WebGLBufferBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::webglobject::WebGLObject;
 use ipc_channel::ipc::{self, IpcSender};
 use std::cell::Cell;
 
-#[dom_struct]
-pub struct WebGLBuffer {
-    webgl_object: WebGLObject,
-    id: u32,
-    /// The target to which this buffer was bound the first time
-    target: Cell<Option<u32>>,
-    is_deleted: Cell<bool>,
+magic_dom_struct! {
+    pub struct WebGLBuffer {
+        webgl_object: Base<WebGLObject>,
+        id: u32,
+        /// The target to which this buffer was bound the first time
+        target: Mut<Option<u32>>,
+        is_deleted: Mut<bool>,
+    }
 }
 
 impl WebGLBuffer {
-    fn new_inherited(id: u32) -> WebGLBuffer {
-        WebGLBuffer {
-            webgl_object: WebGLObject::new_inherited(),
-            id: id,
-            target: Cell::new(None),
-            is_deleted: Cell::new(false),
-        }
+    fn new_inherited(&mut self, id: u32) {
+        self.webgl_object.new_inherited();
+        self.id.init(id);
+        self.target.init(None);
+        self.is_deleted.init(false);
     }
 
     pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
@@ -41,7 +40,9 @@ impl WebGLBuffer {
     }
 
     pub fn new(global: GlobalRef, id: u32) -> Root<WebGLBuffer> {
-        reflect_dom_object(box WebGLBuffer::new_inherited(id), global, WebGLBufferBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLBuffer>(global);
+        obj.new_inherited(id);
+        obj.into_root()
     }
 }
 

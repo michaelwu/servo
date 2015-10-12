@@ -14,9 +14,10 @@ use dom::htmltablecellelement::HTMLTableCellElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTableHeaderCellElement {
-    htmltablecellelement: HTMLTableCellElement,
+magic_dom_struct! {
+    pub struct HTMLTableHeaderCellElement {
+        htmltablecellelement: Base<HTMLTableCellElement>,
+    }
 }
 
 impl HTMLTableHeaderCellElementDerived for EventTarget {
@@ -29,20 +30,19 @@ impl HTMLTableHeaderCellElementDerived for EventTarget {
 }
 
 impl HTMLTableHeaderCellElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLTableHeaderCellElement {
-        HTMLTableHeaderCellElement {
-            htmltablecellelement: HTMLTableCellElement::new_inherited(
+                     document: &Document) {
+        self.htmltablecellelement.new_inherited(
                 HTMLTableCellElementTypeId::HTMLTableHeaderCellElement, localName, prefix, document)
-        }
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLTableHeaderCellElement> {
-        let element = HTMLTableHeaderCellElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableHeaderCellElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableHeaderCellElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

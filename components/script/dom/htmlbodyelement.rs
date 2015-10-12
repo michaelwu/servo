@@ -12,7 +12,7 @@ use dom::bindings::codegen::InheritTypes::{ElementTypeId, EventTargetCast, Event
 use dom::bindings::codegen::InheritTypes::{HTMLBodyElementDerived, HTMLElementCast};
 use dom::bindings::codegen::InheritTypes::{HTMLElementTypeId, NodeTypeId};
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::utils::{TopDOMClass};
 use dom::document::Document;
 use dom::element::AttributeMutation;
 use dom::eventtarget::EventTarget;
@@ -32,11 +32,12 @@ use util::str::{self, DOMString};
 /// nanoseconds.
 const INITIAL_REFLOW_DELAY: u64 = 200_000_000;
 
-#[dom_struct]
-pub struct HTMLBodyElement {
-    htmlelement: HTMLElement,
-    background_color: Cell<Option<RGBA>>,
-    background: DOMRefCell<Option<Url>>
+magic_dom_struct! {
+    pub struct HTMLBodyElement {
+        htmlelement: Base<HTMLElement>,
+        background_color: Mut<Option<RGBA>>,
+        background: Layout<Option<Url>>
+    }
 }
 
 impl HTMLBodyElementDerived for EventTarget {
@@ -47,23 +48,22 @@ impl HTMLBodyElementDerived for EventTarget {
 }
 
 impl HTMLBodyElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document)
-                     -> HTMLBodyElement {
-        HTMLBodyElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLBodyElement,
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document)
+                     {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLBodyElement,
                                                     localName,
                                                     prefix,
-                                                    document),
-            background_color: Cell::new(None),
-            background: DOMRefCell::new(None)
-        }
+                                                    document);
+        self.background_color.init(None);
+        self.background.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLBodyElement> {
-        let element = HTMLBodyElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLBodyElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLBodyElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 
@@ -96,7 +96,7 @@ impl HTMLBodyElement {
     #[allow(unsafe_code)]
     pub fn get_background(&self) -> Option<Url> {
         unsafe {
-            self.background.borrow_for_layout().clone()
+            self.background.layout_get()
         }
     }
 }
@@ -143,7 +143,7 @@ impl VirtualMethods for HTMLBodyElement {
                 let window = window_from_node(self);
                 let (cx, url, reflector) = (window.get_cx(),
                                             window.get_url(),
-                                            window.reflector().get_jsobject());
+                                            window.handle());
                 let evtarget = match name {
                     &atom!(onfocus) | &atom!(onload) | &atom!(onscroll) | &atom!(onafterprint) |
                     &atom!(onbeforeprint) | &atom!(onbeforeunload) | &atom!(onhashchange) |

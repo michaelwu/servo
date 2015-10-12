@@ -7,34 +7,30 @@ use dom::bindings::codegen::Bindings::WebGLShaderPrecisionFormatBinding;
 use dom::bindings::codegen::Bindings::WebGLShaderPrecisionFormatBinding::WebGLShaderPrecisionFormatMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 
-#[dom_struct]
-pub struct WebGLShaderPrecisionFormat {
-    reflector_: Reflector,
-    range_min: i32,
-    range_max: i32,
-    precision: i32,
+magic_dom_struct! {
+    pub struct WebGLShaderPrecisionFormat {
+        range_min: i32,
+        range_max: i32,
+        precision: i32,
+    }
 }
 
 impl WebGLShaderPrecisionFormat {
-    fn new_inherited(range_min: i32, range_max: i32, precision: i32) -> WebGLShaderPrecisionFormat {
-        WebGLShaderPrecisionFormat {
-            reflector_: Reflector::new(),
-            range_min: range_min,
-            range_max: range_max,
-            precision: precision,
-        }
+    fn new_inherited(&mut self, range_min: i32, range_max: i32, precision: i32) {
+        self.range_min.init(range_min);
+        self.range_max.init(range_max);
+        self.precision.init(precision);
     }
 
     pub fn new(global: GlobalRef,
                range_min: i32,
                range_max: i32,
                precision: i32) -> Root<WebGLShaderPrecisionFormat> {
-        reflect_dom_object(
-            box WebGLShaderPrecisionFormat::new_inherited(range_min, range_max, precision),
-            global,
-            WebGLShaderPrecisionFormatBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLShaderPrecisionFormat>(global);
+        obj.new_inherited(range_min, range_max, precision);
+        obj.into_root()
     }
 }
 

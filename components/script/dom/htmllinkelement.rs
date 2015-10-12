@@ -13,7 +13,7 @@ use dom::bindings::codegen::InheritTypes::{EventTargetCast, EventTargetTypeId};
 use dom::bindings::codegen::InheritTypes::{HTMLElementCast, HTMLElementTypeId};
 use dom::bindings::codegen::InheritTypes::{HTMLLinkElementDerived, NodeCast, NodeTypeId};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::bindings::js::{RootedReference};
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::utils::TopDOMClass;
@@ -37,10 +37,11 @@ use style::media_queries::parse_media_query_list;
 use url::UrlParser;
 use util::str::{DOMString, HTML_SPACE_CHARACTERS};
 
-#[dom_struct]
-pub struct HTMLLinkElement {
-    htmlelement: HTMLElement,
-    rel_list: MutNullableHeap<JS<DOMTokenList>>,
+magic_dom_struct! {
+    pub struct HTMLLinkElement {
+        htmlelement: Base<HTMLElement>,
+        rel_list: Mut<Option<JS<DOMTokenList>>>,
+    }
 }
 
 impl HTMLLinkElementDerived for EventTarget {
@@ -52,19 +53,18 @@ impl HTMLLinkElementDerived for EventTarget {
 }
 
 impl HTMLLinkElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLLinkElement {
-        HTMLLinkElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLLinkElement, localName, prefix, document),
-            rel_list: Default::default(),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLLinkElement, localName, prefix, document);
+        self.rel_list.init(Default::default());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLLinkElement> {
-        let element = HTMLLinkElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLLinkElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLLinkElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

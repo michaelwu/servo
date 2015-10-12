@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLEmbedElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLEmbedElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLEmbedElementDerived for EventTarget {
@@ -27,17 +28,16 @@ impl HTMLEmbedElementDerived for EventTarget {
 }
 
 impl HTMLEmbedElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLEmbedElement {
-        HTMLEmbedElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLEmbedElement, localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLEmbedElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLEmbedElement> {
-        let element = HTMLEmbedElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLEmbedElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLEmbedElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

@@ -15,9 +15,10 @@ use dom::htmlformelement::{FormControl, HTMLFormElement};
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLLabelElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLLabelElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLLabelElementDerived for EventTarget {
@@ -29,21 +30,19 @@ impl HTMLLabelElementDerived for EventTarget {
 }
 
 impl HTMLLabelElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLLabelElement {
-        HTMLLabelElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLLabelElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLLabelElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLLabelElement> {
-        let element = HTMLLabelElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLLabelElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLLabelElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

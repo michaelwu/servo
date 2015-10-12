@@ -6,32 +6,31 @@ use dom::bindings::codegen::Bindings::DOMPointReadOnlyBinding::DOMPointReadOnlyM
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use std::cell::Cell;
 
 // http://dev.w3.org/fxtf/geometry/Overview.html#dompointreadonly
-#[dom_struct]
-pub struct DOMPointReadOnly {
-    reflector_: Reflector,
-    x: Cell<f64>,
-    y: Cell<f64>,
-    z: Cell<f64>,
-    w: Cell<f64>,
+magic_dom_struct! {
+    pub struct DOMPointReadOnly {
+        x: Mut<f64>,
+        y: Mut<f64>,
+        z: Mut<f64>,
+        w: Mut<f64>,
+    }
 }
 
 impl DOMPointReadOnly {
-    pub fn new_inherited(x: f64, y: f64, z: f64, w: f64) -> DOMPointReadOnly {
-        DOMPointReadOnly {
-            x: Cell::new(x),
-            y: Cell::new(y),
-            z: Cell::new(z),
-            w: Cell::new(w),
-            reflector_: Reflector::new(),
-        }
+    pub fn new_inherited(&mut self, x: f64, y: f64, z: f64, w: f64) {
+        self.x.init(x);
+        self.y.init(y);
+        self.z.init(z);
+        self.w.init(w);
     }
 
     pub fn new(global: GlobalRef, x: f64, y: f64, z: f64, w: f64) -> Root<DOMPointReadOnly> {
-        reflect_dom_object(box DOMPointReadOnly::new_inherited(x, y, z, w), global, Wrap)
+        let mut obj = alloc_dom_object::<DOMPointReadOnly>(global);
+        obj.new_inherited(x, y, z, w);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

@@ -7,31 +7,28 @@ use dom::bindings::codegen::Bindings::WorkerLocationBinding::WorkerLocationMetho
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::str::USVString;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::urlhelper::UrlHelper;
 use dom::workerglobalscope::WorkerGlobalScope;
 use url::Url;
 use util::str::DOMString;
 
 // https://html.spec.whatwg.org/multipage/#worker-locations
-#[dom_struct]
-pub struct WorkerLocation {
-    reflector_: Reflector,
-    url: Box<Url>,
+magic_dom_struct! {
+    pub struct WorkerLocation {
+        url: Box<Url>,
+    }
 }
 
 impl WorkerLocation {
-    fn new_inherited(url: Url) -> WorkerLocation {
-        WorkerLocation {
-            reflector_: Reflector::new(),
-            url: box url,
-        }
+    fn new_inherited(&mut self, url: Url) {
+        self.url.init(box url);
     }
 
     pub fn new(global: &WorkerGlobalScope, url: Url) -> Root<WorkerLocation> {
-        reflect_dom_object(box WorkerLocation::new_inherited(url),
-                           GlobalRef::Worker(global),
-                           WorkerLocationBinding::Wrap)
+        let mut obj = alloc_dom_object::<WorkerLocation>(GlobalRef::Worker(global));
+        obj.new_inherited(url);
+        obj.into_root()
     }
 }
 

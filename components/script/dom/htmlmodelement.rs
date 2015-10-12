@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLModElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLModElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLModElementDerived for EventTarget {
@@ -27,20 +28,18 @@ impl HTMLModElementDerived for EventTarget {
 }
 
 impl HTMLModElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLModElement {
-        HTMLModElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLModElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLModElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLModElement> {
-        let element = HTMLModElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLModElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLModElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

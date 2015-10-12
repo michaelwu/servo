@@ -22,9 +22,10 @@ use dom::node::Node;
 use util::str::DOMString;
 
 /// An HTML text node.
-#[dom_struct]
-pub struct Text {
-    characterdata: CharacterData,
+magic_dom_struct! {
+    pub struct Text {
+        characterdata: Base<CharacterData>,
+    }
 }
 
 impl TextDerived for EventTarget {
@@ -34,15 +35,14 @@ impl TextDerived for EventTarget {
 }
 
 impl Text {
-    fn new_inherited(text: DOMString, document: &Document) -> Text {
-        Text {
-            characterdata: CharacterData::new_inherited(CharacterDataTypeId::Text, text, document)
-        }
+    fn new_inherited(&mut self, text: DOMString, document: &Document) {
+        self.characterdata.new_inherited(CharacterDataTypeId::Text, text, document)
     }
 
     pub fn new(text: DOMString, document: &Document) -> Root<Text> {
-        let element = Text::new_inherited(text, document);
-        Node::reflect_node(box element, document, TextBinding::Wrap)
+        let mut obj = Node::alloc_node::<Text>(document);
+        obj.new_inherited(text, document);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef, text: DOMString) -> Fallible<Root<Text>> {

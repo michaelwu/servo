@@ -6,24 +6,21 @@ use dom::bindings::codegen::Bindings::PerformanceTimingBinding;
 use dom::bindings::codegen::Bindings::PerformanceTimingBinding::PerformanceTimingMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::window::Window;
 
-#[dom_struct]
-pub struct PerformanceTiming {
-    reflector_: Reflector,
-    navigationStart: u64,
-    navigationStartPrecise: f64,
+magic_dom_struct! {
+    pub struct PerformanceTiming {
+        navigationStart: u64,
+        navigationStartPrecise: f64,
+    }
 }
 
 impl PerformanceTiming {
-    fn new_inherited(navStart: u64, navStartPrecise: f64)
-                         -> PerformanceTiming {
-        PerformanceTiming {
-            reflector_: Reflector::new(),
-            navigationStart: navStart,
-            navigationStartPrecise: navStartPrecise,
-        }
+    fn new_inherited(&mut self, navStart: u64, navStartPrecise: f64)
+                         {
+        self.navigationStart.init(navStart);
+        self.navigationStartPrecise.init(navStartPrecise);
     }
 
     #[allow(unrooted_must_root)]
@@ -31,8 +28,9 @@ impl PerformanceTiming {
                navigation_start: u64,
                navigation_start_precise: f64)
                -> Root<PerformanceTiming> {
-        reflect_dom_object(box PerformanceTiming::new_inherited(navigation_start,navigation_start_precise), GlobalRef::Window(window),
-                           PerformanceTimingBinding::Wrap)
+        let mut obj = alloc_dom_object::<PerformanceTiming>(GlobalRef::Window(window));
+        obj.new_inherited(navigation_start,navigation_start_precise);
+        obj.into_root()
     }
 }
 

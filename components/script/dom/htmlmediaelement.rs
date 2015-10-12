@@ -11,9 +11,10 @@ use dom::eventtarget::EventTarget;
 use dom::htmlelement::HTMLElement;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLMediaElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLMediaElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLMediaElementDerived for EventTarget {
@@ -27,13 +28,10 @@ impl HTMLMediaElementDerived for EventTarget {
 }
 
 impl HTMLMediaElement {
-    pub fn new_inherited(type_id: HTMLMediaElementTypeId, tag_name: DOMString,
+    pub fn new_inherited(&mut self, type_id: HTMLMediaElementTypeId, tag_name: DOMString,
                          prefix: Option<DOMString>, document: &Document)
-                         -> HTMLMediaElement {
-        HTMLMediaElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLMediaElement(type_id), tag_name, prefix, document)
-        }
+                         {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLMediaElement(type_id), tag_name, prefix, document)
     }
 
     #[inline]

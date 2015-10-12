@@ -9,8 +9,9 @@ use dom::bindings::codegen::InheritTypes::{EventCast, EventTypeId, UIEventCast};
 use dom::bindings::codegen::InheritTypes::{UIEventTypeId, MouseEventDerived};
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap, Root, RootedReference};
-use dom::bindings::utils::{TopDOMClass, reflect_dom_object};
+use dom::bindings::js::{JS, Root, RootedReference};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::TopDOMClass;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use dom::eventtarget::EventTarget;
 use dom::uievent::UIEvent;
@@ -20,19 +21,20 @@ use std::default::Default;
 use util::prefs;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct MouseEvent {
-    uievent: UIEvent,
-    screen_x: Cell<i32>,
-    screen_y: Cell<i32>,
-    client_x: Cell<i32>,
-    client_y: Cell<i32>,
-    ctrl_key: Cell<bool>,
-    shift_key: Cell<bool>,
-    alt_key: Cell<bool>,
-    meta_key: Cell<bool>,
-    button: Cell<i16>,
-    related_target: MutNullableHeap<JS<EventTarget>>,
+magic_dom_struct! {
+    pub struct MouseEvent {
+        uievent: Base<UIEvent>,
+        screen_x: Mut<i32>,
+        screen_y: Mut<i32>,
+        client_x: Mut<i32>,
+        client_y: Mut<i32>,
+        ctrl_key: Mut<bool>,
+        shift_key: Mut<bool>,
+        alt_key: Mut<bool>,
+        meta_key: Mut<bool>,
+        button: Mut<i16>,
+        related_target: Mut<Option<JS<EventTarget>>>,
+    }
 }
 
 impl MouseEventDerived for Event {
@@ -42,26 +44,24 @@ impl MouseEventDerived for Event {
 }
 
 impl MouseEvent {
-    fn new_inherited() -> MouseEvent {
-        MouseEvent {
-            uievent: UIEvent::new_inherited(),
-            screen_x: Cell::new(0),
-            screen_y: Cell::new(0),
-            client_x: Cell::new(0),
-            client_y: Cell::new(0),
-            ctrl_key: Cell::new(false),
-            shift_key: Cell::new(false),
-            alt_key: Cell::new(false),
-            meta_key: Cell::new(false),
-            button: Cell::new(0),
-            related_target: Default::default(),
-        }
+    fn new_inherited(&mut self) {
+        self.uievent.new_inherited();
+        self.screen_x.init(0);
+        self.screen_y.init(0);
+        self.client_x.init(0);
+        self.client_y.init(0);
+        self.ctrl_key.init(false);
+        self.shift_key.init(false);
+        self.alt_key.init(false);
+        self.meta_key.init(false);
+        self.button.init(0);
+        self.related_target.init(Default::default());
     }
 
     pub fn new_uninitialized(window: &Window) -> Root<MouseEvent> {
-        reflect_dom_object(box MouseEvent::new_inherited(),
-                           GlobalRef::Window(window),
-                           MouseEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<MouseEvent>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 
     pub fn new(window: &Window,

@@ -5,12 +5,10 @@
 use cssparser::serialize_identifier;
 use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::utils::Reflector;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct CSS {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct CSS;
 }
 
 impl CSS {

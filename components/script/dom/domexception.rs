@@ -7,7 +7,7 @@ use dom::bindings::codegen::Bindings::DOMExceptionBinding::DOMExceptionConstants
 use dom::bindings::codegen::Bindings::DOMExceptionBinding::DOMExceptionMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use std::borrow::ToOwned;
 use util::str::DOMString;
 
@@ -39,22 +39,21 @@ pub enum DOMErrorName {
     EncodingError
 }
 
-#[dom_struct]
-pub struct DOMException {
-    reflector_: Reflector,
-    code: DOMErrorName,
+magic_dom_struct! {
+    pub struct DOMException {
+        code: DOMErrorName,
+    }
 }
 
 impl DOMException {
-    fn new_inherited(code: DOMErrorName) -> DOMException {
-        DOMException {
-            reflector_: Reflector::new(),
-            code: code,
-        }
+    fn new_inherited(&mut self, code: DOMErrorName) {
+        self.code.init(code);
     }
 
     pub fn new(global: GlobalRef, code: DOMErrorName) -> Root<DOMException> {
-        reflect_dom_object(box DOMException::new_inherited(code), global, DOMExceptionBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMException>(global);
+        obj.new_inherited(code);
+        obj.into_root()
     }
 }
 

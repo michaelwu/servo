@@ -6,28 +6,24 @@ use dom::bindings::codegen::Bindings::WorkerNavigatorBinding;
 use dom::bindings::codegen::Bindings::WorkerNavigatorBinding::WorkerNavigatorMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::navigatorinfo;
 use dom::workerglobalscope::WorkerGlobalScope;
 use util::str::DOMString;
 
 // https://html.spec.whatwg.org/multipage/#workernavigator
-#[dom_struct]
-pub struct WorkerNavigator {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct WorkerNavigator;
 }
 
 impl WorkerNavigator {
-    fn new_inherited() -> WorkerNavigator {
-        WorkerNavigator {
-            reflector_: Reflector::new(),
-        }
+    fn new_inherited(&mut self) {
     }
 
     pub fn new(global: &WorkerGlobalScope) -> Root<WorkerNavigator> {
-        reflect_dom_object(box WorkerNavigator::new_inherited(),
-                           GlobalRef::Worker(global),
-                           WorkerNavigatorBinding::Wrap)
+        let mut obj = alloc_dom_object::<WorkerNavigator>(GlobalRef::Worker(global));
+        obj.new_inherited();
+        obj.into_root()
     }
 }
 

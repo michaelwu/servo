@@ -8,35 +8,33 @@ use dom::bindings::codegen::Bindings::DOMRectBinding::DOMRectMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::num::Finite;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::window::Window;
 
-#[dom_struct]
-pub struct DOMRect {
-    reflector_: Reflector,
-    top: f32,
-    bottom: f32,
-    left: f32,
-    right: f32,
+magic_dom_struct! {
+    pub struct DOMRect {
+        top: f32,
+        bottom: f32,
+        left: f32,
+        right: f32,
+    }
 }
 
 impl DOMRect {
-    fn new_inherited(top: Au, bottom: Au,
-                         left: Au, right: Au) -> DOMRect {
-        DOMRect {
-            top: top.to_nearest_px() as f32,
-            bottom: bottom.to_nearest_px() as f32,
-            left: left.to_nearest_px() as f32,
-            right: right.to_nearest_px() as f32,
-            reflector_: Reflector::new(),
-        }
+    fn new_inherited(&mut self, top: Au, bottom: Au,
+                         left: Au, right: Au) {
+        self.top.init(top.to_nearest_px() as f32);
+        self.bottom.init(bottom.to_nearest_px() as f32);
+        self.left.init(left.to_nearest_px() as f32);
+        self.right.init(right.to_nearest_px() as f32);
     }
 
     pub fn new(window: &Window,
                top: Au, bottom: Au,
                left: Au, right: Au) -> Root<DOMRect> {
-        reflect_dom_object(box DOMRect::new_inherited(top, bottom, left, right),
-                           GlobalRef::Window(window), DOMRectBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMRect>(GlobalRef::Window(window));
+        obj.new_inherited(top, bottom, left, right);
+        obj.into_root()
     }
 }
 

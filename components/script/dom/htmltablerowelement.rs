@@ -10,7 +10,7 @@ use dom::bindings::codegen::InheritTypes::{ElementTypeId, EventTargetTypeId, HTM
 use dom::bindings::codegen::InheritTypes::{HTMLElementTypeId, HTMLTableDataCellElementDerived};
 use dom::bindings::codegen::InheritTypes::{HTMLTableHeaderCellElementDerived, HTMLTableRowElementDerived};
 use dom::bindings::codegen::InheritTypes::{NodeCast, NodeTypeId};
-use dom::bindings::js::{JS, MutNullableHeap, Root, RootedReference};
+use dom::bindings::js::{JS, Root, RootedReference};
 use dom::bindings::utils::TopDOMClass;
 use dom::document::Document;
 use dom::element::{AttributeMutation, Element};
@@ -32,11 +32,12 @@ impl CollectionFilter for CellsFilter {
     }
 }
 
-#[dom_struct]
-pub struct HTMLTableRowElement {
-    htmlelement: HTMLElement,
-    cells: MutNullableHeap<JS<HTMLCollection>>,
-    background_color: Cell<Option<RGBA>>,
+magic_dom_struct! {
+    pub struct HTMLTableRowElement {
+        htmlelement: Base<HTMLElement>,
+        cells: Mut<Option<JS<HTMLCollection>>>,
+        background_color: Mut<Option<RGBA>>,
+    }
 }
 
 impl HTMLTableRowElementDerived for EventTarget {
@@ -48,23 +49,22 @@ impl HTMLTableRowElementDerived for EventTarget {
 }
 
 impl HTMLTableRowElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document)
-                     -> HTMLTableRowElement {
-        HTMLTableRowElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLTableRowElement,
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document)
+                     {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLTableRowElement,
                                                     localName,
                                                     prefix,
-                                                    document),
-            cells: Default::default(),
-            background_color: Cell::new(None),
-        }
+                                                    document);
+        self.cells.init(Default::default());
+        self.background_color.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableRowElement> {
-        let element = HTMLTableRowElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableRowElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableRowElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {

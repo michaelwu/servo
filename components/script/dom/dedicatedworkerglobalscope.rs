@@ -17,7 +17,7 @@ use dom::bindings::js::{Root, RootCollection};
 use dom::bindings::magic::alloc_dom_global;
 use dom::bindings::refcounted::LiveDOMReferences;
 use dom::bindings::structuredclone::StructuredCloneData;
-use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::utils::{TopDOMClass};
 use dom::eventtarget::EventTarget;
 use dom::messageevent::MessageEvent;
 use dom::worker::{SimpleWorkerErrorHandler, TrustedWorkerAddress, WorkerMessageHandler};
@@ -135,11 +135,12 @@ enum MixedMessage {
 }
 
 // https://html.spec.whatwg.org/multipage/#dedicatedworkerglobalscope
-#[dom_struct]
-pub struct DedicatedWorkerGlobalScope {
-    workerglobalscope: WorkerGlobalScope,
-    id: PipelineId,
-    extra: Box<DedicatedWorkerGlobalScopeExtra>,
+magic_dom_struct! {
+    pub struct DedicatedWorkerGlobalScope {
+        workerglobalscope: Base<WorkerGlobalScope>,
+        id: PipelineId,
+        extra: Box<DedicatedWorkerGlobalScopeExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -156,7 +157,7 @@ pub struct DedicatedWorkerGlobalScopeExtra {
 }
 
 impl DedicatedWorkerGlobalScope {
-    fn new_inherited(init: WorkerGlobalScopeInit,
+    fn new_inherited(&mut self, init: WorkerGlobalScopeInit,
                      worker_url: Url,
                      id: PipelineId,
                      from_devtools_receiver: Receiver<DevtoolScriptControlMsg>,
@@ -164,18 +165,16 @@ impl DedicatedWorkerGlobalScope {
                      parent_sender: Box<ScriptChan + Send>,
                      own_sender: Sender<(TrustedWorkerAddress, WorkerScriptMsg)>,
                      receiver: Receiver<(TrustedWorkerAddress, WorkerScriptMsg)>)
-                     -> DedicatedWorkerGlobalScope {
-        DedicatedWorkerGlobalScope {
-            workerglobalscope: WorkerGlobalScope::new_inherited(
-                init, worker_url, runtime, from_devtools_receiver),
-            id: id,
-            extra: box DedicatedWorkerGlobalScopeExtra {
-                receiver: receiver,
-                own_sender: own_sender,
-                worker: DOMRefCell::new(None),
-                parent_sender: parent_sender,
-            },
-        }
+                     {
+        self.workerglobalscope.new_inherited(
+                init, worker_url, runtime, from_devtools_receiver);
+        self.id.init(id);
+        self.extra.init(box DedicatedWorkerGlobalScopeExtra {
+            receiver: receiver,
+            own_sender: own_sender,
+            worker: DOMRefCell::new(None),
+            parent_sender: parent_sender,
+        });
     }
 
     pub fn new(init: WorkerGlobalScopeInit,
@@ -302,7 +301,7 @@ impl DedicatedWorkerGlobalScope {
                 let scope = WorkerGlobalScopeCast::from_ref(self);
                 let target = EventTargetCast::from_ref(self);
                 let _ar = JSAutoRequest::new(scope.get_cx());
-                let _ac = JSAutoCompartment::new(scope.get_cx(), scope.reflector().get_jsobject().get());
+                let _ac = JSAutoCompartment::new(scope.get_cx(), scope.get_jsobj());
                 let mut message = RootedValue::new(scope.get_cx(), UndefinedValue());
                 data.read(GlobalRef::Worker(scope), message.handle_mut());
                 MessageEvent::dispatch_jsval(target, GlobalRef::Worker(scope), message.handle());

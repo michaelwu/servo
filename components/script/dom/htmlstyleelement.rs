@@ -21,9 +21,10 @@ use style::media_queries::parse_media_query_list;
 use style::stylesheets::{Origin, Stylesheet};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLStyleElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLStyleElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLStyleElementDerived for EventTarget {
@@ -35,20 +36,19 @@ impl HTMLStyleElementDerived for EventTarget {
 }
 
 impl HTMLStyleElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLStyleElement {
-        HTMLStyleElement {
-            htmlelement: HTMLElement::new_inherited(HTMLElementTypeId::HTMLStyleElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLStyleElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLStyleElement> {
-        let element = HTMLStyleElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLStyleElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLStyleElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     pub fn parse_own_css(&self) {

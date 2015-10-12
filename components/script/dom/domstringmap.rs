@@ -7,29 +7,27 @@ use dom::bindings::codegen::Bindings::DOMStringMapBinding::DOMStringMapMethods;
 use dom::bindings::error::ErrorResult;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::htmlelement::HTMLElement;
 use dom::node::window_from_node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct DOMStringMap {
-    reflector_: Reflector,
-    element: JS<HTMLElement>,
+magic_dom_struct! {
+    pub struct DOMStringMap {
+        element: JS<HTMLElement>,
+    }
 }
 
 impl DOMStringMap {
-    fn new_inherited(element: &HTMLElement) -> DOMStringMap {
-        DOMStringMap {
-            reflector_: Reflector::new(),
-            element: JS::from_ref(element),
-        }
+    fn new_inherited(&mut self, element: &HTMLElement) {
+        self.element.init(JS::from_ref(element));
     }
 
     pub fn new(element: &HTMLElement) -> Root<DOMStringMap> {
         let window = window_from_node(element);
-        reflect_dom_object(box DOMStringMap::new_inherited(element),
-                           GlobalRef::Window(window.r()), DOMStringMapBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMStringMap>(GlobalRef::Window(window.r()));
+        obj.new_inherited(element);
+        obj.into_root()
     }
 }
 

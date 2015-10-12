@@ -16,9 +16,10 @@ use dom::node::{Node, window_from_node};
 use dom::validitystate::ValidityState;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLOutputElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLOutputElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLOutputElementDerived for EventTarget {
@@ -30,21 +31,19 @@ impl HTMLOutputElementDerived for EventTarget {
 }
 
 impl HTMLOutputElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLOutputElement {
-        HTMLOutputElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLOutputElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLOutputElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLOutputElement> {
-        let element = HTMLOutputElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLOutputElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLOutputElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

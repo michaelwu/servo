@@ -8,7 +8,8 @@ use dom::bindings::codegen::InheritTypes::{ElementCast, NodeCast};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::{Reflector, namespace_from_domstring, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::namespace_from_domstring;
 use dom::element::Element;
 use dom::node::{Node, TreeIterator};
 use dom::window::Window;
@@ -24,24 +25,22 @@ pub trait CollectionFilter : JSTraceable {
 #[must_root]
 pub struct Collection(JS<Node>, Box<CollectionFilter + 'static>);
 
-#[dom_struct]
-pub struct HTMLCollection {
-    reflector_: Reflector,
-    #[ignore_heap_size_of = "Contains a trait object; can't measure due to #6870"]
-    collection: Box<Collection>,
+magic_dom_struct! {
+    pub struct HTMLCollection {
+        #[ignore_heap_size_of = "Contains a trait object; can't measure due to #6870"]
+        collection: Box<Collection>,
+    }
 }
 
 impl HTMLCollection {
-    fn new_inherited(collection: Collection) -> HTMLCollection {
-        HTMLCollection {
-            reflector_: Reflector::new(),
-            collection: box collection,
-        }
+    fn new_inherited(&mut self, collection: Collection) {
+        self.collection.init(box collection);
     }
 
     pub fn new(window: &Window, collection: Collection) -> Root<HTMLCollection> {
-        reflect_dom_object(box HTMLCollection::new_inherited(collection),
-                           GlobalRef::Window(window), HTMLCollectionBinding::Wrap)
+        let mut obj = alloc_dom_object::<HTMLCollection>(GlobalRef::Window(window));
+        obj.new_inherited(collection);
+        obj.into_root()
     }
 
     pub fn create(window: &Window, root: &Node,

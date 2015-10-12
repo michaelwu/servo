@@ -11,7 +11,7 @@ use dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::DocumentSource;
 use dom::document::{Document, IsHTMLDocument};
 use dom::window::Window;
@@ -19,23 +19,21 @@ use parse::html::{ParseContext, parse_html};
 use std::borrow::ToOwned;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct DOMParser {
-    reflector_: Reflector,
-    window: JS<Window>, //XXXjdm Document instead?
+magic_dom_struct! {
+    pub struct DOMParser {
+        window: JS<Window>, //XXXjdm Document instead?
+    }
 }
 
 impl DOMParser {
-    fn new_inherited(window: &Window) -> DOMParser {
-        DOMParser {
-            reflector_: Reflector::new(),
-            window: JS::from_ref(window),
-        }
+    fn new_inherited(&mut self, window: &Window) {
+        self.window.init(JS::from_ref(window));
     }
 
     pub fn new(window: &Window) -> Root<DOMParser> {
-        reflect_dom_object(box DOMParser::new_inherited(window), GlobalRef::Window(window),
-                           DOMParserBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMParser>(GlobalRef::Window(window));
+        obj.new_inherited(window);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef) -> Fallible<Root<DOMParser>> {

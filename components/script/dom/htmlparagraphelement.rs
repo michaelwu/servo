@@ -13,9 +13,10 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLParagraphElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLParagraphElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLParagraphElementDerived for EventTarget {
@@ -27,20 +28,18 @@ impl HTMLParagraphElementDerived for EventTarget {
 }
 
 impl HTMLParagraphElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLParagraphElement {
-        HTMLParagraphElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLParagraphElement, localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLParagraphElement, localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLParagraphElement> {
-        let element = HTMLParagraphElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLParagraphElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLParagraphElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

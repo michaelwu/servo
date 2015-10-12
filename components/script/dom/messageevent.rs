@@ -9,7 +9,8 @@ use dom::bindings::codegen::InheritTypes::{EventCast, EventTypeId, MessageEventD
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{TopDOMClass, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::TopDOMClass;
 use dom::event::Event;
 use dom::eventtarget::EventTarget;
 use js::jsapi::{HandleValue, Heap, JSContext};
@@ -18,12 +19,13 @@ use std::borrow::ToOwned;
 use std::default::Default;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct MessageEvent {
-    event: Event,
-    data: JSVal,
-    origin: DOMString,
-    lastEventId: DOMString,
+magic_dom_struct! {
+    pub struct MessageEvent {
+        event: Base<Event>,
+        data: JSVal,
+        origin: DOMString,
+        lastEventId: DOMString,
+    }
 }
 
 impl MessageEventDerived for Event {
@@ -33,15 +35,13 @@ impl MessageEventDerived for Event {
 }
 
 impl MessageEvent {
-    pub fn new_inherited(data: HandleValue,
+    pub fn new_inherited(&mut self, data: HandleValue,
                          origin: DOMString,
                          lastEventId: DOMString) {
-        MessageEvent {
-            event: Event::new_inherited(),
-            data: data.get(),
-            origin: origin,
-            lastEventId: lastEventId,
-        }
+        self.event.new_inherited();
+        self.data.init(data.get());
+        self.origin.init(origin);
+        self.lastEventId.init(lastEventId);
     }
 
     pub fn new_uninitialized(global: GlobalRef) -> Root<MessageEvent> {
@@ -52,7 +52,9 @@ impl MessageEvent {
                            data: HandleValue,
                            origin: DOMString,
                            lastEventId: DOMString) -> Root<MessageEvent> {
-        reflect_dom_object(box MessageEvent::new_inherited(data, origin, lastEventId), global, MessageEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<MessageEvent>(global);
+        obj.new_inherited(data, origin, lastEventId);
+        obj.into_root()
     }
 
     pub fn new(global: GlobalRef, type_: DOMString,

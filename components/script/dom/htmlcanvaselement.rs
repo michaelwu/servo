@@ -12,8 +12,8 @@ use dom::bindings::codegen::InheritTypes::{HTMLCanvasElementDerived, HTMLElement
 use dom::bindings::codegen::InheritTypes::{HTMLElementTypeId, NodeTypeId};
 use dom::bindings::codegen::UnionTypes::CanvasRenderingContext2DOrWebGLRenderingContext;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap, Root};
-use dom::bindings::utils::{Reflectable, TopDOMClass};
+use dom::bindings::js::{JS, LayoutJS, Root};
+use dom::bindings::utils::{TopDOMClass};
 use dom::canvasrenderingcontext2d::{CanvasRenderingContext2D, LayoutCanvasRenderingContext2DHelpers};
 use dom::document::Document;
 use dom::element::AttributeMutation;
@@ -41,12 +41,13 @@ pub enum CanvasContext {
     WebGL(JS<WebGLRenderingContext>),
 }
 
-#[dom_struct]
-pub struct HTMLCanvasElement {
-    htmlelement: HTMLElement,
-    context: MutNullableHeap<CanvasContext>,
-    width: Cell<u32>,
-    height: Cell<u32>,
+magic_dom_struct! {
+    pub struct HTMLCanvasElement {
+        htmlelement: Base<HTMLElement>,
+        context: Mut<Option<CanvasContext>>,
+        width: Mut<u32>,
+        height: Mut<u32>,
+    }
 }
 
 impl PartialEq for HTMLCanvasElement {
@@ -64,24 +65,22 @@ impl HTMLCanvasElementDerived for EventTarget {
 }
 
 impl HTMLCanvasElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLCanvasElement {
-        HTMLCanvasElement {
-            htmlelement:
-                HTMLElement::new_inherited(HTMLElementTypeId::HTMLCanvasElement, localName, prefix, document),
-            context: Default::default(),
-            width: Cell::new(DEFAULT_WIDTH),
-            height: Cell::new(DEFAULT_HEIGHT),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(HTMLElementTypeId::HTMLCanvasElement, localName, prefix, document);
+        self.context.init(Default::default());
+        self.width.init(DEFAULT_WIDTH);
+        self.height.init(DEFAULT_HEIGHT);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLCanvasElement> {
-        let element = HTMLCanvasElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLCanvasElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLCanvasElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     fn recreate_contexts(&self) {
