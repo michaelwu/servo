@@ -567,7 +567,7 @@ impl Node {
     }
 
     pub fn to_trusted_node_address(&self) -> TrustedNodeAddress {
-        TrustedNodeAddress(&*self as *const Node as *const libc::c_void)
+        TrustedNodeAddress(self.get_jsobj())
     }
 
     pub fn get_bounding_content_box(&self) -> Rect<Au> {
@@ -2306,7 +2306,7 @@ impl NodeMethods for Node {
 
 #[allow(raw_pointer_derive)]
 #[derive(Clone, PartialEq, Eq, Copy)]
-pub struct TrustedNodeAddress(pub *const c_void);
+pub struct TrustedNodeAddress(pub *mut JSObject);
 
 #[allow(unsafe_code)]
 unsafe impl Send for TrustedNodeAddress {}
