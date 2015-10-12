@@ -12,6 +12,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::ErrorResult;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root, RootCollection};
+use dom::bindings::magic::alloc_dom_global;
 use dom::bindings::refcounted::LiveDOMReferences;
 use dom::bindings::structuredclone::StructuredCloneData;
 use dom::bindings::utils::Reflectable;
@@ -216,10 +217,11 @@ impl DedicatedWorkerGlobalScope {
                timer_event_chan: Box<TimerEventChan + Send>,
                timer_event_port: Receiver<(TrustedWorkerAddress, TimerEvent)>)
                -> Root<DedicatedWorkerGlobalScope> {
-        let scope = box DedicatedWorkerGlobalScope::new_inherited(
+        let mut scope = alloc_dom_global::<DedicatedWorkerGlobalScope>(runtime.cx());
+        scope.new_inherited(
             init, worker_url, id, from_devtools_receiver, runtime.clone(), parent_sender,
             own_sender, receiver, timer_event_chan, timer_event_port);
-        DedicatedWorkerGlobalScopeBinding::Wrap(runtime.cx(), scope)
+        scope.into_root()
     }
 
     pub fn run_worker_scope(init: WorkerGlobalScopeInit,
