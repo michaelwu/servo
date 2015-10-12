@@ -254,7 +254,7 @@ impl DedicatedWorkerGlobalScope {
     }
 
     pub fn pipeline(&self) -> PipelineId {
-        self.id
+        self.id.get()
     }
 
     pub fn new_script_pair(&self) -> (Box<ScriptChan + Send>, Box<ScriptPort + Send>) {

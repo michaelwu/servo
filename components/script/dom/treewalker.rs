@@ -63,17 +63,17 @@ impl TreeWalker {
 impl TreeWalkerMethods for TreeWalker {
     // https://dom.spec.whatwg.org/#dom-treewalker-root
     fn Root(&self) -> Root<Node> {
-        self.root_node.root()
+        self.root_node.get().root()
     }
 
     // https://dom.spec.whatwg.org/#dom-treewalker-whattoshow
     fn WhatToShow(&self) -> u32 {
-        self.what_to_show
+        self.what_to_show.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-treewalker-filter
     fn GetFilter(&self) -> Option<Rc<NodeFilter>> {
-        match self.filter {
+        match self.filter.get() {
             Filter::None => None,
             Filter::JS(ref nf) => Some(nf.clone()),
             Filter::Native(_) => panic!("Cannot convert native node filter to DOM NodeFilter")
@@ -425,14 +425,14 @@ impl TreeWalker {
         let n = node.NodeType() - 1;
         // "2. If the nth bit (where 0 is the least significant bit) of whatToShow is not set,
         //     return FILTER_SKIP."
-        if (self.what_to_show & (1 << n)) == 0 {
+        if (self.what_to_show.get() & (1 << n)) == 0 {
             return Ok(NodeFilterConstants::FILTER_SKIP)
         }
         // "3. If filter is null, return FILTER_ACCEPT."
         // "4. Let result be the return value of invoking filter."
         // "5. If an exception was thrown, re-throw the exception."
         // "6. Return result."
-        match self.filter {
+        match self.filter.get() {
             Filter::None => Ok(NodeFilterConstants::FILTER_ACCEPT),
             Filter::Native(f) => Ok((f)(node)),
             Filter::JS(ref callback) => callback.AcceptNode_(self, node, Rethrow)
@@ -440,7 +440,7 @@ impl TreeWalker {
     }
 
     fn is_root_node(&self, node: &Node) -> bool {
-        JS::from_ref(node) == self.root_node
+        JS::from_ref(node) == self.root_node.get()
     }
 
     fn is_current_node(&self, node: &Node) -> bool {

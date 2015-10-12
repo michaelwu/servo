@@ -82,7 +82,7 @@ impl BlobMethods for Blob {
 
     // https://dev.w3.org/2006/webapi/FileAPI/#dfn-type
     fn Type(&self) -> DOMString {
-        self.typeString.clone()
+        self.typeString.get()
     }
 
     // https://dev.w3.org/2006/webapi/FileAPI/#slice-method-algo
@@ -121,7 +121,7 @@ impl BlobMethods for Blob {
             }
         };
         let span: i64 = max(relativeEnd - relativeStart, 0);
-        let global = self.global.root();
+        let global = self.global.get().root();
         match *self.bytes {
             None => Blob::new(global.r(), None, &relativeContentType),
             Some(ref vec) => {

@@ -48,7 +48,7 @@ impl WebGLBuffer {
 
 impl WebGLBuffer {
     pub fn id(&self) -> u32 {
-        self.id
+        self.id.get()
     }
 
     // NB: Only valid buffer targets come here
@@ -60,7 +60,7 @@ impl WebGLBuffer {
         } else {
             self.target.set(Some(target));
         }
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindBuffer(target, self.id))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindBuffer(target, self.id.get()))).unwrap();
 
         Ok(())
     }
@@ -68,7 +68,7 @@ impl WebGLBuffer {
     pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteBuffer(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteBuffer(self.id.get()))).unwrap();
         }
     }
 }

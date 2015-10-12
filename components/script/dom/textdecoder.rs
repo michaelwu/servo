@@ -69,12 +69,12 @@ impl TextDecoder {
 impl TextDecoderMethods for TextDecoder {
     // https://encoding.spec.whatwg.org/#dom-textdecoder-encoding
     fn Encoding(&self) -> DOMString {
-        self.encoding.whatwg_name().unwrap().to_owned()
+        self.encoding.get().whatwg_name().unwrap().to_owned()
     }
 
     // https://encoding.spec.whatwg.org/#dom-textdecoder-fatal
     fn Fatal(&self) -> bool {
-        self.fatal
+        self.fatal.get()
     }
 
     #[allow(unsafe_code)]
@@ -95,12 +95,12 @@ impl TextDecoderMethods for TextDecoder {
         let buffer = unsafe {
             slice::from_raw_parts(data as *const _, length as usize)
         };
-        let trap = if self.fatal {
+        let trap = if self.fatal.get() {
             DecoderTrap::Strict
         } else {
             DecoderTrap::Replace
         };
-        match self.encoding.decode(buffer, trap) {
+        match self.encoding.get().decode(buffer, trap) {
             Ok(s) => Ok(USVString(s)),
             Err(_) => Err(Error::Type("Decoding failed".to_owned())),
         }

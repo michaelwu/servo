@@ -37,16 +37,16 @@ impl WebGLShaderPrecisionFormat {
 impl WebGLShaderPrecisionFormatMethods for WebGLShaderPrecisionFormat {
     // https://www.khronos.org/registry/webgl/specs/1.0/#5.12.1
     fn RangeMin(&self) -> i32 {
-        self.range_min
+        self.range_min.get()
     }
 
     // https://www.khronos.org/registry/webgl/specs/1.0/#5.12.1
     fn RangeMax(&self) -> i32 {
-        self.range_max
+        self.range_max.get()
     }
 
     // https://www.khronos.org/registry/webgl/specs/1.0/#5.12.1
     fn Precision(&self) -> i32 {
-        self.precision
+        self.precision.get()
     }
 }

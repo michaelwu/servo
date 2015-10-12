@@ -68,12 +68,12 @@ impl ImageData {
 impl ImageDataMethods for ImageData {
     // https://html.spec.whatwg.org/multipage/#dom-imagedata-width
     fn Width(&self) -> u32 {
-        self.width
+        self.width.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-imagedata-height
     fn Height(&self) -> u32 {
-        self.height
+        self.height.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-imagedata-data

@@ -34,12 +34,12 @@ impl DOMRectList {
 impl DOMRectListMethods for DOMRectList {
     // https://drafts.fxtf.org/geometry/#dom-domrectlist-length
     fn Length(&self) -> u32 {
-        self.rects.len() as u32
+        self.rects.get().len() as u32
     }
 
     // https://drafts.fxtf.org/geometry/#dom-domrectlist-item
     fn Item(&self, index: u32) -> Option<Root<DOMRect>> {
-        let rects = &self.rects;
+        let rects = &self.rects.get();
         if index < rects.len() as u32 {
             Some(rects[index as usize].root())
         } else {
@@ -49,7 +49,7 @@ impl DOMRectListMethods for DOMRectList {
 
     // check-tidy: no specs after this line
     fn IndexedGetter(&self, index: u32, found: &mut bool) -> Option<Root<DOMRect>> {
-        *found = index < self.rects.len() as u32;
+        *found = index < self.rects.get().len() as u32;
         self.Item(index)
     }
 }

@@ -35,19 +35,19 @@ impl DOMStringMap {
 impl DOMStringMapMethods for DOMStringMap {
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-removeitem
     fn NamedDeleter(&self, name: DOMString) {
-        let element = self.element.root();
+        let element = self.element.get().root();
         element.r().delete_custom_attr(name)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-setitem
     fn NamedSetter(&self, name: DOMString, value: DOMString) -> ErrorResult {
-        let element = self.element.root();
+        let element = self.element.get().root();
         element.r().set_custom_attr(name, value)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-nameditem
     fn NamedGetter(&self, name: DOMString, found: &mut bool) -> DOMString {
-        let element = self.element.root();
+        let element = self.element.get().root();
         match element.r().get_custom_attr(name) {
             Some(value) => {
                 *found = true;

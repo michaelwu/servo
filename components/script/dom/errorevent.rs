@@ -68,8 +68,8 @@ impl ErrorEvent {
             let event = EventCast::from_ref(ev.r());
             event.InitEvent(type_, bubbles == EventBubbles::Bubbles,
                             cancelable == EventCancelable::Cancelable);
-            *ev.message.borrow_mut() = message;
-            *ev.filename.borrow_mut() = filename;
+            ev.message.set(message);
+            ev.filename.set(filename);
             ev.lineno.set(lineno);
             ev.colno.set(colno);
         }
@@ -126,12 +126,12 @@ impl ErrorEventMethods for ErrorEvent {
 
     // https://html.spec.whatwg.org/multipage/#dom-errorevent-message
     fn Message(&self) -> DOMString {
-        self.message.borrow().clone()
+        self.message.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-errorevent-filename
     fn Filename(&self) -> DOMString {
-        self.filename.borrow().clone()
+        self.filename.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-errorevent-error

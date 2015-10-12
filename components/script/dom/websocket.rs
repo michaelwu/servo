@@ -247,7 +247,7 @@ impl WebSocketMethods for WebSocket {
 
     // https://html.spec.whatwg.org/multipage/#dom-websocket-url
     fn Url(&self) -> DOMString {
-        self.url.serialize()
+        self.url.get().serialize()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-websocket-readystate
@@ -334,7 +334,7 @@ impl WebSocketMethods for WebSocket {
                     self.code.set(code);
                 }
                 if let Some(reason) = reason {
-                    *self.reason.borrow_mut() = reason.0;
+                    self.reason.set(reason.0);
                 }
                 send_close(self);
                 //Note: After sending the close message, the receive loop confirms a close message from the server and
@@ -399,7 +399,7 @@ impl Runnable for CloseTask {
             let target = EventTargetCast::from_ref(ws);
             event.r().fire(target);
         }
-        let rsn = ws.reason.borrow();
+        let rsn = ws.reason.get();
         let rsn_clone = rsn.clone();
         /*In addition, we also have to fire a close even if error event fired
          https://html.spec.whatwg.org/multipage/#closeWebSocket

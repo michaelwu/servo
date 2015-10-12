@@ -41,13 +41,13 @@ impl Storage {
     }
 
     fn get_url(&self) -> Url {
-        let global_root = self.global.root();
+        let global_root = self.global.get().root();
         let global_ref = global_root.r();
         global_ref.get_url()
     }
 
     fn get_storage_task(&self) -> StorageTask {
-        let global_root = self.global.root();
+        let global_root = self.global.get().root();
         let global_ref = global_root.r();
         global_ref.as_window().storage_task()
     }
@@ -59,7 +59,7 @@ impl StorageMethods for Storage {
     fn Length(&self) -> u32 {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        self.get_storage_task().send(StorageTaskMsg::Length(sender, self.get_url(), self.storage_type)).unwrap();
+        self.get_storage_task().send(StorageTaskMsg::Length(sender, self.get_url(), self.storage_type.get())).unwrap();
         receiver.recv().unwrap() as u32
     }
 
@@ -67,7 +67,7 @@ impl StorageMethods for Storage {
     fn Key(&self, index: u32) -> Option<DOMString> {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        self.get_storage_task().send(StorageTaskMsg::Key(sender, self.get_url(), self.storage_type, index)).unwrap();
+        self.get_storage_task().send(StorageTaskMsg::Key(sender, self.get_url(), self.storage_type.get(), index)).unwrap();
         receiver.recv().unwrap()
     }
 
@@ -75,7 +75,7 @@ impl StorageMethods for Storage {
     fn GetItem(&self, name: DOMString) -> Option<DOMString> {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        let msg = StorageTaskMsg::GetItem(sender, self.get_url(), self.storage_type, name);
+        let msg = StorageTaskMsg::GetItem(sender, self.get_url(), self.storage_type.get(), name);
         self.get_storage_task().send(msg).unwrap();
         receiver.recv().unwrap()
     }
@@ -84,7 +84,7 @@ impl StorageMethods for Storage {
     fn SetItem(&self, name: DOMString, value: DOMString) {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        let msg = StorageTaskMsg::SetItem(sender, self.get_url(), self.storage_type, name.clone(), value.clone());
+        let msg = StorageTaskMsg::SetItem(sender, self.get_url(), self.storage_type.get(), name.clone(), value.clone());
         self.get_storage_task().send(msg).unwrap();
         let (changed, old_value) = receiver.recv().unwrap();
         if changed {
@@ -96,7 +96,7 @@ impl StorageMethods for Storage {
     fn RemoveItem(&self, name: DOMString) {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        let msg = StorageTaskMsg::RemoveItem(sender, self.get_url(), self.storage_type, name.clone());
+        let msg = StorageTaskMsg::RemoveItem(sender, self.get_url(), self.storage_type.get(), name.clone());
         self.get_storage_task().send(msg).unwrap();
         if let Some(old_value) = receiver.recv().unwrap() {
             self.broadcast_change_notification(Some(name), Some(old_value), None);
@@ -107,7 +107,7 @@ impl StorageMethods for Storage {
     fn Clear(&self) {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        self.get_storage_task().send(StorageTaskMsg::Clear(sender, self.get_url(), self.storage_type)).unwrap();
+        self.get_storage_task().send(StorageTaskMsg::Clear(sender, self.get_url(), self.storage_type.get())).unwrap();
         if receiver.recv().unwrap() {
             self.broadcast_change_notification(None, None, None);
         }
@@ -117,7 +117,7 @@ impl StorageMethods for Storage {
     fn SupportedPropertyNames(&self) -> Vec<DOMString> {
         let (sender, receiver) = ipc::channel().unwrap();
 
-        self.get_storage_task().send(StorageTaskMsg::Keys(sender, self.get_url(), self.storage_type)).unwrap();
+        self.get_storage_task().send(StorageTaskMsg::Keys(sender, self.get_url(), self.storage_type.get())).unwrap();
         receiver.recv().unwrap()
     }
 
@@ -142,7 +142,7 @@ impl Storage {
     /// https://html.spec.whatwg.org/multipage/#send-a-storage-notification
     fn broadcast_change_notification(&self, key: Option<DOMString>, old_value: Option<DOMString>,
                                      new_value: Option<DOMString>) {
-        let global_root = self.global.root();
+        let global_root = self.global.get().root();
         let global_ref = global_root.r();
         let main_script_chan = global_ref.as_window().main_thread_script_chan();
         let script_chan = global_ref.script_chan();

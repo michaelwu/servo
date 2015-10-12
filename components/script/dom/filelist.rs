@@ -33,12 +33,12 @@ impl FileList {
 impl FileListMethods for FileList {
     // https://w3c.github.io/FileAPI/#dfn-length
     fn Length(&self) -> u32 {
-        self.list.len() as u32
+        self.list.get().len() as u32
     }
 
     // https://w3c.github.io/FileAPI/#dfn-item
     fn Item(&self, index: u32) -> Option<Root<File>> {
-        Some(self.list[index as usize].root())
+        Some(self.list.get()[index as usize].root())
     }
 
     // check-tidy: no specs after this line

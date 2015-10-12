@@ -42,13 +42,13 @@ impl File {
     }
 
     pub fn name(&self) -> &DOMString {
-        &self.name
+        &self.name.get()
     }
 }
 
 impl FileMethods for File {
     // https://w3c.github.io/FileAPI/#dfn-name
     fn Name(&self) -> DOMString {
-        self.name.clone()
+        self.name.get()
     }
 }
