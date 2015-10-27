@@ -25,8 +25,8 @@ use util::str::{DOMString, str_join};
 pub struct CSSStyleDeclaration {
     reflector_: Reflector,
     owner: JS<Element>,
-    readonly: bool,
     pseudo: Option<PseudoElement>,
+    readonly: bool,
 }
 
 #[derive(PartialEq, HeapSizeOf)]
