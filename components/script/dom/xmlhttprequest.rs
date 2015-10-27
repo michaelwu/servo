@@ -123,9 +123,9 @@ pub struct XMLHttpRequest {
 
     // Associated concepts
     sync: Cell<bool>,
+    send_flag: Cell<bool>,
     upload_complete: Cell<bool>,
     upload_events: Cell<bool>,
-    send_flag: Cell<bool>,
 
     global: GlobalField,
     extra: Box<XMLHttpRequestExtra>,
