@@ -63,7 +63,7 @@ impl HTMLOptionElement {
 
 fn collect_text(node: &&Node, value: &mut DOMString) {
     let elem = ElementCast::to_ref(*node).unwrap();
-    let svg_script = *elem.namespace() == ns!(SVG) && elem.local_name() == &atom!("script");
+    let svg_script = elem.namespace() == ns!(SVG) && elem.local_name() == atom!("script");
     let html_script = node.is_htmlscriptelement();
     if svg_script || html_script {
         return;

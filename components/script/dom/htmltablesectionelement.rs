@@ -24,7 +24,7 @@ use util::str::{self, DOMString};
 magic_dom_struct! {
     pub struct HTMLTableSectionElement {
         htmlelement: Base<HTMLElement>,
-        background_color: Mut<Option<RGBA>>,
+        background_color: Layout<Option<RGBA>>,
     }
 }
 
@@ -55,7 +55,7 @@ impl HTMLTableSectionElement {
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {
-        self.background_color.get()
+        self.background_color.layout_get()
     }
 }
 

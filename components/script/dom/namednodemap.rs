@@ -49,7 +49,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let attrs = owner.attrs();
-        attrs.get(index as usize).map(|t| t.root())
+        attrs.get(index).map(|t| t.root())
     }
 
     // https://dom.spec.whatwg.org/#dom-namednodemap-getnameditem

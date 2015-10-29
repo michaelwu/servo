@@ -88,7 +88,7 @@ impl WebGLShader {
             debug!("Compiling already compiled shader {}", self.id.get());
         }
 
-        if let Some(ref source) = *self.source.get() {
+        if let Some(ref source) = self.source.get() {
             let validator = ShaderValidator::for_webgl(self.gl_type.get(),
                                                        SHADER_OUTPUT_FORMAT,
                                                        &BuiltInResources::default()).unwrap();

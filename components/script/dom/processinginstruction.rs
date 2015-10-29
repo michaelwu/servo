@@ -44,8 +44,8 @@ impl ProcessingInstruction {
 
 
 impl ProcessingInstruction {
-    pub fn target(&self) -> &DOMString {
-        &self.target.get()
+    pub fn target(&self) -> DOMString {
+        self.target.get()
     }
 }
 

@@ -10,7 +10,7 @@ use dom::bindings::error::Error::{JSFailed, Network, Syntax};
 use dom::bindings::error::{ErrorResult, Fallible, report_pending_exception};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::magic::GlobalObjectSlots;
+use dom::bindings::magic::{MagicDOMClass, GlobalObjectSlots};
 use dom::console::Console;
 use dom::crypto::Crypto;
 use dom::eventtarget::EventTarget;

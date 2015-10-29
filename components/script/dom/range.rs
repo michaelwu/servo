@@ -15,7 +15,7 @@ use dom::bindings::codegen::InheritTypes::{NodeCast, NodeTypeId, TextCast, TextD
 use dom::bindings::error::Error::HierarchyRequest;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, Root, RootedReference};
+use dom::bindings::js::{JS, HeapJS, Root, RootedReference};
 use dom::bindings::magic::alloc_dom_object;
 use dom::document::Document;
 use dom::documentfragment::DocumentFragment;
@@ -23,6 +23,7 @@ use dom::node::Node;
 use std::cell::RefCell;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::rc::Rc;
+use std::default::Default;
 
 magic_dom_struct! {
     pub struct Range {
@@ -33,7 +34,7 @@ magic_dom_struct! {
 impl Range {
     fn new_inherited(&mut self, start_container: &Node, start_offset: u32,
                      end_container: &Node, end_offset: u32) {
-        self.inner.init(Rc::new(RangeInner::new(BoundaryPoint::new(start_container, start_offset), BoundaryPoint::new(end_container, end_offset))));
+        self.inner.init(Rc::new(RefCell::new(RangeInner::new(BoundaryPoint::new(start_container, start_offset), BoundaryPoint::new(end_container, end_offset)))));
     }
 
     pub fn new_with_doc(document: &Document) -> Root<Range> {
@@ -60,7 +61,7 @@ impl Range {
 
     // https://dom.spec.whatwg.org/#contained
     fn contains(&self, node: &Node) -> bool {
-        let inner = self.inner.get().borrow();
+        let inner = self.inner.borrow();
         let start = &inner.start;
         let end = &inner.end;
         match (bp_position(node, 0, start.node().r(), start.offset()),
@@ -72,7 +73,7 @@ impl Range {
 
     // https://dom.spec.whatwg.org/#partially-contained
     fn partially_contains(&self, node: &Node) -> bool {
-        let inner = self.inner.get().borrow();
+        let inner = self.inner.borrow();
         inner.start.node().inclusive_ancestors().any(|n| n.r() == node) !=
             inner.end.node().inclusive_ancestors().any(|n| n.r() == node)
     }
@@ -121,8 +122,8 @@ impl Range {
 
 
 impl Range {
-    pub fn inner(&self) -> &Rc<RefCell<RangeInner>> {
-        &self.inner.get()
+    pub fn inner(&self) -> &RefCell<RangeInner> {
+        &self.inner
     }
 }
 
@@ -338,7 +339,7 @@ impl RangeMethods for Range {
     // https://dom.spec.whatwg.org/#dom-range-clonecontents
     // https://dom.spec.whatwg.org/#concept-range-clone
     fn CloneContents(&self) -> Fallible<Root<DocumentFragment>> {
-        let inner = self.inner.get().borrow();
+        let inner = self.inner.borrow();
         let start = &inner.start;
         let end = &inner.end;
 
@@ -450,7 +451,7 @@ impl RangeMethods for Range {
 
         // Step 3.
         let (start_node, start_offset, end_node, end_offset) = {
-            let inner = self.inner.get().borrow();
+            let inner = self.inner.borrow();
             let start = &inner.start;
             let end = &inner.end;
             (start.node(), start.offset(), end.node(), end.offset())
@@ -704,12 +705,12 @@ impl RangeMethods for Range {
 #[privatize]
 #[derive(HeapSizeOf)]
 pub struct RangeInner {
-    start: BoundaryPoint,
-    end: BoundaryPoint,
+    start: Box<BoundaryPoint>,
+    end: Box<BoundaryPoint>,
 }
 
 impl RangeInner {
-    fn new(start: BoundaryPoint, end: BoundaryPoint) -> RangeInner {
+    fn new(start: Box<BoundaryPoint>, end: Box<BoundaryPoint>) -> RangeInner {
         RangeInner { start: start, end: end }
     }
 
@@ -839,22 +840,24 @@ impl RangeInner {
 #[privatize]
 #[derive(HeapSizeOf)]
 pub struct BoundaryPoint {
-    node: JS<Node>,
+    node: HeapJS<JS<Node>>,
     offset: u32,
 }
 
 impl BoundaryPoint {
-    fn new(node: &Node, offset: u32) -> BoundaryPoint {
+    fn new(node: &Node, offset: u32) -> Box<BoundaryPoint> {
         debug_assert!(!node.is_doctype());
         debug_assert!(offset <= node.len());
-        BoundaryPoint {
-            node: JS::from_ref(node),
+        let point = Box::new(BoundaryPoint {
+            node: Default::default(),
             offset: offset,
-        }
+        });
+        point.node.set(Some(JS::from_ref(node)));
+        point
     }
 
     pub fn node(&self) -> Root<Node> {
-        self.node.root()
+        self.node.get().unwrap().root()
     }
 
     pub fn offset(&self) -> u32 {
@@ -864,7 +867,7 @@ impl BoundaryPoint {
     fn set(&mut self, node: &Node, offset: u32) {
         debug_assert!(!node.is_doctype());
         debug_assert!(offset <= node.len());
-        self.node = JS::from_ref(node);
+        self.node.set(Some(JS::from_ref(node)));
         self.offset = offset;
     }
 }

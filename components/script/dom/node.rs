@@ -35,7 +35,7 @@ use dom::bindings::js::Root;
 use dom::bindings::js::RootedReference;
 use dom::bindings::js::{JS, LayoutJS};
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::trace::RootedVec;
+use dom::bindings::trace::{RootedVec, JSVecIter};
 use dom::bindings::utils::{TopDOMClass};
 use dom::bindings::magic::alloc_dom_object;
 use dom::bindings::utils::namespace_from_domstring;
@@ -55,7 +55,7 @@ use dom::window::Window;
 use euclid::rect::Rect;
 use js::jsapi::{JSContext, JSObject, JSRuntime};
 use layout_interface::{LayoutChan, Msg};
-use libc::{self, c_void, uintptr_t};
+use libc::{self, uintptr_t};
 use parse::html::parse_html_fragment;
 use script_traits::UntrustedNodeAddress;
 use selectors::matching::matches;
@@ -66,6 +66,7 @@ use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::default::Default;
 use std::iter::{FilterMap, Peekable};
 use std::mem;
+use std::ptr::Unique;
 use std::slice::ref_slice;
 use std::sync::Arc;
 use string_cache::{Atom, Namespace, QualName};
@@ -85,37 +86,37 @@ magic_dom_struct! {
         eventtarget: Base<EventTarget>,
 
         /// The parent of this node.
-        parent_node: Mut<Option<JS<Node>>>,
+        parent_node: Layout<Option<JS<Node>>>,
 
         /// The first child of this node.
-        first_child: Mut<Option<JS<Node>>>,
+        first_child: Layout<Option<JS<Node>>>,
 
         /// The last child of this node.
-        last_child: Mut<Option<JS<Node>>>,
+        last_child: Layout<Option<JS<Node>>>,
 
         /// The next sibling of this node.
-        next_sibling: Mut<Option<JS<Node>>>,
+        next_sibling: Layout<Option<JS<Node>>>,
 
         /// The previous sibling of this node.
-        prev_sibling: Mut<Option<JS<Node>>>,
+        prev_sibling: Layout<Option<JS<Node>>>,
 
         /// The document that this node belongs to.
-        owner_doc: Mut<Option<JS<Document>>>,
+        owner_doc: Layout<Option<JS<Document>>>,
 
         /// The live list of children return by .childNodes.
         child_list: Mut<Option<JS<NodeList>>>,
 
         /// The live count of children of this node.
-        children_count: Mut<u32>,
+        children_count: Layout<u32>,
 
         /// A bitfield of flags for node items.
-        flags: Mut<NodeFlags>,
+        flags: Layout<NodeFlags>,
 
         /// Layout information. Only the layout task may touch this data.
         ///
         /// Must be sent back to the layout task to be destroyed when this
         /// node is finalized.
-        layout_data: Layout<Option<Box<RefCell<LayoutData>>>>,
+        layout_data: Layout<Option<*const RefCell<LayoutData>>>,
 
         unique_id: Layout<String>,
     }
@@ -123,7 +124,7 @@ magic_dom_struct! {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Node) -> bool {
-        self as *const Node == &*other
+        self.get_jsobj() == other.get_jsobj()
     }
 }
 
@@ -196,12 +197,14 @@ impl NodeFlags {
     }
 }
 
+/*
 impl Drop for Node {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
         self.dispose_layoutdata();
     }
 }
+*/
 
 /// suppress observers flag
 /// https://dom.spec.whatwg.org/#concept-node-insert
@@ -223,24 +226,28 @@ pub struct SharedLayoutData {
 #[allow(raw_pointer_derive)]
 #[derive(HeapSizeOf)]
 pub struct LayoutData {
-    _shared_data: SharedLayoutData,
+    pub _shared_data: SharedLayoutData,
     #[ignore_heap_size_of = "TODO(#6910) Box value that should be counted but the type lives in layout"]
-    _data: NonZero<*const ()>,
+    pub _data: (),
 }
 
-#[allow(unsafe_code)]
-unsafe impl Send for LayoutData {}
+//#[allow(unsafe_code)]
+//unsafe impl Send for LayoutData {}
 
 no_jsmanaged_fields!(LayoutData);
 
 impl Node {
     /// Sends layout data, if any, back to the layout task to be destroyed.
+    #[allow(unsafe_code)]
     fn dispose_layoutdata(&self) {
         debug_assert!(task_state::get().is_script());
-        if let Some(layout_data) = mem::replace(&mut *self.layout_data.borrow_mut(), None) {
+        if let Some(layout_data) = self.layout_data.get() {
+            self.layout_data.set(None);
             let win = window_from_node(self);
             let LayoutChan(chan) = win.layout_chan();
-            chan.send(Msg::ReapLayoutData(layout_data)).unwrap()
+            unsafe {
+                chan.send(Msg::ReapLayoutData(Unique::new(layout_data as *mut _))).unwrap()
+            }
         }
     }
 
@@ -935,8 +942,7 @@ pub fn from_untrusted_node_address(_runtime: *mut JSRuntime, candidate: Untruste
         if object.is_null() {
             panic!("Attempted to create a `JS<Node>` from an invalid pointer!")
         }
-        let boxed_node: *const Node = conversions::native_from_reflector(object);
-        Root::from_ref(&*boxed_node)
+        Root::new(NonZero::new(object))
     }
 }
 
@@ -958,9 +964,12 @@ pub trait LayoutNodeHelpers {
 
     unsafe fn children_count(&self) -> u32;
 
-    unsafe fn layout_data(&self) -> Ref<Option<LayoutData>>;
-    unsafe fn layout_data_mut(&self) -> RefMut<Option<LayoutData>>;
-    unsafe fn layout_data_unchecked(&self) -> *const Option<LayoutData>;
+    unsafe fn layout_data(&self) -> Option<Ref<LayoutData>>;
+    unsafe fn layout_data_mut(&self) -> Option<RefMut<LayoutData>>;
+    unsafe fn layout_data_unchecked(&self) -> Option<*const LayoutData>;
+
+    fn layout_data_set(&self, val: Box<RefCell<LayoutData>>);
+    fn has_layout_data(&self) -> bool;
 
     fn get_hover_state_for_layout(&self) -> bool;
     fn get_focus_state_for_layout(&self) -> bool;
@@ -973,62 +982,62 @@ impl LayoutNodeHelpers for LayoutJS<Node> {
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn type_id_for_layout(&self) -> NodeTypeId {
-        (*self.unsafe_get()).type_id()
+        (&*self.unsafe_get()).type_id()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn is_element_for_layout(&self) -> bool {
-        (*self.unsafe_get()).is_element()
+        (&*self.unsafe_get()).is_element()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn parent_node_ref(&self) -> Option<LayoutJS<Node>> {
-        (*self.unsafe_get()).parent_node.get_inner_as_layout()
+        (&*self.unsafe_get()).parent_node.get_inner_as_layout()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn first_child_ref(&self) -> Option<LayoutJS<Node>> {
-        (*self.unsafe_get()).first_child.get_inner_as_layout()
+        (&*self.unsafe_get()).first_child.get_inner_as_layout()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn last_child_ref(&self) -> Option<LayoutJS<Node>> {
-        (*self.unsafe_get()).last_child.get_inner_as_layout()
+        (&*self.unsafe_get()).last_child.get_inner_as_layout()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn prev_sibling_ref(&self) -> Option<LayoutJS<Node>> {
-        (*self.unsafe_get()).prev_sibling.get_inner_as_layout()
+        (&*self.unsafe_get()).prev_sibling.get_inner_as_layout()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn next_sibling_ref(&self) -> Option<LayoutJS<Node>> {
-        (*self.unsafe_get()).next_sibling.get_inner_as_layout()
+        (&*self.unsafe_get()).next_sibling.get_inner_as_layout()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn owner_doc_for_layout(&self) -> LayoutJS<Document> {
-        (*self.unsafe_get()).owner_doc.get_inner_as_layout().unwrap()
+        (&*self.unsafe_get()).owner_doc.get_inner_as_layout().unwrap()
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn get_flag(&self, flag: NodeFlags) -> bool {
-        (*self.unsafe_get()).flags.get().contains(flag)
+        (&*self.unsafe_get()).flags.layout_get().contains(flag)
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn set_flag(&self, flag: NodeFlags, value: bool) {
-        let this = self.unsafe_get();
-        let mut flags = (*this).flags.get();
+        let this = &*self.unsafe_get();
+        let mut flags = (this).flags.layout_get();
 
         if value {
             flags.insert(flag);
@@ -1036,34 +1045,44 @@ impl LayoutNodeHelpers for LayoutJS<Node> {
             flags.remove(flag);
         }
 
-        (*this).flags.set(flags);
+        this.flags.layout_set(flags);
     }
 
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn children_count(&self) -> u32 {
-        (*self.unsafe_get()).children_count.get()
+        (&*self.unsafe_get()).children_count.layout_get()
     }
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn layout_data(&self) -> Ref<Option<LayoutData>> {
+    unsafe fn layout_data(&self) -> Option<Ref<LayoutData>> {
         debug_assert!(task_state::get().is_layout());
-        (*self.unsafe_get()).layout_data.get()
+        (&*self.unsafe_get()).layout_data.layout_get().map(|v| (&*v).borrow())
     }
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn layout_data_mut(&self) -> RefMut<Option<LayoutData>> {
+    unsafe fn layout_data_mut(&self) -> Option<RefMut<LayoutData>> {
         debug_assert!(task_state::get().is_layout());
-        (*self.unsafe_get()).layout_data.borrow_mut()
+        (&*self.unsafe_get()).layout_data.layout_get().map(|v| (&*v).borrow_mut())
     }
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn layout_data_unchecked(&self) -> *const Option<LayoutData> {
+    unsafe fn layout_data_unchecked(&self) -> Option<*const LayoutData> {
         debug_assert!(task_state::get().is_layout());
-        (*self.unsafe_get()).layout_data.as_unsafe_cell().get() as *const _
+        (&*self.unsafe_get()).layout_data.layout_get().map(|v| (&*v).as_unsafe_cell().get() as *const _)
+    }
+
+    #[allow(unsafe_code)]
+    fn layout_data_set(&self, val: Box<RefCell<LayoutData>>) {
+        unsafe { (&*self.unsafe_get()).layout_data.layout_set(Some(Box::into_raw(val) as *const _)) }
+    }
+
+    #[allow(unsafe_code)]
+    fn has_layout_data(&self) -> bool {
+        unsafe { !(&*self.unsafe_get()).layout_data.is_some() }
     }
 
     #[inline]
@@ -1329,11 +1348,11 @@ impl Node {
         alloc_dom_object::<N>(GlobalRef::Window(window.r()))
     }
     pub fn new_inherited(&mut self, type_id: NodeTypeId, doc: &Document) {
-        Node::new_(type_id, Some(doc.clone()))
+        self.new_(type_id, Some(doc))
     }
 
-    pub fn new_without_doc(type_id: NodeTypeId) -> Node {
-        Node::new_(type_id, None)
+    pub fn new_without_doc(&mut self, type_id: NodeTypeId) {
+        self.new_(type_id, None)
     }
 
     fn new_(&mut self, type_id: NodeTypeId, doc: Option<&Document>) {
@@ -1523,19 +1542,18 @@ impl Node {
 
         // Steps 1-2: ranges.
         let mut new_nodes = RootedVec::new();
-        let new_nodes = if let NodeTypeId::DocumentFragment = node.type_id() {
+        if let NodeTypeId::DocumentFragment = node.type_id() {
             // Step 3.
             new_nodes.extend(node.children().map(|kid| JS::from_rooted(&kid)));
             // Step 4: mutation observers.
             // Step 5.
-            for kid in new_nodes.r() {
-                Node::remove(*kid, node, SuppressObserver::Suppressed);
+            for kid in new_nodes.rooted_iter() {
+                Node::remove(kid, node, SuppressObserver::Suppressed);
             }
-            vtable_for(&node).children_changed(&ChildrenMutation::replace_all(new_nodes.r(), &[]));
-            new_nodes.r()
+            vtable_for(&node).children_changed(&ChildrenMutation::replace_all(Some(new_nodes.rooted_iter()), None));
         } else {
             // Step 3.
-            ref_slice(&node)
+            new_nodes.push(JS::from_ref(node));
         };
         // Step 6: mutation observers.
         let previous_sibling = match suppress_observers {
@@ -1548,14 +1566,14 @@ impl Node {
             SuppressObserver::Suppressed => None,
         };
         // Step 7.
-        for kid in new_nodes {
+        for kid in new_nodes.rooted_iter() {
             // Step 7.1.
-            parent.add_child(*kid, child);
+            parent.add_child(kid, child);
             // Step 7.2: insertion steps.
         }
         if let SuppressObserver::Unsuppressed = suppress_observers {
             vtable_for(&parent).children_changed(
-                &ChildrenMutation::insert(previous_sibling.r(), new_nodes, child));
+                &ChildrenMutation::insert(previous_sibling.r(), Some(new_nodes.rooted_iter()), child));
         }
     }
 
@@ -1569,19 +1587,16 @@ impl Node {
         let removed_nodes = parent.children().collect::<RootedVec<_>>();
         // Step 3.
         let mut added_nodes = RootedVec::new();
-        let added_nodes = if let Some(node) = node.as_ref() {
+        if let Some(node) = node.as_ref() {
             if let NodeTypeId::DocumentFragment = node.type_id() {
                 added_nodes.extend(node.children().map(|child| JS::from_rooted(&child)));
-                added_nodes.r()
             } else {
-                ref_slice(node)
+                added_nodes.push(JS::from_ref(node));
             }
-        } else {
-            &[] as &[&Node]
         };
         // Step 4.
-        for child in removed_nodes.r() {
-            Node::remove(*child, parent, SuppressObserver::Suppressed);
+        for child in removed_nodes.rooted_iter() {
+            Node::remove(child, parent, SuppressObserver::Suppressed);
         }
         // Step 5.
         if let Some(node) = node {
@@ -1589,7 +1604,7 @@ impl Node {
         }
         // Step 6: mutation observers.
         vtable_for(&parent).children_changed(
-            &ChildrenMutation::replace_all(removed_nodes.r(), added_nodes));
+            &ChildrenMutation::replace_all(Some(removed_nodes.rooted_iter()), Some(added_nodes.rooted_iter())));
     }
 
     // https://dom.spec.whatwg.org/#concept-node-pre-remove
@@ -1620,9 +1635,11 @@ impl Node {
         let old_next_sibling = node.GetNextSibling();
         parent.remove_child(node);
         if let SuppressObserver::Unsuppressed = suppress_observers {
+            let mut removal_list = RootedVec::new();
+            removal_list.push(JS::from_ref(node));
             vtable_for(&parent).children_changed(
                 &ChildrenMutation::replace(old_previous_sibling.r(),
-                                           &node, &[],
+                                           removal_list.rooted_iter(), None,
                                            old_next_sibling.r()));
         }
     }
@@ -1642,9 +1659,9 @@ impl Node {
         let copy: Root<Node> = match node.type_id() {
             NodeTypeId::DocumentType => {
                 let doctype: &DocumentType = DocumentTypeCast::to_ref(node).unwrap();
-                let doctype = DocumentType::new(doctype.name().clone(),
-                                                Some(doctype.public_id().clone()),
-                                                Some(doctype.system_id().clone()), document.r());
+                let doctype = DocumentType::new(doctype.name(),
+                                                Some(doctype.public_id()),
+                                                Some(doctype.system_id()), document.r());
                 NodeCast::from_root(doctype)
             },
             NodeTypeId::DocumentFragment => {
@@ -1705,14 +1722,14 @@ impl Node {
             NodeTypeId::Document => {
                 let node_doc = DocumentCast::to_ref(node).unwrap();
                 let copy_doc = DocumentCast::to_ref(copy.r()).unwrap();
-                copy_doc.set_encoding_name(node_doc.encoding_name().clone());
+                copy_doc.set_encoding_name(node_doc.encoding_name());
                 copy_doc.set_quirks_mode(node_doc.quirks_mode());
             },
             NodeTypeId::Element(..) => {
                 let node_elem = ElementCast::to_ref(node).unwrap();
                 let copy_elem = ElementCast::to_ref(copy.r()).unwrap();
 
-                for attr in node_elem.attrs().iter().map(JS::root) {
+                for attr in node_elem.attrs().iter().map(|attr| attr.root()) {
                     copy_elem.push_new_attribute(attr.local_name().clone(),
                                                  attr.value().clone(),
                                                  attr.name().clone(),
@@ -1776,7 +1793,7 @@ impl Node {
             NodeTypeId::Element(_) => {
                 let element = ElementCast::to_ref(node).unwrap();
                 // Step 1.
-                if *element.namespace() != ns!("") && *element.prefix() == prefix {
+                if element.namespace() != ns!("") && element.prefix() == prefix {
                     return element.namespace().clone()
                 }
 
@@ -2127,20 +2144,22 @@ impl NodeMethods for Node {
 
         // Step 12.
         let mut nodes = RootedVec::new();
-        let nodes = if node.type_id() == NodeTypeId::DocumentFragment {
+        if node.type_id() == NodeTypeId::DocumentFragment {
             nodes.extend(node.children().map(|node| JS::from_rooted(&node)));
-            nodes.r()
         } else {
-            ref_slice(&node)
+            nodes.push(JS::from_ref(node));
         };
 
         // Step 13.
         Node::insert(node, self, reference_child, SuppressObserver::Suppressed);
 
+        let mut removal_list = RootedVec::new();
+        removal_list.push(JS::from_ref(child));
         // Step 14.
         vtable_for(&self).children_changed(
             &ChildrenMutation::replace(previous_sibling.r(),
-                                       &child, nodes,
+                                       removal_list.rooted_iter(),
+                                       Some(nodes.rooted_iter()),
                                        reference_child));
 
         // Step 15.
@@ -2167,7 +2186,7 @@ impl NodeMethods for Node {
                             Some(ref text_node) => {
                                 let prev_characterdata =
                                     CharacterDataCast::from_ref(text_node.r());
-                                prev_characterdata.append_data(&**characterdata.data());
+                                prev_characterdata.append_data(&characterdata.data());
                                 Node::remove(&*child, self, SuppressObserver::Unsuppressed);
                             },
                             None => prev_text = Some(Root::from_ref(text))
@@ -2203,9 +2222,9 @@ impl NodeMethods for Node {
         fn is_equal_element(node: &Node, other: &Node) -> bool {
             let element: &Element = ElementCast::to_ref(node).unwrap();
             let other_element: &Element = ElementCast::to_ref(other).unwrap();
-            (*element.namespace() == *other_element.namespace()) &&
-            (*element.prefix() == *other_element.prefix()) &&
-            (*element.local_name() == *other_element.local_name()) &&
+            (element.namespace() == other_element.namespace()) &&
+            (element.prefix() == other_element.prefix()) &&
+            (element.local_name() == other_element.local_name()) &&
             (element.attrs().len() == other_element.attrs().len())
         }
         fn is_equal_processinginstruction(node: &Node, other: &Node) -> bool {
@@ -2418,18 +2437,28 @@ impl VirtualMethods for Node {
             s.children_changed(mutation);
         }
         match *mutation {
-            ChildrenMutation::Append { added, .. } |
-            ChildrenMutation::Insert { added, .. } |
-            ChildrenMutation::Prepend { added, .. } => {
-                self.children_count.set(
-                    self.children_count.get() + added.len() as u32);
+            ChildrenMutation::Append { ref added, .. } |
+            ChildrenMutation::Insert { ref added, .. } |
+            ChildrenMutation::Prepend { ref added, .. } => {
+                if let &Some(ref added) = added {
+                    self.children_count.set(
+                        self.children_count.get() + added.len() as u32);
+                }
             },
-            ChildrenMutation::Replace { added, .. } => {
-                self.children_count.set(
-                    self.children_count.get() - 1u32 + added.len() as u32);
+            ChildrenMutation::Replace { ref added, .. } => {
+                if let &Some(ref added) = added {
+                    self.children_count.set(
+                        self.children_count.get() - 1u32 + added.len() as u32);
+                } else {
+                    self.children_count.set(self.children_count.get() - 1u32);
+                }
             },
-            ChildrenMutation::ReplaceAll { added, .. } => {
-                self.children_count.set(added.len() as u32);
+            ChildrenMutation::ReplaceAll { ref added, .. } => {
+                if let &Some(ref added) = added {
+                    self.children_count.set(added.len() as u32);
+                } else {
+                    self.children_count.set(0);
+                }
             },
         }
         if let Some(list) = self.child_list.get().map(|list| list.root()) {
@@ -2494,25 +2523,29 @@ pub enum NodeDamage {
     OtherNodeDamage,
 }
 
+pub type NodeIter<'a> = JSVecIter<'a, Node>;
+
 pub enum ChildrenMutation<'a> {
-    Append { prev: &'a Node, added: &'a [&'a Node] },
-    Insert { prev: &'a Node, added: &'a [&'a Node], next: &'a Node },
-    Prepend { added: &'a [&'a Node], next: &'a Node },
+    Append { prev: &'a Node, added: Option<NodeIter<'a>> },
+    Insert { prev: &'a Node, added: Option<NodeIter<'a>>, next: &'a Node },
+    Prepend { added: Option<NodeIter<'a>>, next: &'a Node },
     Replace {
         prev: Option<&'a Node>,
         removed: &'a Node,
-        added: &'a [&'a Node],
+        added: Option<NodeIter<'a>>,
         next: Option<&'a Node>,
     },
-    ReplaceAll { removed: &'a [&'a Node], added: &'a [&'a Node] },
+    ReplaceAll { removed: Option<NodeIter<'a>>, added: Option<NodeIter<'a>> },
 }
 
 impl<'a> ChildrenMutation<'a> {
-    fn insert(prev: Option<&'a Node>, added: &'a [&'a Node], next: Option<&'a Node>)
+    fn insert(prev: Option<&'a Node>,
+              added: Option<NodeIter<'a>>,
+              next: Option<&'a Node>)
               -> ChildrenMutation<'a> {
         match (prev, next) {
             (None, None) => {
-                ChildrenMutation::ReplaceAll { removed: &[], added: added }
+                ChildrenMutation::ReplaceAll { removed: None, added: added }
             },
             (Some(prev), None) => {
                 ChildrenMutation::Append { prev: prev, added: added }
@@ -2527,26 +2560,26 @@ impl<'a> ChildrenMutation<'a> {
     }
 
     fn replace(prev: Option<&'a Node>,
-               removed: &'a &'a Node,
-               added: &'a [&'a Node],
+               mut removed: NodeIter<'a>,
+               added: Option<NodeIter<'a>>,
                next: Option<&'a Node>)
                -> ChildrenMutation<'a> {
         if let (None, None) = (prev, next) {
             ChildrenMutation::ReplaceAll {
-                removed: ref_slice(removed),
+                removed: Some(removed),
                 added: added,
             }
         } else {
             ChildrenMutation::Replace {
                 prev: prev,
-                removed: *removed,
+                removed: removed.next().unwrap(),
                 added: added,
                 next: next,
             }
         }
     }
 
-    fn replace_all(removed: &'a [&'a Node], added: &'a [&'a Node])
+    fn replace_all(removed: Option<NodeIter<'a>>, added: Option<NodeIter<'a>>)
                    -> ChildrenMutation<'a> {
         ChildrenMutation::ReplaceAll { removed: removed, added: added }
     }

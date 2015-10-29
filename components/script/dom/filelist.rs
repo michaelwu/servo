@@ -19,11 +19,11 @@ magic_dom_struct! {
 }
 
 impl FileList {
-    fn new_inherited(&mut self, files: Vec<JS<File>>) {
+    fn new_inherited(&mut self, files: DOMVec<JS<File>>) {
         self.list.init(files);
     }
 
-    pub fn new(window: &Window, files: Vec<JS<File>>) -> Root<FileList> {
+    pub fn new(window: &Window, files: DOMVec<JS<File>>) -> Root<FileList> {
         let mut obj = alloc_dom_object::<FileList>(GlobalRef::Window(window));
         obj.new_inherited(files);
         obj.into_root()
@@ -38,7 +38,7 @@ impl FileListMethods for FileList {
 
     // https://w3c.github.io/FileAPI/#dfn-item
     fn Item(&self, index: u32) -> Option<Root<File>> {
-        Some(self.list.get()[index as usize].root())
+        self.list.get().get(index).map(|item| item.root())
     }
 
     // check-tidy: no specs after this line

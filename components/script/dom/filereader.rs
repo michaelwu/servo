@@ -57,7 +57,7 @@ impl ReadMetaData {
 }
 
 #[derive(PartialEq, Clone, Copy, JSTraceable, HeapSizeOf)]
-pub struct GenerationId(u32);
+pub struct GenerationId(pub u32);
 
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, NumFromPrimitive, JSTraceable, HeapSizeOf)]

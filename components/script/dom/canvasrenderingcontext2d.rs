@@ -50,7 +50,7 @@ use util::vec::byte_swap;
 #[derive(JSTraceable, Clone, HeapSizeOf)]
 pub enum CanvasFillOrStrokeStyle {
     Color(RGBA),
-    Gradient(JS<CanvasGradient>),
+    // Gradient(JS<CanvasGradient>),
     // Pattern(JS<CanvasPattern>),  // https://github.com/servo/servo/pull/6157
 }
 
@@ -410,11 +410,11 @@ pub trait LayoutCanvasRenderingContext2DHelpers {
 impl LayoutCanvasRenderingContext2DHelpers for LayoutJS<CanvasRenderingContext2D> {
     #[allow(unsafe_code)]
     unsafe fn get_renderer_id(&self) -> usize {
-        (*self.unsafe_get()).extra.renderer_id
+        (&*self.unsafe_get()).extra.renderer_id
     }
     #[allow(unsafe_code)]
     unsafe fn get_ipc_renderer(&self) -> IpcSender<CanvasMsg> {
-        (*self.unsafe_get()).extra.ipc_renderer.clone()
+        (&*self.unsafe_get()).extra.ipc_renderer.clone()
     }
 }
 
@@ -770,9 +770,11 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 serialize(rgba, &mut result).unwrap();
                 StringOrCanvasGradientOrCanvasPattern::eString(result)
             },
+/*
             CanvasFillOrStrokeStyle::Gradient(gradient) => {
                 StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient.root())
             },
+*/
         }
     }
 
@@ -791,6 +793,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                     _ => {}
                 }
             },
+/*
             StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient) => {
                 self.extra.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Gradient(
                                                            JS::from_ref(gradient.r()));
@@ -798,6 +801,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                     Canvas2dMsg::SetStrokeStyle(gradient.r().to_fill_or_stroke_style()));
                 self.extra.ipc_renderer.send(msg).unwrap();
             },
+*/
             _ => {}
         }
     }
@@ -810,9 +814,11 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 serialize(rgba, &mut result).unwrap();
                 StringOrCanvasGradientOrCanvasPattern::eString(result)
             },
+/*
             CanvasFillOrStrokeStyle::Gradient(gradient) => {
                 StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient.root())
             },
+*/
         }
     }
 
@@ -829,11 +835,13 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
                 }
             }
             StringOrCanvasGradientOrCanvasPattern::eCanvasGradient(gradient) => {
+/*
                 self.extra.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Gradient(
                                                         JS::from_rooted(&gradient));
                 let msg = CanvasMsg::Canvas2d(
                     Canvas2dMsg::SetFillStyle(gradient.r().to_fill_or_stroke_style()));
                 self.extra.ipc_renderer.send(msg).unwrap();
+*/
             }
             StringOrCanvasGradientOrCanvasPattern::eCanvasPattern(pattern) => {
                 self.extra.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::SetFillStyle(

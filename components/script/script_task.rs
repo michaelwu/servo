@@ -538,6 +538,7 @@ impl ScriptTaskFactory for ScriptTask {
                 script_task.start();
             }, reporter_name, channel_for_reporter, CommonScriptMsg::CollectReports);
 
+            script_task.mouse_over_targets.set(None);
             // This must always be the very last operation performed before the task completes
             failsafe.neuter();
         }, ConstellationMsg::Failure(failure_info), const_chan);

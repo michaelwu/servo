@@ -15,6 +15,7 @@ use dom::bindings::error::Error::NotSupported;
 use dom::bindings::error::{ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root};
+use dom::bindings::magic::MagicDOMClass;
 use dom::bindings::utils::{TopDOMClass};
 use dom::customevent::CustomEvent;
 use dom::document::Document;
@@ -58,8 +59,8 @@ enum SandboxAllowance {
 magic_dom_struct! {
     pub struct HTMLIFrameElement {
         htmlelement: Base<HTMLElement>,
-        subpage_id: Mut<Option<SubpageId>>,
-        containing_page_pipeline_id: Mut<Option<PipelineId>>,
+        subpage_id: Layout<Option<SubpageId>>,
+        containing_page_pipeline_id: Layout<Option<PipelineId>>,
         sandbox: Mut<Option<u8>>,
     }
 }
@@ -212,6 +213,16 @@ impl HTMLIFrameElement {
     #[inline]
     pub fn subpage_id(&self) -> Option<SubpageId> {
         self.subpage_id.get()
+    }
+
+    #[inline]
+    pub fn layout_containing_page_pipeline_id(&self) -> Option<PipelineId> {
+        self.containing_page_pipeline_id.layout_get()
+    }
+
+    #[inline]
+    pub fn layout_subpage_id(&self) -> Option<SubpageId> {
+        self.subpage_id.layout_get()
     }
 }
 

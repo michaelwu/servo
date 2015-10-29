@@ -61,13 +61,13 @@ impl DOMRectMethods for DOMRect {
 
     // https://drafts.fxtf.org/geometry/#dom-domrectreadonly-width
     fn Width(&self) -> Finite<f32> {
-        let result = (self.right - self.left.get()).abs();
+        let result = (self.right.get() - self.left.get()).abs();
         Finite::wrap(result)
     }
 
     // https://drafts.fxtf.org/geometry/#dom-domrectreadonly-height
     fn Height(&self) -> Finite<f32> {
-        let result = (self.bottom - self.top.get()).abs();
+        let result = (self.bottom.get() - self.top.get()).abs();
         Finite::wrap(result)
     }
 }

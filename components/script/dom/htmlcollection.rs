@@ -6,7 +6,7 @@ use dom::bindings::codegen::Bindings::HTMLCollectionBinding;
 use dom::bindings::codegen::Bindings::HTMLCollectionBinding::HTMLCollectionMethods;
 use dom::bindings::codegen::InheritTypes::{ElementCast, NodeCast};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, Root};
+use dom::bindings::js::{HeapJS, JS, Root};
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::magic::alloc_dom_object;
 use dom::bindings::utils::namespace_from_domstring;
@@ -14,6 +14,7 @@ use dom::element::Element;
 use dom::node::{Node, TreeIterator};
 use dom::window::Window;
 use std::ascii::AsciiExt;
+use std::default::Default;
 use string_cache::{Atom, Namespace};
 use util::str::{DOMString, split_html_space_chars};
 
@@ -22,8 +23,8 @@ pub trait CollectionFilter : JSTraceable {
 }
 
 #[derive(JSTraceable)]
-#[must_root]
-pub struct Collection(JS<Node>, Box<CollectionFilter + 'static>);
+#[allow(unrooted_must_root)]
+pub struct Collection(HeapJS<JS<Node>>, Box<CollectionFilter + 'static>);
 
 magic_dom_struct! {
     pub struct HTMLCollection {
@@ -33,11 +34,11 @@ magic_dom_struct! {
 }
 
 impl HTMLCollection {
-    fn new_inherited(&mut self, collection: Collection) {
-        self.collection.init(box collection);
+    fn new_inherited(&mut self, collection: Box<Collection>) {
+        self.collection.init(collection);
     }
 
-    pub fn new(window: &Window, collection: Collection) -> Root<HTMLCollection> {
+    pub fn new(window: &Window, collection: Box<Collection>) -> Root<HTMLCollection> {
         let mut obj = alloc_dom_object::<HTMLCollection>(GlobalRef::Window(window));
         obj.new_inherited(collection);
         obj.into_root()
@@ -45,7 +46,9 @@ impl HTMLCollection {
 
     pub fn create(window: &Window, root: &Node,
                   filter: Box<CollectionFilter + 'static>) -> Root<HTMLCollection> {
-        HTMLCollection::new(window, Collection(JS::from_ref(root), filter))
+        let mut collection = box Collection(Default::default(), filter);
+        collection.0.set(Some(JS::from_ref(root)));
+        HTMLCollection::new(window, collection)
     }
 
     fn all_elements(window: &Window, root: &Node,
@@ -58,7 +61,7 @@ impl HTMLCollection {
             fn filter(&self, elem: &Element, _root: &Node) -> bool {
                 match self.namespace_filter {
                     None => true,
-                    Some(ref namespace) => *elem.namespace() == *namespace
+                    Some(ref namespace) => elem.namespace() == *namespace
                 }
             }
         }
@@ -80,9 +83,9 @@ impl HTMLCollection {
         impl CollectionFilter for TagNameFilter {
             fn filter(&self, elem: &Element, _root: &Node) -> bool {
                 if elem.html_element_in_html_document() {
-                    *elem.local_name() == self.ascii_lower_tag
+                    elem.local_name() == self.ascii_lower_tag
                 } else {
-                    *elem.local_name() == self.tag
+                    elem.local_name() == self.tag
                 }
             }
         }
@@ -115,11 +118,11 @@ impl HTMLCollection {
             fn filter(&self, elem: &Element, _root: &Node) -> bool {
                 let ns_match = match self.namespace_filter {
                     Some(ref namespace) => {
-                        *elem.namespace() == *namespace
+                        elem.namespace() == *namespace
                     },
                     None => true
                 };
-                ns_match && *elem.local_name() == self.tag
+                ns_match && elem.local_name() == self.tag
             }
         }
         let filter = TagNameNSFilter {
@@ -161,7 +164,7 @@ impl HTMLCollection {
 
     fn elements_iter(&self) -> HTMLCollectionElementsIter {
         let ref filter = self.collection.1;
-        let root = self.collection.0.root();
+        let root = self.collection.0.get().unwrap().root();
         let mut node_iter = root.traverse_preorder();
         let _ = node_iter.next();  // skip the root node
         HTMLCollectionElementsIter {
@@ -244,7 +247,7 @@ impl HTMLCollectionMethods for HTMLCollection {
             }
             // Step 2.2
             let name_attr = elem.get_string_attribute(&atom!("name"));
-            if !name_attr.is_empty() && !result.contains(&name_attr) && *elem.namespace() == ns!(HTML) {
+            if !name_attr.is_empty() && !result.contains(&name_attr) && elem.namespace() == ns!(HTML) {
                 result.push(name_attr)
             }
         }

@@ -21,6 +21,7 @@ use dom::bindings::js::RootedReference;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::num::Finite;
 use dom::bindings::magic::{MagicDOMClass, alloc_dom_global, GlobalObjectSlots};
+use dom::bindings::trace::JSTraceable;
 use dom::bindings::utils::{GlobalStaticData};
 use dom::bindings::utils::{TopDOMClass, WindowProxyHandler};
 use dom::browsercontext::BrowsingContext;
@@ -41,6 +42,7 @@ use ipc_channel::ipc::{self, IpcSender};
 use js::jsapi::{Evaluate2, MutableHandleValue};
 use js::jsapi::{HandleValue, JSContext};
 use js::jsapi::{JSAutoCompartment, JSAutoRequest, JS_GC, JS_GetRuntime};
+use js::jsapi::JSTracer;
 use js::rust::CompileOptionsWrapper;
 use js::rust::Runtime;
 use layout_interface::{ContentBoxResponse, ContentBoxesResponse, ResolvedStyleResponse, ScriptReflow};
@@ -116,6 +118,7 @@ magic_dom_struct! {
         crypto: Mut<Option<JS<Crypto>>>,
         navigator: Mut<Option<JS<Navigator>>>,
         global_slots: GlobalObjectSlots,
+        browsing_context: Mut<Option<JS<BrowsingContext>>>,
         page: Rc<Page>,
         performance: Mut<Option<JS<Performance>>>,
         screen: Mut<Option<JS<Screen>>>,
@@ -161,7 +164,6 @@ pub struct WindowExtra {
     image_cache_chan: ImageCacheChan,
     #[ignore_heap_size_of = "TODO(#6911) newtypes containing unmeasurable types are hard"]
     compositor: IpcSender<ScriptToCompositorMsg>,
-    browsing_context: DOMRefCell<Option<BrowsingContext>>,
     navigation_start: u64,
     navigation_start_precise: f64,
     timers: TimerManager,
@@ -238,7 +240,7 @@ impl Window {
     pub fn clear_js_runtime_for_script_deallocation(&self) {
         unsafe {
             self.js_runtime.set(None);
-            *self.extra.browsing_context.borrow_for_script_deallocation() = None;
+            self.browsing_context.set(None);
             self.extra.current_state.set(WindowState::Zombie);
         }
     }
@@ -292,16 +294,22 @@ impl Window {
         &self.extra.compositor
     }
 
-    pub fn browsing_context(&self) -> Ref<Option<BrowsingContext>> {
-        self.extra.browsing_context.borrow()
+    pub fn browsing_context(&self) -> Option<Root<BrowsingContext>> {
+        self.browsing_context.get().map(Root::from_rooted)
     }
 
     pub fn page(&self) -> &Page {
-        &*self.page.get()
+        &*self.page
     }
 
     pub fn storage_task(&self) -> StorageTask {
         self.extra.storage_task.clone()
+    }
+}
+
+impl JSTraceable for Window {
+    fn trace(&self, tr: *mut JSTracer) {
+        self.extra.trace(tr);
     }
 }
 
@@ -395,7 +403,7 @@ impl WindowMethods for Window {
 
     // https://html.spec.whatwg.org/multipage/#dom-document-0
     fn Document(&self) -> Root<Document> {
-        self.browsing_context().as_ref().unwrap().active_document()
+        self.browsing_context().unwrap().active_document()
     }
 
     // https://html.spec.whatwg.org/#dom-location
@@ -425,7 +433,7 @@ impl WindowMethods for Window {
 
     // https://html.spec.whatwg.org/#dom-frameelement
     fn GetFrameElement(&self) -> Option<Root<Element>> {
-        self.browsing_context().as_ref().unwrap().frame_element()
+        self.browsing_context().unwrap().frame_element()
     }
 
     // https://html.spec.whatwg.org/#dom-navigator
@@ -819,8 +827,8 @@ impl Window {
         self.Gc();
 
         self.extra.current_state.set(WindowState::Zombie);
+        self.browsing_context.set(None);
         self.js_runtime.set(None);
-        *self.extra.browsing_context.borrow_mut() = None;
     }
 
     /// https://drafts.csswg.org/cssom-view/#dom-window-scroll
@@ -1079,9 +1087,9 @@ impl Window {
     }
 
     pub fn init_browsing_context(&self, doc: &Document, frame_element: Option<&Element>) {
-        let mut browsing_context = self.extra.browsing_context.borrow_mut();
-        *browsing_context = Some(BrowsingContext::new(doc, frame_element));
-        (*browsing_context).as_mut().unwrap().create_window_proxy();
+        let browsing_context = BrowsingContext::new(doc, frame_element);
+        browsing_context.create_window_proxy();
+        self.browsing_context.set(Some(JS::from_rooted(&browsing_context)));
     }
 
     /// Commence a new URL load which will either replace this window or scroll to a fragment.
@@ -1291,6 +1299,8 @@ impl Window {
         self.console.init(Default::default());
         self.crypto.init(Default::default());
         self.navigator.init(Default::default());
+        self.global_slots.init(GlobalObjectSlots);
+        self.browsing_context.init(None);
         self.page.init(page);
         self.performance.init(Default::default());
         self.screen.init(Default::default());
@@ -1310,7 +1320,6 @@ impl Window {
             image_cache_task: image_cache_task,
             image_cache_chan: image_cache_chan,
             compositor: compositor,
-            browsing_context: DOMRefCell::new(None),
             navigation_start: time::get_time().sec as u64,
             navigation_start_precise: time::precise_time_ns() as f64,
             timers: TimerManager::new(),
@@ -1360,7 +1369,7 @@ impl Window {
             rpc_recv.recv().unwrap()
         };
 
-        let win = alloc_dom_global::<Window>(runtime.cx());
+        let mut win = alloc_dom_global::<Window>(runtime.cx());
         win.new_inherited(runtime.clone(),
                           page,
                           script_chan,

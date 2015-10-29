@@ -24,9 +24,9 @@ const DEFAULT_COLSPAN: u32 = 1;
 magic_dom_struct! {
     pub struct HTMLTableCellElement {
         htmlelement: Base<HTMLElement>,
-        background_color: Mut<Option<RGBA>>,
-        colspan: Mut<Option<u32>>,
-        width: Mut<LengthOrPercentageOrAuto>,
+        background_color: Layout<Option<RGBA>>,
+        colspan: Layout<Option<u32>>,
+        width: Layout<LengthOrPercentageOrAuto>,
     }
 }
 
@@ -69,15 +69,15 @@ impl HTMLTableCellElementMethods for HTMLTableCellElement {
 
 impl HTMLTableCellElement {
     pub fn get_background_color(&self) -> Option<RGBA> {
-        self.background_color.get()
+        self.background_color.layout_get()
     }
 
     pub fn get_colspan(&self) -> Option<u32> {
-        self.colspan.get()
+        self.colspan.layout_get()
     }
 
     pub fn get_width(&self) -> LengthOrPercentageOrAuto {
-        self.width.get()
+        self.width.layout_get()
     }
 }
 
