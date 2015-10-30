@@ -109,7 +109,7 @@ pub struct Node {
     ///
     /// Must be sent back to the layout task to be destroyed when this
     /// node is finalized.
-    layout_data: RefCell<Option<LayoutData>>,
+    layout_data: RefCell<Option<Box<RefCell<LayoutData>>>>,
 
     unique_id: DOMRefCell<String>,
 }
