@@ -1636,10 +1636,10 @@ impl<'a> ::selectors::Element for Root<Element> {
         false
     }
 
-    fn get_local_name(&self) -> &Atom {
+    fn get_local_name(&self) -> Atom {
         self.local_name()
     }
-    fn get_namespace(&self) -> &Namespace {
+    fn get_namespace(&self) -> Namespace {
         self.namespace()
     }
 
