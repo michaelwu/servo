@@ -505,7 +505,8 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
         if !self.sync.get() {
             // Step 8
-            let event_target = self.upload.upcast::<EventTarget>();
+            let upload_target = self.upload.root();
+            let event_target = upload_target.r().upcast::<EventTarget>();
             if event_target.has_handlers() {
                 self.upload_events.set(true);
             }
@@ -927,12 +928,13 @@ impl XMLHttpRequest {
 
     fn dispatch_progress_event(&self, upload: bool, type_: DOMString, loaded: u64, total: Option<u64>) {
         let global = self.global.root();
+        let upload_target = self.upload.root();
         let progressevent = ProgressEvent::new(global.r(),
                                                type_, EventBubbles::DoesNotBubble, EventCancelable::NotCancelable,
                                                total.is_some(), loaded,
                                                total.unwrap_or(0));
         let target = if upload {
-            self.upload.upcast()
+            upload_target.r().upcast()
         } else {
             self.upcast()
         };
