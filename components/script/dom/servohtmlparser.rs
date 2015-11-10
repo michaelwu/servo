@@ -151,7 +151,8 @@ impl AsyncResponseListener for ParserContext {
             Some(parser) => parser.root(),
             None => return,
         };
-        parser.document.finish_load(LoadType::PageSource(self.url.clone()));
+        let doc = parser.r().document.root();
+        doc.r().finish_load(LoadType::PageSource(self.url.clone()));
 
         if let Err(err) = status {
             debug!("Failed to load page URL {}, error: {}", self.url.serialize(), err);
@@ -192,7 +193,7 @@ pub struct ServoHTMLParserExtra {
 
 impl<'a> Parser for &'a ServoHTMLParser {
     fn parse_chunk(self, input: String) {
-        self.document.set_current_parser(Some(self));
+        self.document.root().r().set_current_parser(Some(self));
         self.extra.pending_input.borrow_mut().push(input);
         self.parse_sync();
     }
@@ -204,7 +205,8 @@ impl<'a> Parser for &'a ServoHTMLParser {
         self.tokenizer().borrow_mut().end();
         debug!("finished parsing");
 
-        self.document.set_current_parser(None);
+        let document = self.document.root();
+        document.r().set_current_parser(None);
 
         if let Some(pipeline) = self.pipeline {
             ScriptTask::parsing_complete(pipeline);
@@ -247,7 +249,7 @@ impl ServoHTMLParser {
         let tok = tokenizer::Tokenizer::new(tb, Default::default());
 
         reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, false, pipeline),
-                           GlobalRef::Window(document.window()),
+                           GlobalRef::Window(window.r()),
                            ServoHTMLParserBinding::Wrap)
     }
 
@@ -275,7 +277,7 @@ impl ServoHTMLParser {
         let tok = tokenizer::Tokenizer::new(tb, tok_opts);
 
         reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, true, None),
-                           GlobalRef::Window(document.window()),
+                           GlobalRef::Window(window.r()),
                            ServoHTMLParserBinding::Wrap)
     }
 
@@ -301,7 +303,8 @@ impl ServoHTMLParser {
                 break;
             }
 
-            self.document.reflow_if_reflow_timer_expired();
+            let document = self.document.root();
+            document.r().reflow_if_reflow_timer_expired();
 
             let mut pending_input = self.extra.pending_input.borrow_mut();
             if !pending_input.is_empty() {
@@ -320,7 +323,8 @@ impl ServoHTMLParser {
     }
 
     fn window(&self) -> Root<Window> {
-        window_from_node(&*self.document)
+        let doc = self.document.root();
+        window_from_node(doc.r())
     }
 }
 
