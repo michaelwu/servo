@@ -95,6 +95,7 @@ impl HTMLImageElement {
     fn update_image(&self, value: Option<(DOMString, Url)>) {
         let document = document_from_node(self);
         let window = document.r().window();
+        let window = window.r();
         let image_cache = window.image_cache_task();
         match value {
             None => {

@@ -45,8 +45,9 @@ impl TreeWalker {
                            root_node: &Node,
                            what_to_show: u32,
                            filter: Filter) -> Root<TreeWalker> {
+        let window = document.window();
         reflect_dom_object(box TreeWalker::new_inherited(root_node, what_to_show, filter),
-                           GlobalRef::Window(document.window()),
+                           GlobalRef::Window(window.r()),
                            TreeWalkerBinding::Wrap)
     }
 

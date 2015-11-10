@@ -51,9 +51,10 @@ impl Range {
                start_container: &Node, start_offset: u32,
                end_container: &Node, end_offset: u32)
                -> Root<Range> {
+        let window = document.window();
         reflect_dom_object(box Range::new_inherited(start_container, start_offset,
                                                     end_container, end_offset),
-                           GlobalRef::Window(document.window()),
+                           GlobalRef::Window(window.r()),
                            RangeBinding::Wrap)
     }
 

@@ -237,6 +237,7 @@ impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
     pub fn new(base_url: Option<Url>, document: &Document, pipeline: Option<PipelineId>)
                -> Root<ServoHTMLParser> {
+        let window = document.window();
         let sink = Sink {
             base_url: base_url,
             document: JS::from_ref(document),
@@ -257,6 +258,7 @@ impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
     pub fn new_for_fragment(base_url: Option<Url>, document: &Document,
                             fragment_context: FragmentContext) -> Root<ServoHTMLParser> {
+        let window = document.window();
         let sink = Sink {
             base_url: base_url,
             document: JS::from_ref(document),

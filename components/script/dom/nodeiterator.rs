@@ -47,8 +47,9 @@ impl NodeIterator {
                            root_node: &Node,
                            what_to_show: u32,
                            filter: Filter) -> Root<NodeIterator> {
+        let window = document.window();
         reflect_dom_object(box NodeIterator::new_inherited(root_node, what_to_show, filter),
-                           GlobalRef::Window(document.window()),
+                           GlobalRef::Window(window.r()),
                            NodeIteratorBinding::Wrap)
     }
 
