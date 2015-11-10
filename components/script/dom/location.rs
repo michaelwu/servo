@@ -34,31 +34,33 @@ impl Location {
     }
 
     fn get_url(&self) -> Url {
-        self.window.get_url()
+        self.window.root().get_url()
     }
 
     fn set_url_component(&self, value: USVString,
                          setter: fn(&mut Url, USVString)) {
-        let mut url = self.window.get_url();
+        let window = self.window.root();
+        let mut url = window.get_url();
         setter(&mut url, value);
-        self.window.load_url(url);
+        window.load_url(url);
     }
 }
 
 impl LocationMethods for Location {
     // https://html.spec.whatwg.org/multipage/#dom-location-assign
     fn Assign(&self, url: USVString) {
+        let window = self.window.root();
         // TODO: per spec, we should use the _API base URL_ specified by the
         //       _entry settings object_.
-        let base_url = self.window.get_url();
+        let base_url = window.get_url();
         if let Ok(url) = UrlParser::new().base_url(&base_url).parse(&url.0) {
-            self.window.load_url(url);
+            window.load_url(url);
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-location-reload
     fn Reload(&self) {
-        self.window.load_url(self.get_url());
+        self.window.root().load_url(self.get_url());
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-location-hash
@@ -98,8 +100,9 @@ impl LocationMethods for Location {
 
     // https://html.spec.whatwg.org/multipage/#dom-location-href
     fn SetHref(&self, value: USVString) {
-        if let Ok(url) = UrlParser::new().base_url(&self.window.get_url()).parse(&value.0) {
-            self.window.load_url(url);
+        let window = self.window.root();
+        if let Ok(url) = UrlParser::new().base_url(&window.get_url()).parse(&value.0) {
+            window.load_url(url);
         }
     }
 
