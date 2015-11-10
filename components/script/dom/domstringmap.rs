@@ -37,17 +37,20 @@ impl DOMStringMap {
 impl DOMStringMapMethods for DOMStringMap {
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-removeitem
     fn NamedDeleter(&self, name: DOMString) {
-        self.element.delete_custom_attr(name)
+        let element = self.element.root();
+        element.r().delete_custom_attr(name)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-setitem
     fn NamedSetter(&self, name: DOMString, value: DOMString) -> ErrorResult {
-        self.element.set_custom_attr(name, value)
+        let element = self.element.root();
+        element.r().set_custom_attr(name, value)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-domstringmap-nameditem
     fn NamedGetter(&self, name: DOMString, found: &mut bool) -> DOMString {
-        match self.element.get_custom_attr(name) {
+        let element = self.element.root();
+        match element.r().get_custom_attr(name) {
             Some(value) => {
                 *found = true;
                 value.clone()
