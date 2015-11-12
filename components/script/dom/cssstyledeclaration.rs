@@ -7,7 +7,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::element::{Element, StylePriority};
 use dom::node::{Node, NodeDamage, document_from_node, window_from_node};
 use dom::window::Window;
@@ -21,12 +21,12 @@ use style::properties::{is_supported_property, longhands_from_shorthand, parse_o
 use util::str::{DOMString, str_join};
 
 // http://dev.w3.org/csswg/cssom/#the-cssstyledeclaration-interface
-#[dom_struct]
-pub struct CSSStyleDeclaration {
-    reflector_: Reflector,
-    owner: JS<Element>,
-    pseudo: Option<PseudoElement>,
-    readonly: bool,
+magic_dom_struct! {
+    pub struct CSSStyleDeclaration {
+        owner: JS<Element>,
+        pseudo: Option<PseudoElement>,
+        readonly: bool,
+    }
 }
 
 #[derive(PartialEq, HeapSizeOf)]
@@ -54,23 +54,20 @@ fn serialize_list(list: &[Ref<PropertyDeclaration>]) -> DOMString {
 }
 
 impl CSSStyleDeclaration {
-    pub fn new_inherited(owner: &Element,
+    pub fn new_inherited(&mut self, owner: &Element,
                          pseudo: Option<PseudoElement>,
-                         modification_access: CSSModificationAccess) -> CSSStyleDeclaration {
-        CSSStyleDeclaration {
-            reflector_: Reflector::new(),
-            owner: JS::from_ref(owner),
-            pseudo: pseudo,
-            readonly: modification_access == CSSModificationAccess::Readonly,
-        }
+                         modification_access: CSSModificationAccess) {
+        self.owner.init(JS::from_ref(owner));
+        self.pseudo.init(pseudo);
+        self.readonly.init(modification_access == CSSModificationAccess::Readonly);
     }
 
     pub fn new(global: &Window, owner: &Element,
                pseudo: Option<PseudoElement>,
                modification_access: CSSModificationAccess) -> Root<CSSStyleDeclaration> {
-        reflect_dom_object(box CSSStyleDeclaration::new_inherited(owner, pseudo, modification_access),
-                           GlobalRef::Window(global),
-                           CSSStyleDeclarationBinding::Wrap)
+        let mut obj = alloc_dom_object::<CSSStyleDeclaration>(GlobalRef::Window(global));
+        obj.new_inherited(owner, pseudo, modification_access);
+        obj.into_root()
     }
 
     fn get_computed_style(&self, property: &Atom) -> Option<DOMString> {

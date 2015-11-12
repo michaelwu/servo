@@ -9,38 +9,36 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct ProgressEvent {
-    event: Event,
-    length_computable: bool,
-    loaded: u64,
-    total: u64
+magic_dom_struct! {
+    pub struct ProgressEvent {
+        event: Base<Event>,
+        length_computable: bool,
+        loaded: u64,
+        total: u64
+    }
 }
 
 impl ProgressEvent {
-    fn new_inherited(length_computable: bool, loaded: u64, total: u64) -> ProgressEvent {
-        ProgressEvent {
-            event: Event::new_inherited(),
-            length_computable: length_computable,
-            loaded: loaded,
-            total: total
-        }
+    fn new_inherited(&mut self, length_computable: bool, loaded: u64, total: u64) {
+        self.event.new_inherited();
+        self.length_computable.init(length_computable);
+        self.loaded.init(loaded);
+        self.total.init(total);
     }
     pub fn new(global: GlobalRef, type_: DOMString,
                can_bubble: EventBubbles, cancelable: EventCancelable,
                length_computable: bool, loaded: u64, total: u64) -> Root<ProgressEvent> {
-        let ev = reflect_dom_object(box ProgressEvent::new_inherited(length_computable, loaded, total),
-                                    global,
-                                    ProgressEventBinding::Wrap);
+        let mut ev = alloc_dom_object::<ProgressEvent>(global);
+        ev.new_inherited(length_computable, loaded, total);
         {
             let event = ev.upcast::<Event>();
             event.InitEvent(type_, can_bubble == EventBubbles::Bubbles, cancelable == EventCancelable::Cancelable);
         }
-        ev
+        ev.into_root()
     }
     pub fn Constructor(global: GlobalRef,
                        type_: DOMString,

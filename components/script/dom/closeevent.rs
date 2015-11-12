@@ -9,28 +9,27 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use script_task::ScriptChan;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct CloseEvent {
-    event: Event,
-    wasClean: bool,
-    code: u16,
-    reason: DOMString,
+magic_dom_struct! {
+    pub struct CloseEvent {
+        event: Base<Event>,
+        wasClean: bool,
+        code: u16,
+        reason: DOMString,
+    }
 }
 
 impl CloseEvent {
-    pub fn new_inherited(wasClean: bool, code: u16,
-                         reason: DOMString) -> CloseEvent {
-        CloseEvent {
-            event: Event::new_inherited(),
-            wasClean: wasClean,
-            code: code,
-            reason: reason,
-        }
+    pub fn new_inherited(&mut self, wasClean: bool, code: u16,
+                         reason: DOMString) {
+        self.event.new_inherited();
+        self.wasClean.init(wasClean);
+        self.code.init(code);
+        self.reason.init(reason);
     }
 
     pub fn new(global: GlobalRef,
@@ -40,14 +39,15 @@ impl CloseEvent {
                wasClean: bool,
                code: u16,
                reason: DOMString) -> Root<CloseEvent> {
-        let ev = reflect_dom_object(box CloseEvent::new_inherited(wasClean, code, reason), global, CloseEventBinding::Wrap);
+        let mut ev = alloc_dom_object::<CloseEvent>(global);
+        ev.new_inherited(wasClean, code, reason);
         {
             let event = ev.upcast::<Event>();
             event.InitEvent(type_,
                             bubbles == EventBubbles::Bubbles,
                             cancelable == EventCancelable::Cancelable);
         }
-        ev
+        ev.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

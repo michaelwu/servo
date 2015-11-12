@@ -14,27 +14,26 @@ use dom::htmloptionelement::HTMLOptionElement;
 use dom::node::{Node, window_from_node};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLDataListElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLDataListElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLDataListElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLDataListElement {
-        HTMLDataListElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLDataListElement> {
-        let element = HTMLDataListElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLDataListElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLDataListElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -16,26 +16,26 @@ use std::ascii::AsciiExt;
 use style::viewport::ViewportRule;
 use util::str::{DOMString, HTML_SPACE_CHARACTERS};
 
-#[dom_struct]
-pub struct HTMLMetaElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLMetaElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLMetaElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLMetaElement {
-        HTMLMetaElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLMetaElement> {
-        let element = HTMLMetaElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLMetaElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLMetaElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     fn process_attributes(&self) {

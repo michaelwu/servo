@@ -21,25 +21,24 @@ use util::str::{self, DOMString, LengthOrPercentageOrAuto};
 
 const DEFAULT_COLSPAN: u32 = 1;
 
-#[dom_struct]
-pub struct HTMLTableCellElement {
-    htmlelement: HTMLElement,
-    background_color: Cell<Option<RGBA>>,
-    colspan: Cell<Option<u32>>,
-    width: Cell<LengthOrPercentageOrAuto>,
+magic_dom_struct! {
+    pub struct HTMLTableCellElement {
+        htmlelement: Base<HTMLElement>,
+        background_color: Mut<Option<RGBA>>,
+        colspan: Mut<Option<u32>>,
+        width: Mut<LengthOrPercentageOrAuto>,
+    }
 }
 
 impl HTMLTableCellElement {
-    pub fn new_inherited(tag_name: DOMString,
+    pub fn new_inherited(&mut self, tag_name: DOMString,
                          prefix: Option<DOMString>,
                          document: &Document)
-                         -> HTMLTableCellElement {
-        HTMLTableCellElement {
-            htmlelement: HTMLElement::new_inherited(tag_name, prefix, document),
-            background_color: Cell::new(None),
-            colspan: Cell::new(None),
-            width: Cell::new(LengthOrPercentageOrAuto::Auto),
-        }
+                         {
+        self.htmlelement.new_inherited(tag_name, prefix, document);
+        self.background_color.init(None);
+        self.colspan.init(None);
+        self.width.init(LengthOrPercentageOrAuto::Auto);
     }
 
     #[inline]

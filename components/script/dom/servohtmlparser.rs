@@ -12,7 +12,7 @@ use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::Document;
 use dom::node::{Node, window_from_node};
 use dom::text::Text;
@@ -168,19 +168,19 @@ impl AsyncResponseListener for ParserContext {
 impl PreInvoke for ParserContext {
 }
 
-#[dom_struct]
-pub struct ServoHTMLParser {
-    reflector_: Reflector,
-    /// The document associated with this parser.
-    document: JS<Document>,
-    /// True if this parser should avoid passing any further data to the tokenizer.
-    suspended: Cell<bool>,
-    /// Whether to expect any further input from the associated network request.
-    last_chunk_received: Cell<bool>,
-    /// The pipeline associated with this parse, unavailable if this parse does not
-    /// correspond to a page load.
-    pipeline: Option<PipelineId>,
-    extra: Box<ServoHTMLParserExtra>,
+magic_dom_struct! {
+    pub struct ServoHTMLParser {
+        /// The document associated with this parser.
+        document: JS<Document>,
+        /// True if this parser should avoid passing any further data to the tokenizer.
+        suspended: Mut<bool>,
+        /// Whether to expect any further input from the associated network request.
+        last_chunk_received: Mut<bool>,
+        /// The pipeline associated with this parse, unavailable if this parse does not
+        /// correspond to a page load.
+        pipeline: Option<PipelineId>,
+        extra: Box<ServoHTMLParserExtra>,
+    }
 }
 
 #[must_root]
@@ -217,21 +217,18 @@ impl<'a> Parser for &'a ServoHTMLParser {
 
 impl ServoHTMLParser {
     #[allow(unrooted_must_root)]
-    pub fn new_inherited(tok: Tokenizer,
+    pub fn new_inherited(&mut self, tok: Tokenizer,
                          document: &Document,
                          last_chunk_received: bool,
-                         pipeline: Option<PipelineId>) -> ServoHTMLParser {
-        ServoHTMLParser {
-            reflector_: Reflector::new(),
-            document: JS::from_ref(document),
-            suspended: Cell::new(false),
-            last_chunk_received: Cell::new(last_chunk_received),
-            pipeline: pipeline,
-            extra: box ServoHTMLParserExtra {
-                tokenizer: DOMRefCell::new(tok),
-                pending_input: DOMRefCell::new(vec!()),
-            },
-        }
+                         pipeline: Option<PipelineId>) {
+        self.document.init(JS::from_ref(document));
+        self.suspended.init(false);
+        self.last_chunk_received.init(last_chunk_received);
+        self.pipeline.init(pipeline);
+        self.extra.init(box ServoHTMLParserExtra {
+            tokenizer: DOMRefCell::new(tok),
+            pending_input: DOMRefCell::new(vec!()),
+        });
     }
 
     #[allow(unrooted_must_root)]
@@ -250,9 +247,9 @@ impl ServoHTMLParser {
 
         let tok = tokenizer::Tokenizer::new(tb, Default::default());
 
-        reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, false, pipeline),
-                           GlobalRef::Window(window.r()),
-                           ServoHTMLParserBinding::Wrap)
+        let mut obj = alloc_dom_object::<ServoHTMLParser>(GlobalRef::Window(window.r()));
+        obj.new_inherited(tok, document, false, pipeline);
+        obj.into_root()
     }
 
     #[allow(unrooted_must_root)]
@@ -279,9 +276,9 @@ impl ServoHTMLParser {
         };
         let tok = tokenizer::Tokenizer::new(tb, tok_opts);
 
-        reflect_dom_object(box ServoHTMLParser::new_inherited(tok, document, true, None),
-                           GlobalRef::Window(window.r()),
-                           ServoHTMLParserBinding::Wrap)
+        let mut obj = alloc_dom_object::<ServoHTMLParser>(GlobalRef::Window(window.r()));
+        obj.new_inherited(tok, document, true, None);
+        obj.into_root()
     }
 
     #[inline]

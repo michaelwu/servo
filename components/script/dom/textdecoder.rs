@@ -9,7 +9,7 @@ use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::str::USVString;
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use encoding::Encoding;
 use encoding::label::encoding_from_whatwg_label;
 use encoding::types::{DecoderTrap, EncodingRef};
@@ -19,21 +19,18 @@ use std::borrow::ToOwned;
 use std::{ptr, slice};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct TextDecoder {
-    reflector_: Reflector,
-    #[ignore_heap_size_of = "Defined in rust-encoding"]
-    encoding: EncodingRef,
-    fatal: bool,
+magic_dom_struct! {
+    pub struct TextDecoder {
+        #[ignore_heap_size_of = "Defined in rust-encoding"]
+        encoding: EncodingRef,
+        fatal: bool,
+    }
 }
 
 impl TextDecoder {
-    fn new_inherited(encoding: EncodingRef, fatal: bool) -> TextDecoder {
-        TextDecoder {
-            reflector_: Reflector::new(),
-            encoding: encoding,
-            fatal: fatal,
-        }
+    fn new_inherited(&mut self, encoding: EncodingRef, fatal: bool) {
+        self.encoding.init(encoding);
+        self.fatal.init(fatal);
     }
 
     fn make_range_error() -> Fallible<Root<TextDecoder>> {
@@ -41,9 +38,9 @@ impl TextDecoder {
     }
 
     pub fn new(global: GlobalRef, encoding: EncodingRef, fatal: bool) -> Root<TextDecoder> {
-        reflect_dom_object(box TextDecoder::new_inherited(encoding, fatal),
-                           global,
-                           TextDecoderBinding::Wrap)
+        let mut obj = alloc_dom_object::<TextDecoder>(global);
+        obj.new_inherited(encoding, fatal);
+        obj.into_root()
     }
 
     /// https://encoding.spec.whatwg.org/#dom-textdecoder

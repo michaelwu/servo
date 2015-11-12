@@ -9,9 +9,9 @@ use dom::bindings::codegen::Bindings::EventBinding::EventMethods;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{MutHeapJSVal, Root};
+use dom::bindings::js::{Root};
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use js::jsapi::{RootedValue, HandleValue, JSContext};
 use js::jsval::{JSVal, UndefinedValue};
@@ -19,33 +19,32 @@ use std::borrow::ToOwned;
 use std::cell::Cell;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct ErrorEvent {
-    event: Event,
-    message: DOMRefCell<DOMString>,
-    filename: DOMRefCell<DOMString>,
-    lineno: Cell<u32>,
-    colno: Cell<u32>,
-    #[ignore_heap_size_of = "Defined in rust-mozjs"]
-    error: MutHeapJSVal,
+magic_dom_struct! {
+    pub struct ErrorEvent {
+        event: Base<Event>,
+        message: Layout<DOMString>,
+        filename: Layout<DOMString>,
+        lineno: Mut<u32>,
+        colno: Mut<u32>,
+        #[ignore_heap_size_of = "Defined in rust-mozjs"]
+        error: Mut<JSVal>,
+    }
 }
 
 impl ErrorEvent {
-    fn new_inherited() -> ErrorEvent {
-        ErrorEvent {
-            event: Event::new_inherited(),
-            message: DOMRefCell::new("".to_owned()),
-            filename: DOMRefCell::new("".to_owned()),
-            lineno: Cell::new(0),
-            colno: Cell::new(0),
-            error: MutHeapJSVal::new()
-        }
+    fn new_inherited(&mut self) {
+        self.event.new_inherited();
+        self.message.init("".to_owned());
+        self.filename.init("".to_owned());
+        self.lineno.init(0);
+        self.colno.init(0);
+        self.error.init(UndefinedValue());
     }
 
     pub fn new_uninitialized(global: GlobalRef) -> Root<ErrorEvent> {
-        reflect_dom_object(box ErrorEvent::new_inherited(),
-                           global,
-                           ErrorEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<ErrorEvent>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
 
     pub fn new(global: GlobalRef,

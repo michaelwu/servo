@@ -9,23 +9,23 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLHtmlElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLHtmlElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLHtmlElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLHtmlElement {
-        HTMLHtmlElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLHtmlElement> {
-        let element = HTMLHtmlElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLHtmlElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLHtmlElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

@@ -13,7 +13,7 @@ use dom::bindings::js::Root;
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::structuredclone::StructuredCloneData;
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::bindings::magic::MagicDOMClass;
 use dom::dedicatedworkerglobalscope::{DedicatedWorkerGlobalScope, WorkerScriptMsg};
 use dom::errorevent::ErrorEvent;
@@ -34,11 +34,12 @@ use util::str::DOMString;
 pub type TrustedWorkerAddress = Trusted<Worker>;
 
 // https://html.spec.whatwg.org/multipage/#worker
-#[dom_struct]
-pub struct Worker {
-    eventtarget: EventTarget,
-    global: GlobalField,
-    extra: Box<WorkerExtra>,
+magic_dom_struct! {
+    pub struct Worker {
+        eventtarget: Base<EventTarget>,
+        global: GlobalField,
+        extra: Box<WorkerExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -50,24 +51,22 @@ struct WorkerExtra {
 }
 
 impl Worker {
-    fn new_inherited(global: GlobalRef,
+    fn new_inherited(&mut self, global: GlobalRef,
                      sender: Sender<(TrustedWorkerAddress, WorkerScriptMsg)>)
-                     -> Worker {
-        Worker {
-            eventtarget: EventTarget::new_inherited(),
-            global: GlobalField::from_rooted(&global),
-            extra: box WorkerExtra {
-                sender: sender,
-            },
-        }
+                     {
+        self.eventtarget.new_inherited();
+        self.global.init(GlobalField::from_rooted(&global));
+        self.extra.init(box WorkerExtra {
+            sender: sender,
+        });
     }
 
     pub fn new(global: GlobalRef,
                sender: Sender<(TrustedWorkerAddress, WorkerScriptMsg)>)
                -> Root<Worker> {
-        reflect_dom_object(box Worker::new_inherited(global, sender),
-                           global,
-                           WorkerBinding::Wrap)
+        let mut obj = alloc_dom_object::<Worker>(global);
+        obj.new_inherited(global, sender);
+        obj.into_root()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-worker
@@ -127,7 +126,7 @@ impl Worker {
         let global = worker.r().global.root();
         let target = worker.upcast();
         let _ar = JSAutoRequest::new(global.r().get_cx());
-        let _ac = JSAutoCompartment::new(global.r().get_cx(), target.reflector().get_jsobject().get());
+        let _ac = JSAutoCompartment::new(global.r().get_cx(), target.get_jsobj());
         let mut message = RootedValue::new(global.r().get_cx(), UndefinedValue());
         data.read(global.r(), message.handle_mut());
         MessageEvent::dispatch_jsval(target, global.r(), message.handle());

@@ -53,17 +53,18 @@ enum InputType {
     InputPassword
 }
 
-#[dom_struct]
-pub struct HTMLInputElement {
-    htmlelement: HTMLElement,
-    input_type: Cell<InputType>,
-    checked: Cell<bool>,
-    checked_changed: Cell<bool>,
-    placeholder: DOMRefCell<DOMString>,
-    indeterminate: Cell<bool>,
-    value_changed: Cell<bool>,
-    size: Cell<u32>,
-    extra: Box<HTMLInputElementExtra>,
+magic_dom_struct! {
+    pub struct HTMLInputElement {
+        htmlelement: Base<HTMLElement>,
+        input_type: Mut<InputType>,
+        checked: Mut<bool>,
+        checked_changed: Mut<bool>,
+        placeholder: Layout<DOMString>,
+        indeterminate: Mut<bool>,
+        value_changed: Mut<bool>,
+        size: Mut<u32>,
+        extra: Box<HTMLInputElementExtra>,
+    }
 }
 
 #[must_root]
@@ -110,30 +111,29 @@ impl InputActivationState {
 static DEFAULT_INPUT_SIZE: u32 = 20;
 
 impl HTMLInputElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLInputElement {
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
         let chan = document.window().r().constellation_chan();
-        HTMLInputElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-            input_type: Cell::new(InputType::InputText),
-            checked: Cell::new(false),
-            placeholder: DOMRefCell::new("".to_owned()),
-            indeterminate: Cell::new(false),
-            checked_changed: Cell::new(false),
-            value_changed: Cell::new(false),
-            size: Cell::new(DEFAULT_INPUT_SIZE),
-            extra: box HTMLInputElementExtra {
-                textinput: DOMRefCell::new(TextInput::new(Single, "".to_owned(), chan)),
-                activation_state: DOMRefCell::new(InputActivationState::new())
-            },
-        }
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
+        self.input_type.init(InputType::InputText);
+        self.checked.init(false);
+        self.placeholder.init("".to_owned());
+        self.indeterminate.init(false);
+        self.checked_changed.init(false);
+        self.value_changed.init(false);
+        self.size.init(DEFAULT_INPUT_SIZE);
+        self.extra.init(box HTMLInputElementExtra {
+            textinput: DOMRefCell::new(TextInput::new(Single, "".to_owned(), chan)),
+            activation_state: DOMRefCell::new(InputActivationState::new())
+        });
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLInputElement> {
-        let element = HTMLInputElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLInputElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLInputElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -9,25 +9,24 @@ use dom::htmltablecellelement::HTMLTableCellElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTableDataCellElement {
-    htmltablecellelement: HTMLTableCellElement,
+magic_dom_struct! {
+    pub struct HTMLTableDataCellElement {
+        htmltablecellelement: Base<HTMLTableCellElement>,
+    }
 }
 
 impl HTMLTableDataCellElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLTableDataCellElement {
-        HTMLTableDataCellElement {
-            htmltablecellelement:
-                HTMLTableCellElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmltablecellelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableDataCellElement> {
-        let element = HTMLTableDataCellElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableDataCellElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableDataCellElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

@@ -6,31 +6,30 @@ use dom::bindings::codegen::Bindings::DOMRectReadOnlyBinding::DOMRectReadOnlyMet
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use std::cell::Cell;
 
-#[dom_struct]
-pub struct DOMRectReadOnly {
-    reflector_: Reflector,
-    x: Cell<f64>,
-    y: Cell<f64>,
-    width: Cell<f64>,
-    height: Cell<f64>,
+magic_dom_struct! {
+    pub struct DOMRectReadOnly {
+        x: Mut<f64>,
+        y: Mut<f64>,
+        width: Mut<f64>,
+        height: Mut<f64>,
+    }
 }
 
 impl DOMRectReadOnly {
-    pub fn new_inherited(x: f64, y: f64, width: f64, height: f64) -> DOMRectReadOnly {
-        DOMRectReadOnly {
-            x: Cell::new(x),
-            y: Cell::new(y),
-            width: Cell::new(width),
-            height: Cell::new(height),
-            reflector_: Reflector::new(),
-        }
+    pub fn new_inherited(&mut self, x: f64, y: f64, width: f64, height: f64) {
+        self.x.init(x);
+        self.y.init(y);
+        self.width.init(width);
+        self.height.init(height);
     }
 
     pub fn new(global: GlobalRef, x: f64, y: f64, width: f64, height: f64) -> Root<DOMRectReadOnly> {
-        reflect_dom_object(box DOMRectReadOnly::new_inherited(x, y, width, height), global, Wrap)
+        let mut obj = alloc_dom_object::<DOMRectReadOnly>(global);
+        obj.new_inherited(x, y, width, height);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

@@ -10,16 +10,16 @@ use dom::bindings::codegen::UnionTypes::StringOrURLSearchParams::{eString, eURLS
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use encoding::types::EncodingRef;
 use url::form_urlencoded::{parse, serialize_with_encoding};
 use util::str::DOMString;
 
 // https://url.spec.whatwg.org/#interface-urlsearchparams
-#[dom_struct]
-pub struct URLSearchParams {
-    reflector_: Reflector,
-    extra: Box<URLSearchParamsExtra>,
+magic_dom_struct! {
+    pub struct URLSearchParams {
+        extra: Box<URLSearchParamsExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -29,18 +29,16 @@ pub struct URLSearchParamsExtra {
 }
 
 impl URLSearchParams {
-    fn new_inherited() -> URLSearchParams {
-        URLSearchParams {
-            reflector_: Reflector::new(),
-            extra: box URLSearchParamsExtra {
-                list: DOMRefCell::new(vec![]),
-            },
-        }
+    fn new_inherited(&mut self) {
+        self.extra.init(box URLSearchParamsExtra {
+            list: DOMRefCell::new(vec![]),
+        });
     }
 
     pub fn new(global: GlobalRef) -> Root<URLSearchParams> {
-        reflect_dom_object(box URLSearchParams::new_inherited(), global,
-                           URLSearchParamsBinding::Wrap)
+        let mut obj = alloc_dom_object::<URLSearchParams>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
 
     // https://url.spec.whatwg.org/#dom-urlsearchparams-urlsearchparams

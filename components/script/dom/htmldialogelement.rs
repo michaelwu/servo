@@ -12,29 +12,28 @@ use dom::node::Node;
 use std::borrow::ToOwned;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLDialogElement {
-    htmlelement: HTMLElement,
-    return_value: DOMRefCell<DOMString>,
+magic_dom_struct! {
+    pub struct HTMLDialogElement {
+        htmlelement: Base<HTMLElement>,
+        return_value: Layout<DOMString>,
+    }
 }
 
 impl HTMLDialogElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLDialogElement {
-        HTMLDialogElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            return_value: DOMRefCell::new("".to_owned()),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.return_value.init("".to_owned());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLDialogElement> {
-        let element = HTMLDialogElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLDialogElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLDialogElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

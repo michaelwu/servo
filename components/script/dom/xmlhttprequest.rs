@@ -16,10 +16,10 @@ use dom::bindings::conversions::{Castable, ToJSValConvertible};
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::{GlobalField, GlobalRef, GlobalRoot};
 use dom::bindings::js::Root;
-use dom::bindings::js::{JS, MutNullableHeap};
+use dom::bindings::js::{JS};
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::str::ByteString;
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::Document;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use dom::eventtarget::EventTarget;
@@ -105,26 +105,27 @@ impl XHRProgress {
     }
 }
 
-#[dom_struct]
-pub struct XMLHttpRequest {
-    eventtarget: XMLHttpRequestEventTarget,
-    ready_state: Cell<XMLHttpRequestState>,
-    timeout: Cell<u32>,
-    with_credentials: Cell<bool>,
-    upload: JS<XMLHttpRequestUpload>,
-    response_url: DOMString,
-    status: Cell<u16>,
-    status_text: DOMRefCell<ByteString>,
-    response_xml: MutNullableHeap<JS<Document>>,
+magic_dom_struct! {
+    pub struct XMLHttpRequest {
+        eventtarget: Base<XMLHttpRequestEventTarget>,
+        ready_state: Mut<XMLHttpRequestState>,
+        timeout: Mut<u32>,
+        with_credentials: Mut<bool>,
+        upload: JS<XMLHttpRequestUpload>,
+        response_url: DOMString,
+        status: Mut<u16>,
+        status_text: Layout<ByteString>,
+        response_xml: Mut<Option<JS<Document>>>,
 
-    // Associated concepts
-    sync: Cell<bool>,
-    send_flag: Cell<bool>,
-    upload_complete: Cell<bool>,
-    upload_events: Cell<bool>,
+        // Associated concepts
+        sync: Mut<bool>,
+        send_flag: Mut<bool>,
+        upload_complete: Mut<bool>,
+        upload_events: Mut<bool>,
 
-    global: GlobalField,
-    extra: Box<XMLHttpRequestExtra>,
+        global: GlobalField,
+        extra: Box<XMLHttpRequestExtra>,
+    }
 }
 
 #[must_root]
@@ -153,45 +154,43 @@ pub struct XMLHttpRequestExtra {
 }
 
 impl XMLHttpRequest {
-    fn new_inherited(global: GlobalRef) -> XMLHttpRequest {
-        XMLHttpRequest {
-            eventtarget: XMLHttpRequestEventTarget::new_inherited(),
-            ready_state: Cell::new(XMLHttpRequestState::Unsent),
-            timeout: Cell::new(0u32),
-            with_credentials: Cell::new(false),
-            upload: JS::from_rooted(&XMLHttpRequestUpload::new(global)),
-            response_url: "".to_owned(),
-            status: Cell::new(0),
-            status_text: DOMRefCell::new(ByteString::new(vec!())),
-            response_xml: Default::default(),
+    fn new_inherited(&mut self, global: GlobalRef) {
+        self.eventtarget.new_inherited();
+        self.ready_state.init(XMLHttpRequestState::Unsent);
+        self.timeout.init(0u32);
+        self.with_credentials.init(false);
+        self.upload.init(JS::from_rooted(&XMLHttpRequestUpload::new(global)));
+        self.response_url.init("".to_owned());
+        self.status.init(0);
+        self.status_text.init(ByteString::new(vec!()));
+        self.response_xml.init(Default::default());
 
-            sync: Cell::new(false),
-            send_flag: Cell::new(false),
+        self.sync.init(false);
+        self.send_flag.init(false);
 
-            upload_complete: Cell::new(false),
-            upload_events: Cell::new(false),
+        self.upload_complete.init(false);
+        self.upload_events.init(false);
 
-            global: GlobalField::from_rooted(&global),
-            extra: box XMLHttpRequestExtra {
-                response: DOMRefCell::new(ByteString::new(vec!())),
-                response_type: Cell::new(_empty),
-                response_headers: DOMRefCell::new(Headers::new()),
-                request_method: DOMRefCell::new(Method::Get),
-                request_url: DOMRefCell::new(None),
-                request_headers: DOMRefCell::new(Headers::new()),
-                request_body_len: Cell::new(0),
-                timeout_cancel: DOMRefCell::new(None),
-                fetch_time: Cell::new(0),
-                timeout_target: DOMRefCell::new(None),
-                generation_id: Cell::new(GenerationId(0)),
-                response_status: Cell::new(Ok(())),
-            },
-        }
+        self.global.init(GlobalField::from_rooted(&global));
+        self.extra.init(box XMLHttpRequestExtra {
+            response: DOMRefCell::new(ByteString::new(vec!())),
+            response_type: Cell::new(_empty),
+            response_headers: DOMRefCell::new(Headers::new()),
+            request_method: DOMRefCell::new(Method::Get),
+            request_url: DOMRefCell::new(None),
+            request_headers: DOMRefCell::new(Headers::new()),
+            request_body_len: Cell::new(0),
+            timeout_cancel: DOMRefCell::new(None),
+            fetch_time: Cell::new(0),
+            timeout_target: DOMRefCell::new(None),
+            generation_id: Cell::new(GenerationId(0)),
+            response_status: Cell::new(Ok(())),
+        });
     }
     pub fn new(global: GlobalRef) -> Root<XMLHttpRequest> {
-        reflect_dom_object(box XMLHttpRequest::new_inherited(global),
-                           global,
-                           XMLHttpRequestBinding::Wrap)
+        let mut obj = alloc_dom_object::<XMLHttpRequest>(global);
+        obj.new_inherited(global);
+        obj.into_root()
     }
 
     // https://xhr.spec.whatwg.org/#constructors
@@ -734,7 +733,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-responsexml-attribute
     fn GetResponseXML(&self) -> Option<Root<Document>> {
-        self.response_xml.get_rooted()
+        self.response_xml.get().map(Root::from_rooted)
     }
 }
 

@@ -13,7 +13,7 @@ use dom::bindings::js::Root;
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::str::USVString;
 use dom::bindings::trace::JSTraceable;
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::bindings::magic::MagicDOMClass;
 use dom::blob::Blob;
 use dom::closeevent::CloseEvent;
@@ -125,21 +125,22 @@ const BLOCKED_PORTS_LIST: &'static [u16] = &[
     6000, // x11
 ];
 
-#[dom_struct]
-pub struct WebSocket {
-    eventtarget: EventTarget,
-    url: Url,
-    global: GlobalField,
-    ready_state: Cell<WebSocketRequestState>,
-    buffered_amount: Cell<u32>,
-    clearing_buffer: Cell<bool>, //Flag to tell if there is a running task to clear buffered_amount
-    failed: Cell<bool>, //Flag to tell if websocket was closed due to failure
-    full: Cell<bool>, //Flag to tell if websocket queue is full
-    clean_close: Cell<bool>, //Flag to tell if the websocket closed cleanly (not due to full or fail)
-    code: Cell<u16>, //Closing code
-    reason: DOMRefCell<DOMString>, //Closing reason
-    binary_type: Cell<BinaryType>,
-    extra: Box<WebSocketExtra>,
+magic_dom_struct! {
+    pub struct WebSocket {
+        eventtarget: Base<EventTarget>,
+        url: Url,
+        global: GlobalField,
+        ready_state: Mut<WebSocketRequestState>,
+        buffered_amount: Mut<u32>,
+        clearing_buffer: Mut<bool>, //Flag to tell if there is a running task to clear buffered_amount
+        failed: Mut<bool>, //Flag to tell if websocket was closed due to failure
+        full: Mut<bool>, //Flag to tell if websocket queue is full
+        clean_close: Mut<bool>, //Flag to tell if the websocket closed cleanly (not due to full or fail)
+        code: Mut<u16>, //Closing code
+        reason: Layout<DOMString>, //Closing reason
+        binary_type: Mut<BinaryType>,
+        extra: Box<WebSocketExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -172,30 +173,29 @@ fn establish_a_websocket_connection(resource_url: &Url, net_url: (Host, String, 
 
 
 impl WebSocket {
-    fn new_inherited(global: GlobalRef, url: Url) -> WebSocket {
-        WebSocket {
-            eventtarget: EventTarget::new_inherited(),
-            url: url,
-            global: GlobalField::from_rooted(&global),
-            ready_state: Cell::new(WebSocketRequestState::Connecting),
-            buffered_amount: Cell::new(0),
-            clearing_buffer: Cell::new(false),
-            failed: Cell::new(false),
-            full: Cell::new(false),
-            clean_close: Cell::new(true),
-            code: Cell::new(0),
-            reason: DOMRefCell::new("".to_owned()),
-            binary_type: Cell::new(BinaryType::Blob),
-            extra: box WebSocketExtra {
-                sender: RefCell::new(None),
-            },
-        }
+    fn new_inherited(&mut self, global: GlobalRef, url: Url) {
+        self.eventtarget.new_inherited();
+        self.url.init(url);
+        self.global.init(GlobalField::from_rooted(&global));
+        self.ready_state.init(WebSocketRequestState::Connecting);
+        self.buffered_amount.init(0);
+        self.clearing_buffer.init(false);
+        self.failed.init(false);
+        self.full.init(false);
+        self.clean_close.init(true);
+        self.code.init(0);
+        self.reason.init("".to_owned());
+        self.binary_type.init(BinaryType::Blob);
+        self.extra.init(box WebSocketExtra {
+            sender: RefCell::new(None),
+        });
 
     }
 
     fn new(global: GlobalRef, url: Url) -> Root<WebSocket> {
-        reflect_dom_object(box WebSocket::new_inherited(global, url),
-                           global, WebSocketBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebSocket>(global);
+        obj.new_inherited(global, url);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,
@@ -543,7 +543,7 @@ impl Runnable for MessageReceivedTask {
         let global = ws.global.root();
         let cx = global.r().get_cx();
         let _ar = JSAutoRequest::new(cx);
-        let _ac = JSAutoCompartment::new(cx, ws.reflector().get_jsobject().get());
+        let _ac = JSAutoCompartment::new(cx, ws.get_jsobj());
         let mut message = RootedValue::new(cx, UndefinedValue());
         match self.message {
             MessageData::Text(text) => text.to_jsval(cx, message.handle_mut()),

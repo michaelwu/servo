@@ -5,27 +5,24 @@
 use dom::bindings::codegen::Bindings::ValidityStateBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::window::Window;
 
 // https://html.spec.whatwg.org/multipage/#validitystate
-#[dom_struct]
-pub struct ValidityState {
-    reflector_: Reflector,
-    state: u8,
+magic_dom_struct! {
+    pub struct ValidityState {
+        state: u8,
+    }
 }
 
 impl ValidityState {
-    fn new_inherited() -> ValidityState {
-        ValidityState {
-            reflector_: Reflector::new(),
-            state: 0,
-        }
+    fn new_inherited(&mut self) {
+        self.state.init(0);
     }
 
     pub fn new(window: &Window) -> Root<ValidityState> {
-        reflect_dom_object(box ValidityState::new_inherited(),
-                           GlobalRef::Window(window),
-                           ValidityStateBinding::Wrap)
+        let mut obj = alloc_dom_object::<ValidityState>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 }

@@ -7,7 +7,7 @@ use dom::bindings::codegen::Bindings::HTMLTemplateElementBinding;
 use dom::bindings::codegen::Bindings::HTMLTemplateElementBinding::HTMLTemplateElementMethods;
 use dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use dom::bindings::conversions::Castable;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::document::Document;
 use dom::documentfragment::DocumentFragment;
 use dom::htmlelement::HTMLElement;
@@ -15,31 +15,30 @@ use dom::node::{CloneChildrenFlag, Node, document_from_node};
 use dom::virtualmethods::VirtualMethods;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTemplateElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLTemplateElement {
+        htmlelement: Base<HTMLElement>,
 
-    /// https://html.spec.whatwg.org/multipage/#template-contents
-    contents: MutNullableHeap<JS<DocumentFragment>>,
+        /// https://html.spec.whatwg.org/multipage/#template-contents
+        contents: Mut<Option<JS<DocumentFragment>>>,
+    }
 }
 
 impl HTMLTemplateElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLTemplateElement {
-        HTMLTemplateElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            contents: MutNullableHeap::new(None),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.contents.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLTemplateElement> {
-        let element = HTMLTemplateElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTemplateElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTemplateElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

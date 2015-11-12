@@ -12,26 +12,26 @@ use dom::userscripts::load_script;
 use dom::virtualmethods::VirtualMethods;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLHeadElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLHeadElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLHeadElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLHeadElement {
-        HTMLHeadElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLHeadElement> {
-        let element = HTMLHeadElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLHeadElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLHeadElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -20,32 +20,32 @@ use std::cell::Cell;
 use string_cache::Atom;
 use util::str::{self, DOMString, LengthOrPercentageOrAuto};
 
-#[dom_struct]
-pub struct HTMLTableElement {
-    htmlelement: HTMLElement,
-    background_color: Cell<Option<RGBA>>,
-    border: Cell<Option<u32>>,
-    cellspacing: Cell<Option<u32>>,
-    width: Cell<LengthOrPercentageOrAuto>,
+magic_dom_struct! {
+    pub struct HTMLTableElement {
+        htmlelement: Base<HTMLElement>,
+        background_color: Mut<Option<RGBA>>,
+        border: Mut<Option<u32>>,
+        cellspacing: Mut<Option<u32>>,
+        width: Mut<LengthOrPercentageOrAuto>,
+    }
 }
 
 impl HTMLTableElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document)
-                     -> HTMLTableElement {
-        HTMLTableElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            background_color: Cell::new(None),
-            border: Cell::new(None),
-            cellspacing: Cell::new(None),
-            width: Cell::new(LengthOrPercentageOrAuto::Auto),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document)
+                     {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.background_color.init(None);
+        self.border.init(None);
+        self.cellspacing.init(None);
+        self.width.init(LengthOrPercentageOrAuto::Auto);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableElement> {
-        let element = HTMLTableElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

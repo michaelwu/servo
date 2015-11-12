@@ -6,21 +6,19 @@
 use dom::bindings::codegen::Bindings::WebGLObjectBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 
-#[dom_struct]
-pub struct WebGLObject {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct WebGLObject;
 }
 
 impl WebGLObject {
-    pub fn new_inherited() -> WebGLObject {
-        WebGLObject {
-            reflector_: Reflector::new(),
-        }
+    pub fn new_inherited(&mut self) {
     }
 
     pub fn new(global: GlobalRef) -> Root<WebGLObject> {
-        reflect_dom_object(box WebGLObject::new_inherited(), global, WebGLObjectBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLObject>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
 }

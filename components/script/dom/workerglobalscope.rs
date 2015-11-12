@@ -8,9 +8,8 @@ use dom::bindings::codegen::Bindings::WorkerGlobalScopeBinding::WorkerGlobalScop
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible, report_pending_exception};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::bindings::magic::GlobalObjectSlots;
-use dom::bindings::utils::Reflectable;
 use dom::console::Console;
 use dom::crypto::Crypto;
 use dom::dedicatedworkerglobalscope::DedicatedWorkerGlobalScope;
@@ -50,19 +49,20 @@ pub struct WorkerGlobalScopeInit {
 }
 
 // https://html.spec.whatwg.org/multipage/#the-workerglobalscope-common-interface
-#[dom_struct]
-pub struct WorkerGlobalScope {
-    eventtarget: EventTarget,
-    worker_id: WorkerId,
-    #[ignore_heap_size_of = "Defined in std"]
-    runtime: Rc<Runtime>,
-    next_worker_id: Cell<WorkerId>,
-    global_slots: GlobalObjectSlots,
-    location: MutNullableHeap<JS<WorkerLocation>>,
-    navigator: MutNullableHeap<JS<WorkerNavigator>>,
-    console: MutNullableHeap<JS<Console>>,
-    crypto: MutNullableHeap<JS<Crypto>>,
-    extra: Box<WorkerGlobalScopeExtra>,
+magic_dom_struct! {
+    pub struct WorkerGlobalScope {
+        eventtarget: Base<EventTarget>,
+        worker_id: WorkerId,
+        #[ignore_heap_size_of = "Defined in std"]
+        runtime: Rc<Runtime>,
+        next_worker_id: Mut<WorkerId>,
+        global_slots: GlobalObjectSlots,
+        location: Mut<Option<JS<WorkerLocation>>>,
+        navigator: Mut<Option<JS<WorkerNavigator>>>,
+        console: Mut<Option<JS<Console>>>,
+        crypto: Mut<Option<JS<Crypto>>>,
+        extra: Box<WorkerGlobalScopeExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -98,34 +98,32 @@ pub struct WorkerGlobalScopeExtra {
 }
 
 impl WorkerGlobalScope {
-    pub fn new_inherited(init: WorkerGlobalScopeInit,
+    pub fn new_inherited(&mut self, init: WorkerGlobalScopeInit,
                          worker_url: Url,
                          runtime: Rc<Runtime>,
                          from_devtools_receiver: Receiver<DevtoolScriptControlMsg>,
                          timer_event_chan: Box<TimerEventChan + Send>)
-                         -> WorkerGlobalScope {
-        WorkerGlobalScope {
-            eventtarget: EventTarget::new_inherited(),
-            worker_id: init.worker_id,
-            runtime: runtime,
-            next_worker_id: Cell::new(WorkerId(0)),
-            location: Default::default(),
-            navigator: Default::default(),
-            console: Default::default(),
-            crypto: Default::default(),
-            extra: box WorkerGlobalScopeExtra {
-                worker_url: worker_url,
-                resource_task: init.resource_task,
-                timers: ActiveTimers::new(timer_event_chan, init.scheduler_chan.clone()),
-                mem_profiler_chan: init.mem_profiler_chan,
-                to_devtools_sender: init.to_devtools_sender,
-                from_devtools_sender: init.from_devtools_sender,
-                from_devtools_receiver: from_devtools_receiver,
-                devtools_wants_updates: Cell::new(false),
-                constellation_chan: init.constellation_chan,
-                scheduler_chan: init.scheduler_chan,
-            },
-        }
+                         {
+        self.eventtarget.new_inherited();
+        self.worker_id.init(init.worker_id);
+        self.runtime.init(runtime);
+        self.next_worker_id.init(WorkerId(0));
+        self.location.init(Default::default());
+        self.navigator.init(Default::default());
+        self.console.init(Default::default());
+        self.crypto.init(Default::default());
+        self.extra.init(box WorkerGlobalScopeExtra {
+            worker_url: worker_url,
+            resource_task: init.resource_task,
+            timers: ActiveTimers::new(timer_event_chan, init.scheduler_chan.clone()),
+            mem_profiler_chan: init.mem_profiler_chan,
+            to_devtools_sender: init.to_devtools_sender,
+            from_devtools_sender: init.from_devtools_sender,
+            from_devtools_receiver: from_devtools_receiver,
+            devtools_wants_updates: Cell::new(false),
+            constellation_chan: init.constellation_chan,
+            scheduler_chan: init.scheduler_chan,
+        });
     }
 
     pub fn mem_profiler_chan(&self) -> mem::ProfilerChan {
@@ -210,7 +208,7 @@ impl WorkerGlobalScopeMethods for WorkerGlobalScope {
             };
 
             match self.runtime.evaluate_script(
-                self.reflector().get_jsobject(), source, url.serialize(), 1) {
+                self.handle(), source, url.serialize(), 1) {
                 Ok(_) => (),
                 Err(_) => {
                     println!("evaluate_script failed");
@@ -298,14 +296,14 @@ impl WorkerGlobalScopeMethods for WorkerGlobalScope {
 impl WorkerGlobalScope {
     pub fn execute_script(&self, source: DOMString) {
         match self.runtime.evaluate_script(
-            self.reflector().get_jsobject(), source, self.extra.worker_url.serialize(), 1) {
+            self.handle(), source, self.extra.worker_url.serialize(), 1) {
             Ok(_) => (),
             Err(_) => {
                 // TODO: An error needs to be dispatched to the parent.
                 // https://github.com/servo/servo/issues/6422
                 println!("evaluate_script failed");
                 let _ar = JSAutoRequest::new(self.runtime.cx());
-                report_pending_exception(self.runtime.cx(), self.reflector().get_jsobject().get());
+                report_pending_exception(self.runtime.cx(), self.get_jsobj());
             }
         }
     }

@@ -15,7 +15,6 @@ use dom::bindings::js::{Root, RootCollection};
 use dom::bindings::magic::alloc_dom_global;
 use dom::bindings::refcounted::LiveDOMReferences;
 use dom::bindings::structuredclone::StructuredCloneData;
-use dom::bindings::utils::Reflectable;
 use dom::messageevent::MessageEvent;
 use dom::worker::{SimpleWorkerErrorHandler, TrustedWorkerAddress, WorkerMessageHandler};
 use dom::workerglobalscope::WorkerGlobalScope;
@@ -157,11 +156,12 @@ enum MixedMessage {
 }
 
 // https://html.spec.whatwg.org/multipage/#dedicatedworkerglobalscope
-#[dom_struct]
-pub struct DedicatedWorkerGlobalScope {
-    workerglobalscope: WorkerGlobalScope,
-    id: PipelineId,
-    extra: Box<DedicatedWorkerGlobalScopeExtra>,
+magic_dom_struct! {
+    pub struct DedicatedWorkerGlobalScope {
+        workerglobalscope: Base<WorkerGlobalScope>,
+        id: PipelineId,
+        extra: Box<DedicatedWorkerGlobalScopeExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -180,7 +180,7 @@ pub struct DedicatedWorkerGlobalScopeExtra {
 }
 
 impl DedicatedWorkerGlobalScope {
-    fn new_inherited(init: WorkerGlobalScopeInit,
+    fn new_inherited(&mut self, init: WorkerGlobalScopeInit,
                      worker_url: Url,
                      id: PipelineId,
                      from_devtools_receiver: Receiver<DevtoolScriptControlMsg>,
@@ -190,20 +190,18 @@ impl DedicatedWorkerGlobalScope {
                      receiver: Receiver<(TrustedWorkerAddress, WorkerScriptMsg)>,
                      timer_event_chan: Box<TimerEventChan + Send>,
                      timer_event_port: Receiver<(TrustedWorkerAddress, TimerEvent)>)
-                     -> DedicatedWorkerGlobalScope {
+                     {
 
-        DedicatedWorkerGlobalScope {
-            workerglobalscope: WorkerGlobalScope::new_inherited(
-                init, worker_url, runtime, from_devtools_receiver, timer_event_chan),
-            id: id,
-            extra: box DedicatedWorkerGlobalScopeExtra {
-                receiver: receiver,
-                own_sender: own_sender,
-                timer_event_port: timer_event_port,
-                worker: DOMRefCell::new(None),
-                parent_sender: parent_sender,
-            },
-        }
+        self.workerglobalscope.new_inherited(
+                init, worker_url, runtime, from_devtools_receiver, timer_event_chan);
+        self.id.init(id);
+        self.extra.init(box DedicatedWorkerGlobalScopeExtra {
+            receiver: receiver,
+            own_sender: own_sender,
+            timer_event_port: timer_event_port,
+            worker: DOMRefCell::new(None),
+            parent_sender: parent_sender,
+        });
     }
 
     pub fn new(init: WorkerGlobalScopeInit,
@@ -344,7 +342,7 @@ impl DedicatedWorkerGlobalScope {
                 let scope = self.upcast::<WorkerGlobalScope>();
                 let target = self.upcast();
                 let _ar = JSAutoRequest::new(scope.get_cx());
-                let _ac = JSAutoCompartment::new(scope.get_cx(), scope.reflector().get_jsobject().get());
+                let _ac = JSAutoCompartment::new(scope.get_cx(), scope.get_jsobj());
                 let mut message = RootedValue::new(scope.get_cx(), UndefinedValue());
                 data.read(GlobalRef::Worker(scope), message.handle_mut());
                 MessageEvent::dispatch_jsval(target, GlobalRef::Worker(scope), message.handle());

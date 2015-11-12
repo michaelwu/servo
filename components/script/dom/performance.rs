@@ -7,37 +7,34 @@ use dom::bindings::codegen::Bindings::PerformanceBinding::PerformanceMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::num::Finite;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::performancetiming::PerformanceTiming;
 use dom::window::Window;
 use time;
 
 pub type DOMHighResTimeStamp = Finite<f64>;
 
-#[dom_struct]
-pub struct Performance {
-    reflector_: Reflector,
-    timing: JS<PerformanceTiming>,
+magic_dom_struct! {
+    pub struct Performance {
+        timing: JS<PerformanceTiming>,
+    }
 }
 
 impl Performance {
-    fn new_inherited(window: &Window,
+    fn new_inherited(&mut self, window: &Window,
                      navigation_start: u64,
-                     navigation_start_precise: f64) -> Performance {
-        Performance {
-            reflector_: Reflector::new(),
-            timing: JS::from_rooted(&PerformanceTiming::new(window, navigation_start, navigation_start_precise)),
-        }
+                     navigation_start_precise: f64) {
+        self.timing.init(JS::from_rooted(&PerformanceTiming::new(window, navigation_start, navigation_start_precise)));
     }
 
     pub fn new(window: &Window,
                navigation_start: u64,
                navigation_start_precise: f64) -> Root<Performance> {
-        reflect_dom_object(box Performance::new_inherited(window,
+        let mut obj = alloc_dom_object::<Performance>(GlobalRef::Window(window));
+        obj.new_inherited(window,
                                                           navigation_start,
-                                                          navigation_start_precise),
-                           GlobalRef::Window(window),
-                           PerformanceBinding::Wrap)
+                                                          navigation_start_precise);
+        obj.into_root()
     }
 }
 

@@ -10,37 +10,34 @@ use dom::bindings::codegen::Bindings::NodeIteratorBinding;
 use dom::bindings::codegen::Bindings::NodeIteratorBinding::NodeIteratorMethods;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutHeap, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::js::{JS, Root};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::Document;
 use dom::node::Node;
 use std::cell::Cell;
 use std::rc::Rc;
 
-#[dom_struct]
-pub struct NodeIterator {
-    reflector_: Reflector,
-    root_node: JS<Node>,
-    #[ignore_heap_size_of = "Defined in rust-mozjs"]
-    reference_node: MutHeap<JS<Node>>,
-    pointer_before_reference_node: Cell<bool>,
-    what_to_show: u32,
-    #[ignore_heap_size_of = "Can't measure due to #6870"]
-    filter: Filter,
+magic_dom_struct! {
+    pub struct NodeIterator {
+        root_node: JS<Node>,
+        #[ignore_heap_size_of = "Defined in rust-mozjs"]
+        reference_node: Mut<JS<Node>>,
+        pointer_before_reference_node: Mut<bool>,
+        what_to_show: u32,
+        #[ignore_heap_size_of = "Can't measure due to #6870"]
+        filter: Filter,
+    }
 }
 
 impl NodeIterator {
-    fn new_inherited(root_node: &Node,
+    fn new_inherited(&mut self, root_node: &Node,
                      what_to_show: u32,
-                     filter: Filter) -> NodeIterator {
-        NodeIterator {
-            reflector_: Reflector::new(),
-            root_node: JS::from_ref(root_node),
-            reference_node: MutHeap::new(root_node),
-            pointer_before_reference_node: Cell::new(true),
-            what_to_show: what_to_show,
-            filter: filter
-        }
+                     filter: Filter) {
+        self.root_node.init(JS::from_ref(root_node));
+        self.reference_node.init(root_node);
+        self.pointer_before_reference_node.init(true);
+        self.what_to_show.init(what_to_show);
+        self.filter.init(filter);
     }
 
     pub fn new_with_filter(document: &Document,
@@ -48,9 +45,9 @@ impl NodeIterator {
                            what_to_show: u32,
                            filter: Filter) -> Root<NodeIterator> {
         let window = document.window();
-        reflect_dom_object(box NodeIterator::new_inherited(root_node, what_to_show, filter),
-                           GlobalRef::Window(window.r()),
-                           NodeIteratorBinding::Wrap)
+        let mut obj = alloc_dom_object::<NodeIterator>(GlobalRef::Window(window.r()));
+        obj.new_inherited(root_node, what_to_show, filter);
+        obj.into_root()
     }
 
     pub fn new(document: &Document,

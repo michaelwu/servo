@@ -31,11 +31,12 @@ use string_cache::Atom;
 use url::{Url, UrlParser};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLImageElement {
-    htmlelement: HTMLElement,
-    url: DOMRefCell<Option<Url>>,
-    image: DOMRefCell<Option<Arc<Image>>>,
+magic_dom_struct! {
+    pub struct HTMLImageElement {
+        htmlelement: Base<HTMLElement>,
+        url: Layout<Option<Url>>,
+        image: Layout<Option<Arc<Image>>>,
+    }
 }
 
 impl HTMLImageElement {
@@ -127,20 +128,19 @@ impl HTMLImageElement {
         }
     }
 
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLImageElement {
-        HTMLImageElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            url: DOMRefCell::new(None),
-            image: DOMRefCell::new(None),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.url.init(None);
+        self.image.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLImageElement> {
-        let element = HTMLImageElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLImageElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLImageElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     pub fn Image(global: GlobalRef,
@@ -170,12 +170,12 @@ pub trait LayoutHTMLImageElementHelpers {
 impl LayoutHTMLImageElementHelpers for LayoutJS<HTMLImageElement> {
     #[allow(unsafe_code)]
     unsafe fn image(&self) -> Option<Arc<Image>> {
-        (*self.unsafe_get()).image.borrow_for_layout().clone()
+        (*self.unsafe_get()).image.layout_get()
     }
 
     #[allow(unsafe_code)]
     unsafe fn image_url(&self) -> Option<Url> {
-        (*self.unsafe_get()).url.borrow_for_layout().clone()
+        (*self.unsafe_get()).url.layout_get()
     }
 }
 

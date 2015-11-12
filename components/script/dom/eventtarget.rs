@@ -9,7 +9,6 @@ use dom::bindings::codegen::Bindings::EventListenerBinding::EventListener;
 use dom::bindings::codegen::Bindings::EventTargetBinding::EventTargetMethods;
 use dom::bindings::codegen::InheritTypes::EventTargetTypeId;
 use dom::bindings::error::{Error, Fallible, report_pending_exception};
-use dom::bindings::utils::{Reflectable, Reflector};
 use dom::bindings::magic::MagicDOMClass;
 use dom::event::Event;
 use dom::eventdispatcher::dispatch_event;
@@ -90,7 +89,7 @@ impl HeapSizeOf for EventListenerType {
 }
 
 impl EventListenerType {
-    pub fn call_or_handle_event<T: Reflectable>(&self,
+    pub fn call_or_handle_event<T: MagicDOMClass>(&self,
                                                 object: &T,
                                                 event: &Event,
                                                 exception_handle: ExceptionHandling) {
@@ -112,10 +111,10 @@ pub struct EventListenerEntry {
     listener: EventListenerType
 }
 
-#[dom_struct]
-pub struct EventTarget {
-    reflector_: Reflector,
-    extra: Box<EventTargetExtra>,
+magic_dom_struct! {
+    pub struct EventTarget {
+        extra: Box<EventTargetExtra>,
+    }
 }
 
 #[must_root]
@@ -125,13 +124,10 @@ pub struct EventTargetExtra {
 }
 
 impl EventTarget {
-    pub fn new_inherited() -> EventTarget {
-        EventTarget {
-            reflector_: Reflector::new(),
-            extra: box EventTargetExtra {
-                handlers: DOMRefCell::new(Default::default()),
-            },
-        }
+    pub fn new_inherited(&mut self) {
+        self.extra.init(box EventTargetExtra {
+            handlers: DOMRefCell::new(Default::default()),
+        });
     }
 
     pub fn get_listeners(&self, type_: &str) -> Option<Vec<EventListenerType>> {
@@ -238,7 +234,7 @@ impl EventTarget {
                             handler.handle_mut())
         };
         if !rv || handler.ptr.is_null() {
-            report_pending_exception(cx, self.reflector().get_jsobject().get());
+            report_pending_exception(cx, self.get_jsobj());
             return;
         }
 

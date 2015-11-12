@@ -6,27 +6,23 @@ use dom::bindings::codegen::Bindings::NavigatorBinding;
 use dom::bindings::codegen::Bindings::NavigatorBinding::NavigatorMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::navigatorinfo;
 use dom::window::Window;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct Navigator {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct Navigator;
 }
 
 impl Navigator {
-    fn new_inherited() -> Navigator {
-        Navigator {
-            reflector_: Reflector::new()
-        }
+    fn new_inherited(&mut self) {
     }
 
     pub fn new(window: &Window) -> Root<Navigator> {
-        reflect_dom_object(box Navigator::new_inherited(),
-                           GlobalRef::Window(window),
-                           NavigatorBinding::Wrap)
+        let mut obj = alloc_dom_object::<Navigator>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 }
 

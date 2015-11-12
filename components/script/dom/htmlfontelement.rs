@@ -19,29 +19,29 @@ use string_cache::Atom;
 use style::values::specified;
 use util::str::{self, DOMString, parse_legacy_font_size};
 
-#[dom_struct]
-pub struct HTMLFontElement {
-    htmlelement: HTMLElement,
-    color: Cell<Option<RGBA>>,
-    face: DOMRefCell<Option<Atom>>,
+magic_dom_struct! {
+    pub struct HTMLFontElement {
+        htmlelement: Base<HTMLElement>,
+        color: Mut<Option<RGBA>>,
+        face: Layout<Option<Atom>>,
+    }
 }
 
 
 impl HTMLFontElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLFontElement {
-        HTMLFontElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            color: Cell::new(None),
-            face: DOMRefCell::new(None),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.color.init(None);
+        self.face.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLFontElement> {
-        let element = HTMLFontElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLFontElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLFontElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -34,29 +34,29 @@ enum ButtonType {
     Menu
 }
 
-#[dom_struct]
-pub struct HTMLButtonElement {
-    htmlelement: HTMLElement,
-    button_type: Cell<ButtonType>
+magic_dom_struct! {
+    pub struct HTMLButtonElement {
+        htmlelement: Base<HTMLElement>,
+        button_type: Mut<ButtonType>
+    }
 }
 
 impl HTMLButtonElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLButtonElement {
-        HTMLButtonElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-            //TODO: implement button_type in attribute_mutated
-            button_type: Cell::new(ButtonType::Submit)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
+        //TODO: implement button_type in attribute_mutated
+        self.button_type.init(ButtonType::Submit);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLButtonElement> {
-        let element = HTMLButtonElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLButtonElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLButtonElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

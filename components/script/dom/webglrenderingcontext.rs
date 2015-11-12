@@ -11,8 +11,8 @@ use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::{self, WebGL
 use dom::bindings::codegen::UnionTypes::ImageDataOrHTMLImageElementOrHTMLCanvasElementOrHTMLVideoElement;
 use dom::bindings::conversions::{Castable, ToJSValConvertible};
 use dom::bindings::global::{GlobalField, GlobalRef};
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::js::{JS, LayoutJS, Root};
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use dom::htmlcanvaselement::HTMLCanvasElement;
 use dom::htmlcanvaselement::utils as canvas_utils;
@@ -67,16 +67,16 @@ bitflags! {
     }
 }
 
-#[dom_struct]
-pub struct WebGLRenderingContext {
-    reflector_: Reflector,
-    global: GlobalField,
-    canvas: JS<HTMLCanvasElement>,
-    last_error: Cell<Option<WebGLError>>,
-    texture_unpacking_settings: Cell<TextureUnpacking>,
-    bound_texture_2d: MutNullableHeap<JS<WebGLTexture>>,
-    bound_texture_cube_map: MutNullableHeap<JS<WebGLTexture>>,
-    extra: Box<WebGLRenderingContextExtra>,
+magic_dom_struct! {
+    pub struct WebGLRenderingContext {
+        global: GlobalField,
+        canvas: JS<HTMLCanvasElement>,
+        last_error: Mut<Option<WebGLError>>,
+        texture_unpacking_settings: Mut<TextureUnpacking>,
+        bound_texture_2d: Mut<Option<JS<WebGLTexture>>>,
+        bound_texture_cube_map: Mut<Option<JS<WebGLTexture>>>,
+        extra: Box<WebGLRenderingContextExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -87,24 +87,21 @@ pub struct WebGLRenderingContextExtra {
 }
 
 impl WebGLRenderingContext {
-    fn new_inherited(global: GlobalRef,
+    fn new_inherited(&mut self, global: GlobalRef,
                      canvas: &HTMLCanvasElement,
                      renderer_id: usize,
                      ipc_renderer: IpcSender<CanvasMsg>)
-                     -> WebGLRenderingContext {
-        WebGLRenderingContext {
-            reflector_: Reflector::new(),
-            global: GlobalField::from_rooted(&global),
-            canvas: JS::from_ref(canvas),
-            last_error: Cell::new(None),
-            texture_unpacking_settings: Cell::new(CONVERT_COLORSPACE),
-            bound_texture_2d: MutNullableHeap::new(None),
-            bound_texture_cube_map: MutNullableHeap::new(None),
-            extra: box WebGLRenderingContextExtra {
-                renderer_id: renderer_id,
-                ipc_renderer: ipc_renderer,
-            },
-        }
+                     {
+        self.global.init(GlobalField::from_rooted(&global));
+        self.canvas.init(JS::from_ref(canvas));
+        self.last_error.init(None);
+        self.texture_unpacking_settings.init(CONVERT_COLORSPACE);
+        self.bound_texture_2d.init(None);
+        self.bound_texture_cube_map.init(None);
+        self.extra.init(box WebGLRenderingContextExtra {
+            renderer_id: renderer_id,
+            ipc_renderer: ipc_renderer,
+        });
     }
 
     pub fn new(global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>, attrs: GLContextAttributes)
@@ -129,9 +126,9 @@ impl WebGLRenderingContext {
             }
         };
 
-        Some(reflect_dom_object(box WebGLRenderingContext::new_inherited(global, canvas, renderer_id, ipc_renderer),
-                                global,
-                                WebGLRenderingContextBinding::Wrap))
+        let mut obj = alloc_dom_object::<WebGLRenderingContext>(global);
+        obj.new_inherited(global, canvas, renderer_id, ipc_renderer);
+        Some(obj.into_root())
     }
 
     pub fn recreate(&self, size: Size2D<i32>) {
@@ -152,8 +149,8 @@ impl WebGLRenderingContext {
 
     pub fn bound_texture_for(&self, target: u32) -> Option<Root<WebGLTexture>> {
         match target {
-            constants::TEXTURE_2D => self.bound_texture_2d.get_rooted(),
-            constants::TEXTURE_CUBE_MAP => self.bound_texture_cube_map.get_rooted(),
+            constants::TEXTURE_2D => self.bound_texture_2d.get().map(Root::from_rooted),
+            constants::TEXTURE_CUBE_MAP => self.bound_texture_cube_map.get().map(Root::from_rooted),
 
             _ => unreachable!(),
         }

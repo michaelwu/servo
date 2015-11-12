@@ -19,29 +19,28 @@ use net_traits::image::base::Image;
 use std::sync::Arc;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLObjectElement {
-    htmlelement: HTMLElement,
-    image: DOMRefCell<Option<Arc<Image>>>,
+magic_dom_struct! {
+    pub struct HTMLObjectElement {
+        htmlelement: Base<HTMLElement>,
+        image: Layout<Option<Arc<Image>>>,
+    }
 }
 
 impl HTMLObjectElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLObjectElement {
-        HTMLObjectElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            image: DOMRefCell::new(None),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.image.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLObjectElement> {
-        let element = HTMLObjectElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLObjectElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLObjectElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

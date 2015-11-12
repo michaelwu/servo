@@ -24,7 +24,7 @@ use dom::bindings::codegen::UnionTypes::NodeOrString;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap};
+use dom::bindings::js::{JS, LayoutJS};
 use dom::bindings::js::{Root, RootedReference};
 use dom::bindings::js::DOMVec;
 use dom::bindings::utils::XMLName::InvalidXMLName;
@@ -102,18 +102,19 @@ bitflags! {
     }
 }
 
-#[dom_struct]
-pub struct Element {
-    node: Node,
-    local_name: Atom,
-    namespace: Namespace,
-    prefix: Option<DOMString>,
-    attrs: DOMRefCell<Vec<JS<Attr>>>,
-    id_attribute: DOMRefCell<Option<Atom>>,
-    style_attribute: DOMRefCell<Option<PropertyDeclarationBlock>>,
-    attr_list: MutNullableHeap<JS<NamedNodeMap>>,
-    class_list: MutNullableHeap<JS<DOMTokenList>>,
-    event_state: Cell<EventState>,
+magic_dom_struct! {
+    pub struct Element {
+        node: Base<Node>,
+        local_name: Atom,
+        namespace: Namespace,
+        prefix: Option<DOMString>,
+        attrs: Layout<DOMVec<JS<Attr>>>,
+        id_attribute: Layout<Option<Atom>>,
+        style_attribute: Layout<Option<PropertyDeclarationBlock>>,
+        attr_list: Mut<Option<JS<NamedNodeMap>>>,
+        class_list: Mut<Option<JS<DOMTokenList>>>,
+        event_state: Mut<EventState>,
+    }
 }
 
 impl PartialEq for Element {
@@ -139,37 +140,36 @@ impl Element {
     }
 
 
-    pub fn new_inherited(local_name: DOMString,
+    pub fn new_inherited(&mut self, local_name: DOMString,
                          namespace: Namespace, prefix: Option<DOMString>,
-                         document: &Document) -> Element {
+                         document: &Document) {
         Element::new_inherited_with_state(EventState::empty(), local_name,
                                           namespace, prefix, document)
     }
 
-    pub fn new_inherited_with_state(state: EventState, local_name: DOMString,
+    pub fn new_inherited_with_state(&mut self, state: EventState, local_name: DOMString,
                                     namespace: Namespace, prefix: Option<DOMString>,
                                     document: &Document)
-                                    -> Element {
-        Element {
-            node: Node::new_inherited(document),
-            local_name: Atom::from_slice(&local_name),
-            namespace: namespace,
-            prefix: prefix,
-            attrs: DOMRefCell::new(vec!()),
-            id_attribute: DOMRefCell::new(None),
-            style_attribute: DOMRefCell::new(None),
-            attr_list: Default::default(),
-            class_list: Default::default(),
-            event_state: Cell::new(state),
-        }
+                                    {
+        self.node.new_inherited(document);
+        self.local_name.init(Atom::from_slice(&local_name));
+        self.namespace.init(namespace);
+        self.prefix.init(prefix);
+        self.attrs.init(vec!());
+        self.id_attribute.init(None);
+        self.style_attribute.init(None);
+        self.attr_list.init(Default::default());
+        self.class_list.init(Default::default());
+        self.event_state.init(state);
     }
 
     pub fn new(local_name: DOMString,
                namespace: Namespace,
                prefix: Option<DOMString>,
                document: &Document) -> Root<Element> {
-        let element = Element::new_inherited(local_name, namespace, prefix, document);
-        Node::reflect_node(box element, document, ElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<Element>(document);
+        obj.new_inherited(local_name, namespace, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -20,11 +20,11 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::RootedReference;
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, LayoutJS, Root};
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::trace::RootedVec;
 use dom::bindings::utils::XMLName::InvalidXMLName;
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::bindings::utils::{validate_and_extract, xml_name_type};
 use dom::comment::Comment;
 use dom::customevent::CustomEvent;
@@ -104,45 +104,46 @@ pub enum IsHTMLDocument {
 }
 
 // https://dom.spec.whatwg.org/#document
-#[dom_struct]
-pub struct Document {
-    node: Node,
-    window: JS<Window>,
-    implementation: MutNullableHeap<JS<DOMImplementation>>,
-    location: MutNullableHeap<JS<Location>>,
-    content_type: DOMString,
-    last_modified: Option<DOMString>,
-    encoding_name: DOMRefCell<DOMString>,
-    is_html_document: bool,
-    quirks_mode: Cell<QuirksMode>,
-    images: MutNullableHeap<JS<HTMLCollection>>,
-    embeds: MutNullableHeap<JS<HTMLCollection>>,
-    links: MutNullableHeap<JS<HTMLCollection>>,
-    forms: MutNullableHeap<JS<HTMLCollection>>,
-    scripts: MutNullableHeap<JS<HTMLCollection>>,
-    anchors: MutNullableHeap<JS<HTMLCollection>>,
-    applets: MutNullableHeap<JS<HTMLCollection>>,
-    ready_state: Cell<DocumentReadyState>,
-    /// The element that has most recently requested focus for itself.
-    possibly_focused: MutNullableHeap<JS<Element>>,
-    /// The element that currently has the document focus context.
-    focused: MutNullableHeap<JS<Element>>,
-    /// The script element that is currently executing.
-    current_script: MutNullableHeap<JS<HTMLScriptElement>>,
-    /// https://html.spec.whatwg.org/multipage/#concept-n-noscript
-    /// True if scripting is enabled for all scripts in this document
-    scripting_enabled: Cell<bool>,
-    /// https://html.spec.whatwg.org/multipage/#animation-frame-callback-identifier
-    /// Current identifier of animation frame callback
-    animation_frame_ident: Cell<u32>,
-    /// The current active HTML parser, to allow resuming after interruptions.
-    current_parser: MutNullableHeap<JS<ServoHTMLParser>>,
-    /// The cached first `base` element with an `href` attribute.
-    base_element: MutNullableHeap<JS<HTMLBaseElement>>,
-    /// This field is set to the document itself for inert documents.
-    /// https://html.spec.whatwg.org/multipage/#appropriate-template-contents-owner-document
-    appropriate_template_contents_owner_document: MutNullableHeap<JS<Document>>,
-    extra: Box<DocumentExtra>,
+magic_dom_struct! {
+    pub struct Document {
+        node: Base<Node>,
+        window: JS<Window>,
+        implementation: Mut<Option<JS<DOMImplementation>>>,
+        location: Mut<Option<JS<Location>>>,
+        content_type: DOMString,
+        last_modified: Option<DOMString>,
+        encoding_name: Layout<DOMString>,
+        is_html_document: bool,
+        quirks_mode: Mut<QuirksMode>,
+        images: Mut<Option<JS<HTMLCollection>>>,
+        embeds: Mut<Option<JS<HTMLCollection>>>,
+        links: Mut<Option<JS<HTMLCollection>>>,
+        forms: Mut<Option<JS<HTMLCollection>>>,
+        scripts: Mut<Option<JS<HTMLCollection>>>,
+        anchors: Mut<Option<JS<HTMLCollection>>>,
+        applets: Mut<Option<JS<HTMLCollection>>>,
+        ready_state: Mut<DocumentReadyState>,
+        /// The element that has most recently requested focus for itself.
+        possibly_focused: Mut<Option<JS<Element>>>,
+        /// The element that currently has the document focus context.
+        focused: Mut<Option<JS<Element>>>,
+        /// The script element that is currently executing.
+        current_script: Mut<Option<JS<HTMLScriptElement>>>,
+        /// https://html.spec.whatwg.org/multipage/#concept-n-noscript
+        /// True if scripting is enabled for all scripts in this document
+        scripting_enabled: Mut<bool>,
+        /// https://html.spec.whatwg.org/multipage/#animation-frame-callback-identifier
+        /// Current identifier of animation frame callback
+        animation_frame_ident: Mut<u32>,
+        /// The current active HTML parser, to allow resuming after interruptions.
+        current_parser: Mut<Option<JS<ServoHTMLParser>>>,
+        /// The cached first `base` element with an `href` attribute.
+        base_element: Mut<Option<JS<HTMLBaseElement>>>,
+        /// This field is set to the document itself for inert documents.
+        /// https://html.spec.whatwg.org/multipage/#appropriate-template-contents-owner-document
+        appropriate_template_contents_owner_document: Mut<Option<JS<Document>>>,
+        extra: Box<DocumentExtra>,
+    }
 }
 
 #[must_root]
@@ -288,7 +289,7 @@ impl Document {
 
     /// Returns the first `base` element in the DOM that has an `href` attribute.
     pub fn base_element(&self) -> Option<Root<HTMLBaseElement>> {
-        self.base_element.get_rooted()
+        self.base_element.get().map(Root::from_rooted)
     }
 
     /// Refresh the cached first base element in the DOM.
@@ -487,7 +488,7 @@ impl Document {
     /// Return the element that currently has focus.
     // https://dvcs.w3.org/hg/dom3events/raw-file/tip/html/DOM3-Events.html#events-focusevent-doc-focus
     pub fn get_focused_element(&self) -> Option<Root<Element>> {
-        self.focused.get_rooted()
+        self.focused.get().map(Root::from_rooted)
     }
 
     /// Initiate a new round of checking for elements requesting focus. The last element to call
@@ -508,13 +509,13 @@ impl Document {
     pub fn commit_focus_transaction(&self, focus_type: FocusType) {
         //TODO: dispatch blur, focus, focusout, and focusin events
 
-        if let Some(ref elem) = self.focused.get_rooted() {
+        if let Some(ref elem) = self.focused.get().map(Root::from_rooted) {
             elem.set_focus_state(false);
         }
 
         self.focused.set(self.possibly_focused.get().r());
 
-        if let Some(ref elem) = self.focused.get_rooted() {
+        if let Some(ref elem) = self.focused.get().map(Root::from_rooted) {
             elem.set_focus_state(true);
 
             // Update the focus state for all elements in the focus chain.
@@ -652,10 +653,10 @@ impl Document {
     pub fn handle_mouse_move_event(&self,
                                js_runtime: *mut JSRuntime,
                                point: Point2D<f32>,
-                               prev_mouse_over_targets: &mut RootedVec<JS<Element>>) {
+                               prev_mouse_over_targets: &mut RootedVec<Element>) {
         // Build a list of elements that are currently under the mouse.
         let mouse_over_addresses = self.get_nodes_under_mouse(&point);
-        let mut mouse_over_targets: RootedVec<JS<Element>> = RootedVec::new();
+        let mut mouse_over_targets = RootedVec::new();
         for node_address in &mouse_over_addresses {
             let node = node::from_untrusted_node_address(js_runtime, *node_address);
             mouse_over_targets.push(node.r().inclusive_ancestors()
@@ -950,7 +951,7 @@ impl Document {
     }
 
     pub fn get_current_parser(&self) -> Option<Root<ServoHTMLParser>> {
-        self.current_parser.get_rooted()
+        self.current_parser.get().map(Root::from_rooted)
     }
 
     /// Find an iframe element in the document.
@@ -991,13 +992,13 @@ impl LayoutDocumentHelpers for LayoutJS<Document> {
 }
 
 impl Document {
-    fn new_inherited(window: &Window,
+    fn new_inherited(&mut self, window: &Window,
                      url: Option<Url>,
                      is_html_document: IsHTMLDocument,
                      content_type: Option<DOMString>,
                      last_modified: Option<DOMString>,
                      source: DocumentSource,
-                     doc_loader: DocumentLoader) -> Document {
+                     doc_loader: DocumentLoader) {
         let url = url.unwrap_or_else(|| Url::parse("about:blank").unwrap());
 
         let ready_state = if source == DocumentSource::FromParser {
@@ -1017,42 +1018,40 @@ impl Document {
                 }
             };
 
-        Document {
-            node: Node::new_document_node(),
-            window: JS::from_ref(window),
-            implementation: Default::default(),
-            location: Default::default(),
-            content_type: content_type,
-            last_modified: last_modified,
-            // https://dom.spec.whatwg.org/#concept-document-encoding
-            encoding_name: DOMRefCell::new("UTF-8".to_owned()),
-            is_html_document: is_html_document == IsHTMLDocument::HTMLDocument,
-            // https://dom.spec.whatwg.org/#concept-document-quirks
-            quirks_mode: Cell::new(NoQuirks),
-            images: Default::default(),
-            embeds: Default::default(),
-            links: Default::default(),
-            forms: Default::default(),
-            scripts: Default::default(),
-            anchors: Default::default(),
-            applets: Default::default(),
-            ready_state: Cell::new(ready_state),
-            possibly_focused: Default::default(),
-            focused: Default::default(),
-            current_script: Default::default(),
-            scripting_enabled: Cell::new(true),
-            animation_frame_ident: Cell::new(0),
-            current_parser: Default::default(),
-            base_element: Default::default(),
-            appropriate_template_contents_owner_document: Default::default(),
-            extra: box DocumentExtra {
-                idmap: DOMRefCell::new(HashMap::new()),
-                url: url,
-                animation_frame_list: RefCell::new(HashMap::new()),
-                loader: DOMRefCell::new(doc_loader),
-                reflow_timeout: Cell::new(None),
-            }
-        }
+        self.node.init(Node::new_document_node());
+        self.window.init(JS::from_ref(window));
+        self.implementation.init(Default::default());
+        self.location.init(Default::default());
+        self.content_type.init(content_type);
+        self.last_modified.init(last_modified);
+        // https://dom.spec.whatwg.org/#concept-document-encoding
+        self.encoding_name.init("UTF-8".to_owned());
+        self.is_html_document.init(is_html_document == IsHTMLDocument::HTMLDocument);
+        // https://dom.spec.whatwg.org/#concept-document-quirks
+        self.quirks_mode.init(NoQuirks);
+        self.images.init(Default::default());
+        self.embeds.init(Default::default());
+        self.links.init(Default::default());
+        self.forms.init(Default::default());
+        self.scripts.init(Default::default());
+        self.anchors.init(Default::default());
+        self.applets.init(Default::default());
+        self.ready_state.init(ready_state);
+        self.possibly_focused.init(Default::default());
+        self.focused.init(Default::default());
+        self.current_script.init(Default::default());
+        self.scripting_enabled.init(true);
+        self.animation_frame_ident.init(0);
+        self.current_parser.init(Default::default());
+        self.base_element.init(Default::default());
+        self.appropriate_template_contents_owner_document.init(Default::default());
+        self.extra.init(box DocumentExtra {
+            idmap: DOMRefCell::new(HashMap::new()),
+            url: url,
+            animation_frame_list: RefCell::new(HashMap::new()),
+            loader: DOMRefCell::new(doc_loader),
+            reflow_timeout: Cell::new(None),
+        });
     }
 
     // https://dom.spec.whatwg.org/#dom-document
@@ -1073,16 +1072,15 @@ impl Document {
                last_modified: Option<DOMString>,
                source: DocumentSource,
                doc_loader: DocumentLoader) -> Root<Document> {
-        let document = reflect_dom_object(box Document::new_inherited(window, url, doctype,
+        let mut document = alloc_dom_object::<Document>(GlobalRef::Window(window));
+        document.new_inherited(window, url, doctype,
                                                                       content_type, last_modified,
-                                                                      source, doc_loader),
-                                          GlobalRef::Window(window),
-                                          DocumentBinding::Wrap);
+                                                                      source, doc_loader);
         {
             let node = document.upcast::<Node>();
             node.set_owner_doc(document.r());
         }
-        document
+        document.into_root()
     }
 
     fn create_node_list<F: Fn(&Node) -> bool>(&self, callback: F) -> Root<NodeList> {
@@ -1480,7 +1478,7 @@ impl DocumentMethods for Document {
 
     // https://html.spec.whatwg.org/multipage/#dom-document-currentscript
     fn GetCurrentScript(&self) -> Option<Root<HTMLScriptElement>> {
-        self.current_script.get_rooted()
+        self.current_script.get().map(Root::from_rooted)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-document-body
@@ -1777,7 +1775,7 @@ impl DocumentMethods for Document {
                     *found = true;
                     // TODO: Step 2.
                     // Step 3.
-                    return first.r().reflector().get_jsobject().get()
+                    return first.handle().get()
                 }
             } else {
                 *found = false;
@@ -1788,7 +1786,7 @@ impl DocumentMethods for Document {
         *found = true;
         let filter = NamedElementFilter { name: name };
         let collection = HTMLCollection::create(self.window().r(), root, box filter);
-        collection.r().reflector().get_jsobject().get()
+        collection.handle().get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-tree-accessors:supported-property-names

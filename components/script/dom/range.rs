@@ -15,7 +15,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root, RootedReference};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::characterdata::CharacterData;
 use dom::document::Document;
 use dom::documentfragment::DocumentFragment;
@@ -25,19 +25,16 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::rc::Rc;
 
-#[dom_struct]
-pub struct Range {
-    reflector_: Reflector,
-    inner: Rc<RefCell<RangeInner>>,
+magic_dom_struct! {
+    pub struct Range {
+        inner: Rc<RefCell<RangeInner>>,
+    }
 }
 
 impl Range {
-    fn new_inherited(start_container: &Node, start_offset: u32,
-                     end_container: &Node, end_offset: u32) -> Range {
-        Range {
-            reflector_: Reflector::new(),
-            inner: Rc::new(RefCell::new(RangeInner::new(BoundaryPoint::new(start_container, start_offset), BoundaryPoint::new(end_container, end_offset)))),
-        }
+    fn new_inherited(&mut self, start_container: &Node, start_offset: u32,
+                     end_container: &Node, end_offset: u32) {
+        self.inner.init(Rc::new(RangeInner::new(BoundaryPoint::new(start_container, start_offset), BoundaryPoint::new(end_container, end_offset))));
     }
 
     pub fn new_with_doc(document: &Document) -> Root<Range> {
@@ -50,10 +47,10 @@ impl Range {
                end_container: &Node, end_offset: u32)
                -> Root<Range> {
         let window = document.window();
-        reflect_dom_object(box Range::new_inherited(start_container, start_offset,
-                                                    end_container, end_offset),
-                           GlobalRef::Window(window.r()),
-                           RangeBinding::Wrap)
+        let mut obj = alloc_dom_object::<Range>(GlobalRef::Window(window.r()));
+        obj.new_inherited(start_container, start_offset,
+                                                    end_container, end_offset);
+        obj.into_root()
     }
 
     // https://dom.spec.whatwg.org/#dom-range

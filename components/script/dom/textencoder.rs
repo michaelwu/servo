@@ -8,7 +8,7 @@ use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::str::USVString;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use encoding::label::encoding_from_whatwg_label;
 use encoding::types::EncodingRef;
 use encoding::{EncoderTrap, Encoding};
@@ -19,27 +19,24 @@ use std::borrow::ToOwned;
 use std::ptr;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct TextEncoder {
-    reflector_: Reflector,
-    encoding: DOMString,
-    #[ignore_heap_size_of = "Defined in rust-encoding"]
-    encoder: EncodingRef,
+magic_dom_struct! {
+    pub struct TextEncoder {
+        encoding: DOMString,
+        #[ignore_heap_size_of = "Defined in rust-encoding"]
+        encoder: EncodingRef,
+    }
 }
 
 impl TextEncoder {
-    fn new_inherited(encoding: DOMString, encoder: EncodingRef) -> TextEncoder {
-        TextEncoder {
-            reflector_: Reflector::new(),
-            encoding: encoding,
-            encoder: encoder,
-        }
+    fn new_inherited(&mut self, encoding: DOMString, encoder: EncodingRef) {
+        self.encoding.init(encoding);
+        self.encoder.init(encoder);
     }
 
     pub fn new(global: GlobalRef, encoding: DOMString, encoder: EncodingRef) -> Root<TextEncoder> {
-        reflect_dom_object(box TextEncoder::new_inherited(encoding, encoder),
-                           global,
-                           TextEncoderBinding::Wrap)
+        let mut obj = alloc_dom_object::<TextEncoder>(global);
+        obj.new_inherited(encoding, encoder);
+        obj.into_root()
     }
 
     // https://encoding.spec.whatwg.org/#dom-textencoder

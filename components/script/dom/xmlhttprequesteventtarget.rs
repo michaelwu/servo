@@ -6,16 +6,15 @@ use dom::bindings::codegen::Bindings::EventHandlerBinding::EventHandlerNonNull;
 use dom::bindings::codegen::Bindings::XMLHttpRequestEventTargetBinding::XMLHttpRequestEventTargetMethods;
 use dom::eventtarget::EventTarget;
 
-#[dom_struct]
-pub struct XMLHttpRequestEventTarget {
-    eventtarget: EventTarget,
+magic_dom_struct! {
+    pub struct XMLHttpRequestEventTarget {
+        eventtarget: Base<EventTarget>,
+    }
 }
 
 impl XMLHttpRequestEventTarget {
-    pub fn new_inherited() -> XMLHttpRequestEventTarget {
-        XMLHttpRequestEventTarget {
-            eventtarget: EventTarget::new_inherited()
-        }
+    pub fn new_inherited(&mut self) {
+        self.eventtarget.new_inherited()
     }
 }
 

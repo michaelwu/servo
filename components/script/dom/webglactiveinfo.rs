@@ -7,30 +7,29 @@ use dom::bindings::codegen::Bindings::WebGLActiveInfoBinding;
 use dom::bindings::codegen::Bindings::WebGLActiveInfoBinding::WebGLActiveInfoMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct WebGLActiveInfo {
-    reflector_: Reflector,
-    size: i32,
-    // NOTE: `ty` stands for `type`, which is a reserved keyword
-    ty: u32,
-    name: String,
+magic_dom_struct! {
+    pub struct WebGLActiveInfo {
+        size: i32,
+        // NOTE: `ty` stands for `type`, which is a reserved keyword
+        ty: u32,
+        name: String,
+    }
 }
 
 impl WebGLActiveInfo {
-    fn new_inherited(size: i32, ty: u32, name: String) -> WebGLActiveInfo {
-        WebGLActiveInfo {
-            reflector_: Reflector::new(),
-            size: size,
-            ty: ty,
-            name: name,
-        }
+    fn new_inherited(&mut self, size: i32, ty: u32, name: String) {
+        self.size.init(size);
+        self.ty.init(ty);
+        self.name.init(name);
     }
 
     pub fn new(global: GlobalRef, size: i32, ty: u32, name: String) -> Root<WebGLActiveInfo> {
-        reflect_dom_object(box WebGLActiveInfo::new_inherited(size, ty, name), global, WebGLActiveInfoBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLActiveInfo>(global);
+        obj.new_inherited(size, ty, name);
+        obj.into_root()
     }
 }
 

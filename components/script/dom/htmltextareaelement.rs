@@ -32,14 +32,15 @@ use string_cache::Atom;
 use textinput::{KeyReaction, Lines, TextInput};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTextAreaElement {
-    htmlelement: HTMLElement,
-    cols: Cell<u32>,
-    rows: Cell<u32>,
-    // https://html.spec.whatwg.org/multipage/#concept-textarea-dirty
-    value_changed: Cell<bool>,
-    extra: Box<HTMLTextAreaElementExtra>,
+magic_dom_struct! {
+    pub struct HTMLTextAreaElement {
+        htmlelement: Base<HTMLElement>,
+        cols: Mut<u32>,
+        rows: Mut<u32>,
+        // https://html.spec.whatwg.org/multipage/#concept-textarea-dirty
+        value_changed: Mut<bool>,
+        extra: Box<HTMLTextAreaElementExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -86,27 +87,26 @@ static DEFAULT_COLS: u32 = 20;
 static DEFAULT_ROWS: u32 = 2;
 
 impl HTMLTextAreaElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLTextAreaElement {
+                     document: &Document) {
         let chan = document.window().r().constellation_chan();
-        HTMLTextAreaElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-            cols: Cell::new(DEFAULT_COLS),
-            rows: Cell::new(DEFAULT_ROWS),
-            value_changed: Cell::new(false),
-            extra: box HTMLTextAreaElementExtra {
-                textinput: DOMRefCell::new(TextInput::new(Lines::Multiple, "".to_owned(), chan)),
-            },
-        }
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
+        self.cols.init(DEFAULT_COLS);
+        self.rows.init(DEFAULT_ROWS);
+        self.value_changed.init(false);
+        self.extra.init(box HTMLTextAreaElementExtra {
+            textinput: DOMRefCell::new(TextInput::new(Lines::Multiple, "".to_owned(), chan)),
+        });
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLTextAreaElement> {
-        let element = HTMLTextAreaElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTextAreaElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTextAreaElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

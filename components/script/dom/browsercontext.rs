@@ -7,7 +7,7 @@ use dom::bindings::conversions::{ToJSValConvertible};
 use dom::bindings::js::{JS, Root};
 use dom::bindings::proxyhandler::{fill_property_descriptor, get_property_descriptor};
 use dom::bindings::utils::get_array_index_from_id;
-use dom::bindings::utils::{Reflectable, WindowProxyHandler};
+use dom::bindings::utils::{WindowProxyHandler};
 use dom::document::Document;
 use dom::element::Element;
 use dom::window::Window;
@@ -72,7 +72,7 @@ impl BrowsingContext {
 
         let cx = win.get_cx();
         let _ar = JSAutoRequest::new(cx);
-        let parent = win.reflector().get_jsobject();
+        let parent = win.handle();
         let _ac = JSAutoCompartment::new(cx, parent.get());
         let wrapper = unsafe { WrapperNew(cx, parent, handler, ptr::null(), false) };
         assert!(!wrapper.is_null());

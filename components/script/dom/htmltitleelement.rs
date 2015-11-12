@@ -15,24 +15,24 @@ use dom::text::Text;
 use dom::virtualmethods::VirtualMethods;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLTitleElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLTitleElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLTitleElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLTitleElement {
-        HTMLTitleElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLTitleElement> {
-        let element = HTMLTitleElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTitleElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTitleElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

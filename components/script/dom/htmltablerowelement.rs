@@ -8,7 +8,7 @@ use dom::bindings::codegen::Bindings::HTMLTableRowElementBinding::{self, HTMLTab
 use dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{ErrorResult, Fallible};
-use dom::bindings::js::{JS, MutNullableHeap, Root, RootedReference};
+use dom::bindings::js::{JS, Root, RootedReference};
 use dom::document::Document;
 use dom::element::{AttributeMutation, Element};
 use dom::htmlcollection::{CollectionFilter, HTMLCollection};
@@ -30,28 +30,28 @@ impl CollectionFilter for CellsFilter {
     }
 }
 
-#[dom_struct]
-pub struct HTMLTableRowElement {
-    htmlelement: HTMLElement,
-    cells: MutNullableHeap<JS<HTMLCollection>>,
-    background_color: Cell<Option<RGBA>>,
+magic_dom_struct! {
+    pub struct HTMLTableRowElement {
+        htmlelement: Base<HTMLElement>,
+        cells: Mut<Option<JS<HTMLCollection>>>,
+        background_color: Mut<Option<RGBA>>,
+    }
 }
 
 impl HTMLTableRowElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document)
-                     -> HTMLTableRowElement {
-        HTMLTableRowElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            cells: Default::default(),
-            background_color: Cell::new(None),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document)
+                     {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.cells.init(Default::default());
+        self.background_color.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableRowElement> {
-        let element = HTMLTableRowElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableRowElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableRowElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {

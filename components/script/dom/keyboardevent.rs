@@ -9,7 +9,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root, RootedReference};
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::Event;
 use dom::uievent::UIEvent;
 use dom::window::Window;
@@ -22,46 +22,45 @@ use util::str::DOMString;
 
 no_jsmanaged_fields!(Key);
 
-#[dom_struct]
-pub struct KeyboardEvent {
-    uievent: UIEvent,
-    key: Cell<Option<Key>>,
-    key_string: RefCell<DOMString>,
-    code: RefCell<DOMString>,
-    location: Cell<u32>,
-    ctrl: Cell<bool>,
-    alt: Cell<bool>,
-    shift: Cell<bool>,
-    meta: Cell<bool>,
-    repeat: Cell<bool>,
-    is_composing: Cell<bool>,
-    char_code: Cell<Option<u32>>,
-    key_code: Cell<u32>,
+magic_dom_struct! {
+    pub struct KeyboardEvent {
+        uievent: Base<UIEvent>,
+        key: Mut<Option<Key>>,
+        key_string: Layout<DOMString>,
+        code: Layout<DOMString>,
+        location: Mut<u32>,
+        ctrl: Mut<bool>,
+        alt: Mut<bool>,
+        shift: Mut<bool>,
+        meta: Mut<bool>,
+        repeat: Mut<bool>,
+        is_composing: Mut<bool>,
+        char_code: Mut<Option<u32>>,
+        key_code: Mut<u32>,
+    }
 }
 
 impl KeyboardEvent {
-    fn new_inherited() -> KeyboardEvent {
-        KeyboardEvent {
-            uievent: UIEvent::new_inherited(),
-            key: Cell::new(None),
-            key_string: RefCell::new("".to_owned()),
-            code: RefCell::new("".to_owned()),
-            location: Cell::new(0),
-            ctrl: Cell::new(false),
-            alt: Cell::new(false),
-            shift: Cell::new(false),
-            meta: Cell::new(false),
-            repeat: Cell::new(false),
-            is_composing: Cell::new(false),
-            char_code: Cell::new(None),
-            key_code: Cell::new(0),
-        }
+    fn new_inherited(&mut self) {
+        self.uievent.new_inherited();
+        self.key.init(None);
+        self.key_string.init("".to_owned());
+        self.code.init("".to_owned());
+        self.location.init(0);
+        self.ctrl.init(false);
+        self.alt.init(false);
+        self.shift.init(false);
+        self.meta.init(false);
+        self.repeat.init(false);
+        self.is_composing.init(false);
+        self.char_code.init(None);
+        self.key_code.init(0);
     }
 
     pub fn new_uninitialized(window: &Window) -> Root<KeyboardEvent> {
-        reflect_dom_object(box KeyboardEvent::new_inherited(),
-                           GlobalRef::Window(window),
-                           KeyboardEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<KeyboardEvent>(GlobalRef::Window(window));
+        obj.new_inherited();
+        obj.into_root()
     }
 
     pub fn new(window: &Window,

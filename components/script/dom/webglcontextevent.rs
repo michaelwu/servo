@@ -10,14 +10,15 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct WebGLContextEvent {
-    event: Event,
-    status_message: DOMString,
+magic_dom_struct! {
+    pub struct WebGLContextEvent {
+        event: Base<Event>,
+        status_message: DOMString,
+    }
 }
 
 impl WebGLContextEventMethods for WebGLContextEvent {
@@ -28,11 +29,9 @@ impl WebGLContextEventMethods for WebGLContextEvent {
 }
 
 impl WebGLContextEvent {
-    pub fn new_inherited(status_message: DOMString) -> WebGLContextEvent {
-        WebGLContextEvent {
-            event: Event::new_inherited(),
-            status_message: status_message,
-        }
+    pub fn new_inherited(&mut self, status_message: DOMString) {
+        self.event.new_inherited();
+        self.status_message.init(status_message);
     }
 
     pub fn new(global: GlobalRef,
@@ -40,17 +39,15 @@ impl WebGLContextEvent {
                bubbles: EventBubbles,
                cancelable: EventCancelable,
                status_message: DOMString) -> Root<WebGLContextEvent> {
-        let event = reflect_dom_object(
-                        box WebGLContextEvent::new_inherited(status_message),
-                        global,
-                        WebGLContextEventBinding::Wrap);
+        let mut event = alloc_dom_object::<WebGLContextEvent>(global);
+        event.new_inherited(status_message);
 
         {
             let parent = event.upcast::<Event>();
             parent.InitEvent(type_, bubbles == EventBubbles::Bubbles, cancelable == EventCancelable::Cancelable);
         }
 
-        event
+        event.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

@@ -8,9 +8,9 @@ use dom::bindings::cell::DOMRefCell;
 use dom::bindings::codegen::Bindings::AttrBinding::{self, AttrMethods};
 use dom::bindings::conversions::Castable;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap};
+use dom::bindings::js::{JS};
 use dom::bindings::js::{LayoutJS, Root, RootedReference};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::element::{AttributeMutation, Element};
 use dom::values::UNSIGNED_LONG_MAX;
 use dom::virtualmethods::vtable_for;
@@ -157,13 +157,13 @@ impl Deref for AttrValue {
 }
 
 // https://dom.spec.whatwg.org/#interface-attr
-#[dom_struct]
-pub struct Attr {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct Attr {
 
-    /// the element that owns this attribute.
-    owner: MutNullableHeap<JS<Element>>,
-    extra: Box<AttrExtra>,
+        /// the element that owns this attribute.
+        owner: Mut<Option<JS<Element>>>,
+        extra: Box<AttrExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -176,28 +176,24 @@ pub struct AttrExtra {
 }
 
 impl Attr {
-    fn new_inherited(local_name: Atom, value: AttrValue, name: Atom, namespace: Namespace,
-                     prefix: Option<Atom>, owner: Option<&Element>) -> Attr {
-        Attr {
-            reflector_: Reflector::new(),
-            owner: MutNullableHeap::new(owner),
-            extra: box AttrExtra {
-                local_name: local_name,
-                value: DOMRefCell::new(value),
-                name: name,
-                namespace: namespace,
-                prefix: prefix,
-            },
-        }
+    fn new_inherited(&mut self, local_name: Atom, value: AttrValue, name: Atom, namespace: Namespace,
+                     prefix: Option<Atom>, owner: Option<&Element>) {
+        self.owner.init(owner);
+        self.extra.init(box AttrExtra {
+            local_name: local_name,
+            value: DOMRefCell::new(value),
+            name: name,
+            namespace: namespace,
+            prefix: prefix,
+        });
     }
 
     pub fn new(window: &Window, local_name: Atom, value: AttrValue,
                name: Atom, namespace: Namespace,
                prefix: Option<Atom>, owner: Option<&Element>) -> Root<Attr> {
-        reflect_dom_object(
-            box Attr::new_inherited(local_name, value, name, namespace, prefix, owner),
-            GlobalRef::Window(window),
-            AttrBinding::Wrap)
+        let mut obj = alloc_dom_object::<Attr>(GlobalRef::Window(window));
+        obj.new_inherited(local_name, value, name, namespace, prefix, owner);
+        obj.into_root()
     }
 
     #[inline]
@@ -326,7 +322,7 @@ impl Attr {
     }
 
     pub fn owner(&self) -> Option<Root<Element>> {
-        self.owner.get_rooted()
+        self.owner.get().map(Root::from_rooted)
     }
 
     pub fn summarize(&self) -> AttrInfo {

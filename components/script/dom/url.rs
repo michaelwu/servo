@@ -7,7 +7,7 @@ use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::str::USVString;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::urlhelper::UrlHelper;
 use std::borrow::ToOwned;
 use std::cell::RefCell;
@@ -15,12 +15,12 @@ use url::{Host, ParseResult, Url, UrlParser};
 use util::str::DOMString;
 
 // https://url.spec.whatwg.org/#url
-#[dom_struct]
-pub struct URL {
-    reflector_: Reflector,
+magic_dom_struct! {
+    pub struct URL {
 
-    // https://url.spec.whatwg.org/#concept-urlutils-url
-    extra: Box<URLExtra>,
+        // https://url.spec.whatwg.org/#concept-urlutils-url
+        extra: Box<URLExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -32,19 +32,17 @@ pub struct URLExtra {
 }
 
 impl URL {
-    fn new_inherited(url: Url, base: Option<Url>) -> URL {
-        URL {
-            reflector_: Reflector::new(),
-            extra: box URLExtra {
-                url: RefCell::new(url),
-                base: base,
-            }
-        }
+    fn new_inherited(&mut self, url: Url, base: Option<Url>) {
+        self.extra.init(box URLExtra {
+            url: RefCell::new(url),
+            base: base,
+        });
     }
 
     pub fn new(global: GlobalRef, url: Url, base: Option<Url>) -> Root<URL> {
-        reflect_dom_object(box URL::new_inherited(url, base),
-                           global, URLBinding::Wrap)
+        let mut obj = alloc_dom_object::<URL>(global);
+        obj.new_inherited(url, base);
+        obj.into_root()
     }
 }
 

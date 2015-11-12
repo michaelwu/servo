@@ -9,24 +9,23 @@ use dom::htmlmediaelement::HTMLMediaElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLVideoElement {
-    htmlmediaelement: HTMLMediaElement
+magic_dom_struct! {
+    pub struct HTMLVideoElement {
+        htmlmediaelement: Base<HTMLMediaElement>
+    }
 }
 
 impl HTMLVideoElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLVideoElement {
-        HTMLVideoElement {
-            htmlmediaelement:
-                HTMLMediaElement::new_inherited(localName, prefix, document)
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlmediaelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLVideoElement> {
-        let element = HTMLVideoElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLVideoElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLVideoElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

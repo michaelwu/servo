@@ -19,7 +19,7 @@ use dom::bindings::error::{Error, Fallible};
 use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::{JS, LayoutJS, Root};
 use dom::bindings::num::Finite;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::canvasgradient::{CanvasGradient, CanvasGradientStyle, ToFillOrStrokeStyle};
 use dom::canvaspattern::CanvasPattern;
 use dom::htmlcanvaselement::HTMLCanvasElement;
@@ -54,12 +54,12 @@ enum CanvasFillOrStrokeStyle {
 }
 
 // https://html.spec.whatwg.org/multipage/#canvasrenderingcontext2d
-#[dom_struct]
-pub struct CanvasRenderingContext2D {
-    reflector_: Reflector,
-    global: GlobalField,
-    canvas: JS<HTMLCanvasElement>,
-    extra: Box<CanvasRenderingContext2DExtra>,
+magic_dom_struct! {
+    pub struct CanvasRenderingContext2D {
+        global: GlobalField,
+        canvas: JS<HTMLCanvasElement>,
+        extra: Box<CanvasRenderingContext2DExtra>,
+    }
 }
 
 #[must_root]
@@ -119,29 +119,27 @@ impl CanvasContextState {
 }
 
 impl CanvasRenderingContext2D {
-    fn new_inherited(global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>)
-                     -> CanvasRenderingContext2D {
+    fn new_inherited(&mut self, global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>)
+                     {
         let (sender, receiver) = ipc::channel().unwrap();
         let constellation_chan = global.constellation_chan();
         constellation_chan.0.send(ConstellationMsg::CreateCanvasPaintTask(size, sender)).unwrap();
         let (ipc_renderer, renderer_id) = receiver.recv().unwrap();
-        CanvasRenderingContext2D {
-            reflector_: Reflector::new(),
-            global: GlobalField::from_rooted(&global),
-            canvas: JS::from_ref(canvas),
-            extra: box CanvasRenderingContext2DExtra {
-                renderer_id: renderer_id,
-                ipc_renderer: ipc_renderer,
-                state: RefCell::new(CanvasContextState::new()),
-                saved_states: RefCell::new(Vec::new()),
-            },
-        }
+        self.global.init(GlobalField::from_rooted(&global));
+        self.canvas.init(JS::from_ref(canvas));
+        self.extra.init(box CanvasRenderingContext2DExtra {
+            renderer_id: renderer_id,
+            ipc_renderer: ipc_renderer,
+            state: RefCell::new(CanvasContextState::new()),
+            saved_states: RefCell::new(Vec::new()),
+        });
     }
 
     pub fn new(global: GlobalRef, canvas: &HTMLCanvasElement, size: Size2D<i32>)
                -> Root<CanvasRenderingContext2D> {
-        reflect_dom_object(box CanvasRenderingContext2D::new_inherited(global, canvas, size),
-                           global, CanvasRenderingContext2DBinding::Wrap)
+        let mut obj = alloc_dom_object::<CanvasRenderingContext2D>(global);
+        obj.new_inherited(global, canvas, size);
+        obj.into_root()
     }
 
     pub fn recreate(&self, size: Size2D<i32>) {

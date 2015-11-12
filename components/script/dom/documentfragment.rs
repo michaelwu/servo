@@ -19,22 +19,22 @@ use string_cache::Atom;
 use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#documentfragment
-#[dom_struct]
-pub struct DocumentFragment {
-    node: Node,
+magic_dom_struct! {
+    pub struct DocumentFragment {
+        node: Base<Node>,
+    }
 }
 
 impl DocumentFragment {
     /// Creates a new DocumentFragment.
-    fn new_inherited(document: &Document) -> DocumentFragment {
-        DocumentFragment {
-            node: Node::new_inherited(document),
-        }
+    fn new_inherited(&mut self, document: &Document) {
+        self.node.new_inherited(document);
     }
 
     pub fn new(document: &Document) -> Root<DocumentFragment> {
-        let element = DocumentFragment::new_inherited(document);
-        Node::reflect_node(box element, document, DocumentFragmentBinding::Wrap)
+        let mut obj = Node::alloc_node::<DocumentFragment>(document);
+        obj.new_inherited(document);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef) -> Fallible<Root<DocumentFragment>> {

@@ -27,10 +27,11 @@ use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::js::RootedReference;
-use dom::bindings::js::{JS, LayoutJS, MutNullableHeap};
+use dom::bindings::js::{JS, LayoutJS};
 use dom::bindings::trace::JSTraceable;
 use dom::bindings::trace::RootedVec;
-use dom::bindings::utils::{Reflectable, namespace_from_domstring, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::utils::namespace_from_domstring;
 use dom::bindings::magic::{MagicDOMClass, InitRoot};
 use dom::characterdata::CharacterData;
 use dom::comment::Comment;
@@ -73,45 +74,46 @@ use uuid;
 //
 
 /// An HTML node.
-#[dom_struct]
-pub struct Node {
-    /// The JavaScript reflector for this node.
-    eventtarget: EventTarget,
+magic_dom_struct! {
+    pub struct Node {
+        /// The JavaScript reflector for this node.
+        eventtarget: Base<EventTarget>,
 
-    /// The parent of this node.
-    parent_node: MutNullableHeap<JS<Node>>,
+        /// The parent of this node.
+        parent_node: Mut<Option<JS<Node>>>,
 
-    /// The first child of this node.
-    first_child: MutNullableHeap<JS<Node>>,
+        /// The first child of this node.
+        first_child: Mut<Option<JS<Node>>>,
 
-    /// The last child of this node.
-    last_child: MutNullableHeap<JS<Node>>,
+        /// The last child of this node.
+        last_child: Mut<Option<JS<Node>>>,
 
-    /// The next sibling of this node.
-    next_sibling: MutNullableHeap<JS<Node>>,
+        /// The next sibling of this node.
+        next_sibling: Mut<Option<JS<Node>>>,
 
-    /// The previous sibling of this node.
-    prev_sibling: MutNullableHeap<JS<Node>>,
+        /// The previous sibling of this node.
+        prev_sibling: Mut<Option<JS<Node>>>,
 
-    /// The document that this node belongs to.
-    owner_doc: MutNullableHeap<JS<Document>>,
+        /// The document that this node belongs to.
+        owner_doc: Mut<Option<JS<Document>>>,
 
-    /// The live list of children return by .childNodes.
-    child_list: MutNullableHeap<JS<NodeList>>,
+        /// The live list of children return by .childNodes.
+        child_list: Mut<Option<JS<NodeList>>>,
 
-    /// The live count of children of this node.
-    children_count: Cell<u32>,
+        /// The live count of children of this node.
+        children_count: Mut<u32>,
 
-    /// A bitfield of flags for node items.
-    flags: Cell<NodeFlags>,
+        /// A bitfield of flags for node items.
+        flags: Mut<NodeFlags>,
 
-    /// Layout information. Only the layout task may touch this data.
-    ///
-    /// Must be sent back to the layout task to be destroyed when this
-    /// node is finalized.
-    layout_data: RefCell<Option<Box<RefCell<LayoutData>>>>,
+        /// Layout information. Only the layout task may touch this data.
+        ///
+        /// Must be sent back to the layout task to be destroyed when this
+        /// node is finalized.
+        layout_data: Layout<Option<Box<RefCell<LayoutData>>>>,
 
-    unique_id: DOMRefCell<String>,
+        unique_id: Layout<String>,
+    }
 }
 
 impl PartialEq for Node {
@@ -211,11 +213,11 @@ impl Node {
         assert!(new_child.next_sibling.get().is_none());
         match before {
             Some(ref before) => {
-                assert!(before.parent_node.get_rooted().r() == Some(self));
+                assert!(before.parent_node.get().map(Root::from_rooted).r() == Some(self));
                 let prev_sibling = before.GetPreviousSibling();
                 match prev_sibling {
                     None => {
-                        assert!(Some(*before) == self.first_child.get_rooted().r());
+                        assert!(Some(*before) == self.first_child.get().map(Root::from_rooted).r());
                         self.first_child.set(Some(new_child));
                     },
                     Some(ref prev_sibling) => {
@@ -256,7 +258,7 @@ impl Node {
     ///
     /// Fails unless `child` is a child of this node.
     fn remove_child(&self, child: &Node) {
-        assert!(child.parent_node.get_rooted().r() == Some(self));
+        assert!(child.parent_node.get().map(Root::from_rooted).r() == Some(self));
         let prev_sibling = child.GetPreviousSibling();
         match prev_sibling {
             None => {
@@ -657,7 +659,7 @@ impl Node {
         let doc = self.owner_doc();
         let node = try!(doc.r().node_from_nodes_and_strings(nodes));
         // Step 2.
-        let first_child = self.first_child.get_rooted();
+        let first_child = self.first_child.get().map(Root::from_rooted);
         Node::pre_insert(node.r(), self, first_child.r()).map(|_| ())
     }
 
@@ -807,7 +809,7 @@ impl Node {
     pub fn insert_cell_or_row<F, G, I>(&self, index: i32, get_items: F, new_child: G) -> Fallible<Root<HTMLElement>>
         where F: Fn() -> Root<HTMLCollection>,
               G: Fn() -> Root<I>,
-              I: DerivedFrom<Node> + DerivedFrom<HTMLElement> + Reflectable,
+              I: DerivedFrom<Node> + DerivedFrom<HTMLElement> + MagicDOMClass,
     {
         if index < -1 {
             return Err(Error::IndexSize);
@@ -1244,7 +1246,7 @@ impl Node {
         let window = document.window();
         alloc_dom_object::<N>(GlobalRef::Window(window.r()))
     }
-    pub fn new_inherited(doc: &Document) -> Node {
+    pub fn new_inherited(&mut self, doc: &Document) {
         Node::new_(NodeFlags::new(), Some(doc))
     }
 
@@ -1254,24 +1256,22 @@ impl Node {
     }
 
     #[allow(unrooted_must_root)]
-    fn new_(flags: NodeFlags, doc: Option<&Document>) -> Node {
-        Node {
-            eventtarget: EventTarget::new_inherited(),
+    fn new_(&mut self, flags: NodeFlags, doc: Option<&Document>) {
+        self.eventtarget.new_inherited();
 
-            parent_node: Default::default(),
-            first_child: Default::default(),
-            last_child: Default::default(),
-            next_sibling: Default::default(),
-            prev_sibling: Default::default(),
-            owner_doc: MutNullableHeap::new(doc),
-            child_list: Default::default(),
-            children_count: Cell::new(0u32),
-            flags: Cell::new(flags),
+        self.parent_node.init(Default::default());
+        self.first_child.init(Default::default());
+        self.last_child.init(Default::default());
+        self.next_sibling.init(Default::default());
+        self.prev_sibling.init(Default::default());
+        self.owner_doc.init(doc);
+        self.child_list.init(Default::default());
+        self.children_count.init(0u32);
+        self.flags.init(flags);
 
-            layout_data: RefCell::new(None),
+        self.layout_data.init(None);
 
-            unique_id: DOMRefCell::new(String::new()),
-        }
+        self.unique_id.init(String::new());
     }
 
     // https://dom.spec.whatwg.org/#concept-node-adopt
@@ -1802,7 +1802,7 @@ impl NodeMethods for Node {
 
     // https://dom.spec.whatwg.org/#dom-node-parentnode
     fn GetParentNode(&self) -> Option<Root<Node>> {
-        self.parent_node.get_rooted()
+        self.parent_node.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-node-parentelement
@@ -1826,22 +1826,22 @@ impl NodeMethods for Node {
 
     // https://dom.spec.whatwg.org/#dom-node-firstchild
     fn GetFirstChild(&self) -> Option<Root<Node>> {
-        self.first_child.get_rooted()
+        self.first_child.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-node-lastchild
     fn GetLastChild(&self) -> Option<Root<Node>> {
-        self.last_child.get_rooted()
+        self.last_child.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-node-previoussibling
     fn GetPreviousSibling(&self) -> Option<Root<Node>> {
-        self.prev_sibling.get_rooted()
+        self.prev_sibling.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-node-nextsibling
     fn GetNextSibling(&self) -> Option<Root<Node>> {
-        self.next_sibling.get_rooted()
+        self.next_sibling.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-node-nodevalue
@@ -2311,11 +2311,11 @@ pub struct TrustedNodeAddress(pub *mut JSObject);
 #[allow(unsafe_code)]
 unsafe impl Send for TrustedNodeAddress {}
 
-pub fn document_from_node<T: DerivedFrom<Node> + Reflectable>(derived: &T) -> Root<Document> {
+pub fn document_from_node<T: DerivedFrom<Node> + MagicDOMClass>(derived: &T) -> Root<Document> {
     derived.upcast().owner_doc()
 }
 
-pub fn window_from_node<T: DerivedFrom<Node> + Reflectable>(derived: &T) -> Root<Window> {
+pub fn window_from_node<T: DerivedFrom<Node> + MagicDOMClass>(derived: &T) -> Root<Window> {
     let document = document_from_node(derived);
     document.r().window()
 }
@@ -2344,7 +2344,7 @@ impl VirtualMethods for Node {
                 self.children_count.set(added.len() as u32);
             },
         }
-        if let Some(list) = self.child_list.get_rooted() {
+        if let Some(list) = self.child_list.get().map(Root::from_rooted) {
             list.as_children_list().children_changed(mutation);
         }
     }

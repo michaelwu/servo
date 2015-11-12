@@ -7,32 +7,31 @@ use canvas_traits::{CanvasMsg, CanvasWebGLMsg, WebGLError, WebGLResult};
 use dom::bindings::codegen::Bindings::WebGLProgramBinding;
 use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderingContextConstants as constants;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::js::{JS, Root};
+use dom::bindings::magic::alloc_dom_object;
 use dom::webglobject::WebGLObject;
 use dom::webglrenderingcontext::MAX_UNIFORM_AND_ATTRIBUTE_LEN;
 use dom::webglshader::WebGLShader;
 use ipc_channel::ipc::{self, IpcSender};
 use std::cell::Cell;
 
-#[dom_struct]
-pub struct WebGLProgram {
-    webgl_object: WebGLObject,
-    id: u32,
-    is_deleted: Cell<bool>,
-    fragment_shader: MutNullableHeap<JS<WebGLShader>>,
-    vertex_shader: MutNullableHeap<JS<WebGLShader>>,
+magic_dom_struct! {
+    pub struct WebGLProgram {
+        webgl_object: Base<WebGLObject>,
+        id: u32,
+        is_deleted: Mut<bool>,
+        fragment_shader: Mut<Option<JS<WebGLShader>>>,
+        vertex_shader: Mut<Option<JS<WebGLShader>>>,
+    }
 }
 
 impl WebGLProgram {
-    fn new_inherited(id: u32) -> WebGLProgram {
-        WebGLProgram {
-            webgl_object: WebGLObject::new_inherited(),
-            id: id,
-            is_deleted: Cell::new(false),
-            fragment_shader: Default::default(),
-            vertex_shader: Default::default(),
-        }
+    fn new_inherited(&mut self, id: u32) {
+        self.webgl_object.new_inherited();
+        self.id.init(id);
+        self.is_deleted.init(false);
+        self.fragment_shader.init(Default::default());
+        self.vertex_shader.init(Default::default());
     }
 
     pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
@@ -45,7 +44,9 @@ impl WebGLProgram {
     }
 
     pub fn new(global: GlobalRef, id: u32) -> Root<WebGLProgram> {
-        reflect_dom_object(box WebGLProgram::new_inherited(id), global, WebGLProgramBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLProgram>(global);
+        obj.new_inherited(id);
+        obj.into_root()
     }
 }
 

@@ -7,29 +7,27 @@ use dom::bindings::codegen::Bindings::DOMRectListBinding::DOMRectListMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::DOMVec;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::domrect::DOMRect;
 use dom::window::Window;
 
-#[dom_struct]
-pub struct DOMRectList {
-    reflector_: Reflector,
-    rects: Vec<JS<DOMRect>>,
+magic_dom_struct! {
+    pub struct DOMRectList {
+        rects: DOMVec<JS<DOMRect>>,
+    }
 }
 
 impl DOMRectList {
-    fn new_inherited<T>(rects: T) -> DOMRectList
+    fn new_inherited<T>(&mut self, rects: T) -> DOMRectList
                         where T: Iterator<Item=Root<DOMRect>> {
-        DOMRectList {
-            reflector_: Reflector::new(),
-            rects: rects.map(|r| JS::from_rooted(&r)).collect(),
-        }
+        self.rects.init(rects.map(|r| JS::from_rooted(&r)).collect());
     }
 
     pub fn new<T>(window: &Window, rects: T) -> Root<DOMRectList>
                   where T: Iterator<Item=Root<DOMRect>> {
-        reflect_dom_object(box DOMRectList::new_inherited(rects),
-                           GlobalRef::Window(window), DOMRectListBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMRectList>(GlobalRef::Window(window));
+        obj.new_inherited(rects);
+        obj.into_root()
     }
 }
 

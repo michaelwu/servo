@@ -11,23 +11,23 @@ use dom::node::Node;
 use util::str::DOMString;
 
 /// An HTML processing instruction node.
-#[dom_struct]
-pub struct ProcessingInstruction {
-    characterdata: CharacterData,
-    target: DOMString,
+magic_dom_struct! {
+    pub struct ProcessingInstruction {
+        characterdata: Base<CharacterData>,
+        target: DOMString,
+    }
 }
 
 impl ProcessingInstruction {
-    fn new_inherited(target: DOMString, data: DOMString, document: &Document) -> ProcessingInstruction {
-        ProcessingInstruction {
-            characterdata: CharacterData::new_inherited(data, document),
-            target: target
-        }
+    fn new_inherited(&mut self, target: DOMString, data: DOMString, document: &Document) {
+        self.characterdata.new_inherited(data, document);
+        self.target.init(target);
     }
 
     pub fn new(target: DOMString, data: DOMString, document: &Document) -> Root<ProcessingInstruction> {
-        let element = ProcessingInstruction::new_inherited(target, data, document);
-        Node::reflect_node(box element, document, ProcessingInstructionBinding::Wrap)
+        let mut obj = Node::alloc_node::<ProcessingInstruction>(document);
+        obj.new_inherited(target, data, document);
+        obj.into_root()
     }
 }
 

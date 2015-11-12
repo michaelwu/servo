@@ -9,26 +9,25 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLParamElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLParamElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLParamElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLParamElement {
-        HTMLParamElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLParamElement> {
-        let element = HTMLParamElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLParamElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLParamElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

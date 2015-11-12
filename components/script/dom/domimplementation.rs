@@ -12,7 +12,7 @@ use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::utils::validate_qualified_name;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::DocumentSource;
 use dom::document::{Document, IsHTMLDocument};
 use dom::documenttype::DocumentType;
@@ -26,25 +26,22 @@ use std::borrow::ToOwned;
 use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#domimplementation
-#[dom_struct]
-pub struct DOMImplementation {
-    reflector_: Reflector,
-    document: JS<Document>,
+magic_dom_struct! {
+    pub struct DOMImplementation {
+        document: JS<Document>,
+    }
 }
 
 impl DOMImplementation {
-    fn new_inherited(document: &Document) -> DOMImplementation {
-        DOMImplementation {
-            reflector_: Reflector::new(),
-            document: JS::from_ref(document),
-        }
+    fn new_inherited(&mut self, document: &Document) {
+        self.document.init(JS::from_ref(document));
     }
 
     pub fn new(document: &Document) -> Root<DOMImplementation> {
         let window = document.window();
-        reflect_dom_object(box DOMImplementation::new_inherited(document),
-                           GlobalRef::Window(window.r()),
-                           DOMImplementationBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMImplementation>(GlobalRef::Window(window.r()));
+        obj.new_inherited(document);
+        obj.into_root()
     }
 }
 

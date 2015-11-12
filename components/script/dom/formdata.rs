@@ -11,7 +11,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Fallible};
 use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::blob::Blob;
 use dom::file::File;
 use dom::htmlformelement::HTMLFormElement;
@@ -28,27 +28,25 @@ pub enum FormDatum {
     FileData(JS<File>)
 }
 
-#[dom_struct]
-pub struct FormData {
-    reflector_: Reflector,
-    data: Box<DOMRefCell<HashMap<DOMString, Vec<FormDatum>>>>,
-    global: GlobalField,
-    form: Option<JS<HTMLFormElement>>
+magic_dom_struct! {
+    pub struct FormData {
+        data: Box<DOMRefCell<HashMap<DOMString, Vec<FormDatum>>>>,
+        global: GlobalField,
+        form: Option<JS<HTMLFormElement>>
+    }
 }
 
 impl FormData {
-    fn new_inherited(form: Option<&HTMLFormElement>, global: GlobalRef) -> FormData {
-        FormData {
-            reflector_: Reflector::new(),
-            data: box DOMRefCell::new(HashMap::new()),
-            global: GlobalField::from_rooted(&global),
-            form: form.map(|f| JS::from_ref(f)),
-        }
+    fn new_inherited(&mut self, form: Option<&HTMLFormElement>, global: GlobalRef) {
+        self.data.init(box HashMap::new());
+        self.global.init(GlobalField::from_rooted(&global));
+        self.form.init(form.map(|f| JS::from_ref(f)));
     }
 
     pub fn new(form: Option<&HTMLFormElement>, global: GlobalRef) -> Root<FormData> {
-        reflect_dom_object(box FormData::new_inherited(form, global),
-                           global, FormDataBinding::Wrap)
+        let mut obj = alloc_dom_object::<FormData>(global);
+        obj.new_inherited(form, global);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef, form: Option<&HTMLFormElement>) -> Fallible<Root<FormData>> {

@@ -13,21 +13,21 @@ use dom::node::Node;
 use util::str::DOMString;
 
 /// An HTML comment.
-#[dom_struct]
-pub struct Comment {
-    characterdata: CharacterData,
+magic_dom_struct! {
+    pub struct Comment {
+        characterdata: Base<CharacterData>,
+    }
 }
 
 impl Comment {
-    fn new_inherited(text: DOMString, document: &Document) -> Comment {
-        Comment {
-            characterdata: CharacterData::new_inherited(text, document)
-        }
+    fn new_inherited(&mut self, text: DOMString, document: &Document) {
+        self.characterdata.new_inherited(text, document)
     }
 
     pub fn new(text: DOMString, document: &Document) -> Root<Comment> {
-        let element = Comment::new_inherited(text, document);
-        Node::reflect_node(box element, document, CommentBinding::Wrap)
+        let mut obj = Node::alloc_node::<Comment>(document);
+        obj.new_inherited(text, document);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef, data: DOMString) -> Fallible<Root<Comment>> {

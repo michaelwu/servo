@@ -19,26 +19,26 @@ use dom::validitystate::ValidityState;
 use dom::virtualmethods::VirtualMethods;
 use util::str::{DOMString, StaticStringVec};
 
-#[dom_struct]
-pub struct HTMLFieldSetElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLFieldSetElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLFieldSetElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLFieldSetElement {
-        HTMLFieldSetElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLFieldSetElement> {
-        let element = HTMLFieldSetElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLFieldSetElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLFieldSetElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

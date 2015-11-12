@@ -18,7 +18,6 @@ use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::Root;
 use dom::bindings::num::Finite;
 use dom::bindings::str::{ByteString, USVString};
-use dom::bindings::utils::Reflector;
 use dom::blob::Blob;
 use js::jsapi::{HandleValue, JSContext, JSObject};
 use js::jsval::{JSVal, NullValue};
@@ -27,10 +26,10 @@ use std::ptr;
 use std::rc::Rc;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct TestBinding {
-    reflector_: Reflector,
-    global: GlobalField,
+magic_dom_struct! {
+    pub struct TestBinding {
+        global: GlobalField,
+    }
 }
 
 impl TestBindingMethods for TestBinding {

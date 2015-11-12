@@ -8,33 +8,32 @@ use dom::bindings::codegen::Bindings::EventBinding::EventMethods;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{MutHeapJSVal, Root};
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::js::{Root};
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::Event;
 use js::jsapi::{HandleValue, JSContext};
 use js::jsval::{JSVal, UndefinedValue};
 use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#interface-customevent
-#[dom_struct]
-pub struct CustomEvent {
-    event: Event,
-    #[ignore_heap_size_of = "Defined in rust-mozjs"]
-    detail: MutHeapJSVal,
+magic_dom_struct! {
+    pub struct CustomEvent {
+        event: Base<Event>,
+        #[ignore_heap_size_of = "Defined in rust-mozjs"]
+        detail: Mut<JSVal>,
+    }
 }
 
 impl CustomEvent {
-    fn new_inherited() -> CustomEvent {
-        CustomEvent {
-            event: Event::new_inherited(),
-            detail: MutHeapJSVal::new(),
-        }
+    fn new_inherited(&mut self) {
+        self.event.new_inherited();
+        self.detail.init(UndefinedValue());
     }
 
     pub fn new_uninitialized(global: GlobalRef) -> Root<CustomEvent> {
-        reflect_dom_object(box CustomEvent::new_inherited(),
-                           global,
-                           CustomEventBinding::Wrap)
+        let mut obj = alloc_dom_object::<CustomEvent>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
     pub fn new(global: GlobalRef,
                type_: DOMString,

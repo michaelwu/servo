@@ -15,26 +15,25 @@ use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#documenttype
 /// The `DOCTYPE` tag.
-#[dom_struct]
-pub struct DocumentType {
-    node: Node,
-    name: DOMString,
-    public_id: DOMString,
-    system_id: DOMString,
+magic_dom_struct! {
+    pub struct DocumentType {
+        node: Base<Node>,
+        name: DOMString,
+        public_id: DOMString,
+        system_id: DOMString,
+    }
 }
 
 impl DocumentType {
-    fn new_inherited(name: DOMString,
+    fn new_inherited(&mut self, name: DOMString,
                          public_id: Option<DOMString>,
                          system_id: Option<DOMString>,
                          document: &Document)
-            -> DocumentType {
-        DocumentType {
-            node: Node::new_inherited(document),
-            name: name,
-            public_id: public_id.unwrap_or("".to_owned()),
-            system_id: system_id.unwrap_or("".to_owned())
-        }
+            {
+        self.node.new_inherited(document);
+        self.name.init(name);
+        self.public_id.init(public_id.unwrap_or("".to_owned()));
+        self.system_id.init(system_id.unwrap_or("".to_owned()));
     }
     #[allow(unrooted_must_root)]
     pub fn new(name: DOMString,
@@ -42,8 +41,9 @@ impl DocumentType {
                system_id: Option<DOMString>,
                document: &Document)
                -> Root<DocumentType> {
-        let element = DocumentType::new_inherited(name, public_id, system_id, document);
-        Node::reflect_node(box element, document, DocumentTypeBinding::Wrap)
+        let mut obj = Node::alloc_node::<DocumentType>(document);
+        obj.new_inherited(name, public_id, system_id, document);
+        obj.into_root()
     }
 
     #[inline]

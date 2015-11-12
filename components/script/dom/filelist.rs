@@ -7,27 +7,26 @@ use dom::bindings::codegen::Bindings::FileListBinding::FileListMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::js::DOMVec;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::file::File;
 use dom::window::Window;
 
 // https://w3c.github.io/FileAPI/#dfn-filelist
-#[dom_struct]
-pub struct FileList {
-    reflector_: Reflector,
-    list: Vec<JS<File>>
+magic_dom_struct! {
+    pub struct FileList {
+        list: DOMVec<JS<File>>
+    }
 }
 
 impl FileList {
-    fn new_inherited(files: Vec<JS<File>>) -> FileList {
-        FileList {
-            reflector_: Reflector::new(),
-            list: files
-        }
+    fn new_inherited(&mut self, files: Vec<JS<File>>) {
+        self.list.init(files);
     }
 
     pub fn new(window: &Window, files: Vec<JS<File>>) -> Root<FileList> {
-        reflect_dom_object(box FileList::new_inherited(files), GlobalRef::Window(window), FileListBinding::Wrap)
+        let mut obj = alloc_dom_object::<FileList>(GlobalRef::Window(window));
+        obj.new_inherited(files);
+        obj.into_root()
     }
 }
 

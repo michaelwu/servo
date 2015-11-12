@@ -11,7 +11,7 @@ use dom::bindings::codegen::Bindings::HTMLAnchorElementBinding::HTMLAnchorElemen
 use dom::bindings::codegen::Bindings::MouseEventBinding::MouseEventMethods;
 use dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use dom::bindings::conversions::Castable;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::document::Document;
 use dom::domtokenlist::DOMTokenList;
 use dom::element::Element;
@@ -28,29 +28,28 @@ use string_cache::Atom;
 use url::UrlParser;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLAnchorElement {
-    htmlelement: HTMLElement,
-    rel_list: MutNullableHeap<JS<DOMTokenList>>,
+magic_dom_struct! {
+    pub struct HTMLAnchorElement {
+        htmlelement: Base<HTMLElement>,
+        rel_list: Mut<Option<JS<DOMTokenList>>>,
+    }
 }
 
 impl HTMLAnchorElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLAnchorElement {
-        HTMLAnchorElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            rel_list: Default::default(),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.rel_list.init(Default::default());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLAnchorElement> {
-        let element = HTMLAnchorElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLAnchorElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLAnchorElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

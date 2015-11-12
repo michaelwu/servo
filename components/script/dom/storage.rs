@@ -9,7 +9,7 @@ use dom::bindings::error::{Error, ErrorResult};
 use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::{Root, RootedReference};
 use dom::bindings::refcounted::Trusted;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::event::{Event, EventBubbles, EventCancelable};
 use dom::storageevent::StorageEvent;
 use dom::urlhelper::UrlHelper;
@@ -22,24 +22,23 @@ use std::sync::mpsc::channel;
 use url::Url;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct Storage {
-    reflector_: Reflector,
-    global: GlobalField,
-    storage_type: StorageType
+magic_dom_struct! {
+    pub struct Storage {
+        global: GlobalField,
+        storage_type: StorageType
+    }
 }
 
 impl Storage {
-    fn new_inherited(global: &GlobalRef, storage_type: StorageType) -> Storage {
-        Storage {
-            reflector_: Reflector::new(),
-            global: GlobalField::from_rooted(global),
-            storage_type: storage_type
-        }
+    fn new_inherited(&mut self, global: &GlobalRef, storage_type: StorageType) {
+        self.global.init(GlobalField::from_rooted(global));
+        self.storage_type.init(storage_type);
     }
 
     pub fn new(global: &GlobalRef, storage_type: StorageType) -> Root<Storage> {
-        reflect_dom_object(box Storage::new_inherited(global, storage_type), *global, StorageBinding::Wrap)
+        let mut obj = alloc_dom_object::<Storage>(*global);
+        obj.new_inherited(global, storage_type);
+        obj.into_root()
     }
 
     fn get_url(&self) -> Url {

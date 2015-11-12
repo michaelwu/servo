@@ -13,7 +13,6 @@ use dom::bindings::codegen::InheritTypes::{ElementTypeId, HTMLElementTypeId, Nod
 use dom::bindings::conversions::{Castable, DerivedFrom};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root};
-use dom::bindings::utils::Reflectable;
 use dom::bindings::magic::MagicDOMClass;
 use dom::document::Document;
 use dom::element::Element;
@@ -37,10 +36,11 @@ use url::UrlParser;
 use url::form_urlencoded::serialize;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLFormElement {
-    htmlelement: HTMLElement,
-    marked_for_reset: Cell<bool>,
+magic_dom_struct! {
+    pub struct HTMLFormElement {
+        htmlelement: Base<HTMLElement>,
+        marked_for_reset: Mut<bool>,
+    }
 }
 
 impl PartialEq for HTMLFormElement {
@@ -50,21 +50,20 @@ impl PartialEq for HTMLFormElement {
 }
 
 impl HTMLFormElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLFormElement {
-        HTMLFormElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            marked_for_reset: Cell::new(false),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.marked_for_reset.init(false);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLFormElement> {
-        let element = HTMLFormElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLFormElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLFormElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 
@@ -458,7 +457,7 @@ impl<'a> FormSubmitter<'a> {
     }
 }
 
-pub trait FormControl: DerivedFrom<Element> + Reflectable {
+pub trait FormControl: DerivedFrom<Element> + MagicDOMClass {
     // FIXME: This is wrong (https://github.com/servo/servo/issues/3553)
     //        but we need html5ever to do it correctly
     fn form_owner(&self) -> Option<Root<HTMLFormElement>> {

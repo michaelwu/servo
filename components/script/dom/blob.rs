@@ -7,7 +7,7 @@ use dom::bindings::codegen::Bindings::BlobBinding::BlobMethods;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::{GlobalField, GlobalRef};
 use dom::bindings::js::Root;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use num::ToPrimitive;
 use std::ascii::AsciiExt;
 use std::borrow::ToOwned;
@@ -17,13 +17,13 @@ use std::sync::mpsc::Sender;
 use util::str::DOMString;
 
 // http://dev.w3.org/2006/webapi/FileAPI/#blob
-#[dom_struct]
-pub struct Blob {
-    reflector_: Reflector,
-    bytes: Box<Option<Vec<u8>>>,
-    typeString: DOMString,
-    global: GlobalField,
-    isClosed_: Cell<bool>
+magic_dom_struct! {
+    pub struct Blob {
+        bytes: Box<Option<Vec<u8>>>,
+        typeString: DOMString,
+        global: GlobalField,
+        isClosed_: Mut<bool>
+    }
 }
 
 fn is_ascii_printable(string: &DOMString) -> bool {
@@ -33,22 +33,19 @@ fn is_ascii_printable(string: &DOMString) -> bool {
 }
 
 impl Blob {
-    pub fn new_inherited(global: GlobalRef,
-                         bytes: Option<Vec<u8>>, typeString: &str) -> Blob {
-        Blob {
-            reflector_: Reflector::new(),
-            bytes: box bytes,
-            typeString: typeString.to_owned(),
-            global: GlobalField::from_rooted(&global),
-            isClosed_: Cell::new(false)
-        }
+    pub fn new_inherited(&mut self, global: GlobalRef,
+                         bytes: Option<Vec<u8>>, typeString: &str) {
+        self.bytes.init(box bytes);
+        self.typeString.init(typeString.to_owned());
+        self.global.init(GlobalField::from_rooted(&global));
+        self.isClosed_.init(false);
     }
 
     pub fn new(global: GlobalRef, bytes: Option<Vec<u8>>,
                typeString: &str) -> Root<Blob> {
-        reflect_dom_object(box Blob::new_inherited(global, bytes, typeString),
-                           global,
-                           BlobBinding::Wrap)
+        let mut obj = alloc_dom_object::<Blob>(global);
+        obj.new_inherited(global, bytes, typeString);
+        obj.into_root()
     }
 
     // http://dev.w3.org/2006/webapi/FileAPI/#constructorBlob

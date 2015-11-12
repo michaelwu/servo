@@ -8,23 +8,24 @@ use dom::bindings::codegen::Bindings::DOMRectReadOnlyBinding::DOMRectReadOnlyMet
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::domrectreadonly::DOMRectReadOnly;
 
-#[dom_struct]
-pub struct DOMRect {
-    rect: DOMRectReadOnly,
+magic_dom_struct! {
+    pub struct DOMRect {
+        rect: Base<DOMRectReadOnly>,
+    }
 }
 
 impl DOMRect {
-    fn new_inherited(x: f64, y: f64, width: f64, height: f64) -> DOMRect {
-        DOMRect {
-            rect: DOMRectReadOnly::new_inherited(x, y, width, height),
-        }
+    fn new_inherited(&mut self, x: f64, y: f64, width: f64, height: f64) {
+        self.rect.new_inherited(x, y, width, height);
     }
 
     pub fn new(global: GlobalRef, x: f64, y: f64, width: f64, height: f64) -> Root<DOMRect> {
-        reflect_dom_object(box DOMRect::new_inherited(x, y, width, height), global, DOMRectBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMRect>(global);
+        obj.new_inherited(x, y, width, height);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef,

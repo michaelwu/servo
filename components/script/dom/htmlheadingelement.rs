@@ -19,22 +19,20 @@ pub enum HeadingLevel {
     Heading6,
 }
 
-#[dom_struct]
-pub struct HTMLHeadingElement {
-    htmlelement: HTMLElement,
-    level: HeadingLevel,
+magic_dom_struct! {
+    pub struct HTMLHeadingElement {
+        htmlelement: Base<HTMLElement>,
+        level: HeadingLevel,
+    }
 }
 
 impl HTMLHeadingElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
                      document: &Document,
-                     level: HeadingLevel) -> HTMLHeadingElement {
-        HTMLHeadingElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            level: level,
-        }
+                     level: HeadingLevel) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.level.init(level);
     }
 
     #[allow(unrooted_must_root)]
@@ -42,7 +40,8 @@ impl HTMLHeadingElement {
                prefix: Option<DOMString>,
                document: &Document,
                level: HeadingLevel) -> Root<HTMLHeadingElement> {
-        let element = HTMLHeadingElement::new_inherited(localName, prefix, document, level);
-        Node::reflect_node(box element, document, HTMLHeadingElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLHeadingElement>(document);
+        obj.new_inherited(localName, prefix, document, level);
+        obj.into_root()
     }
 }

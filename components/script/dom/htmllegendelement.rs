@@ -9,26 +9,25 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLLegendElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLLegendElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLLegendElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLLegendElement {
-        HTMLLegendElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLLegendElement> {
-        let element = HTMLLegendElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLLegendElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLLegendElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

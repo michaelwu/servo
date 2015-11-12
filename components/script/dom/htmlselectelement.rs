@@ -21,28 +21,28 @@ use std::borrow::ToOwned;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLSelectElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLSelectElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 static DEFAULT_SELECT_SIZE: u32 = 0;
 
 impl HTMLSelectElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLSelectElement {
-        HTMLSelectElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLSelectElement> {
-        let element = HTMLSelectElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLSelectElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLSelectElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

@@ -8,9 +8,9 @@ use dom::bindings::codegen::Bindings::FileReaderBinding::{self, FileReaderConsta
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::{GlobalField, GlobalRef};
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::bindings::refcounted::Trusted;
-use dom::bindings::utils::{Reflectable, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::blob::Blob;
 use dom::domexception::{DOMErrorName, DOMException};
 use dom::event::{Event, EventBubbles, EventCancelable};
@@ -66,31 +66,31 @@ pub enum FileReaderReadyState {
     Done = FileReaderConstants::DONE,
 }
 
-#[dom_struct]
-pub struct FileReader {
-    eventtarget: EventTarget,
-    global: GlobalField,
-    ready_state: Cell<FileReaderReadyState>,
-    error: MutNullableHeap<JS<DOMException>>,
-    result: RefCell<Option<DOMString>>,
-    generation_id: Cell<GenerationId>,
+magic_dom_struct! {
+    pub struct FileReader {
+        eventtarget: Base<EventTarget>,
+        global: GlobalField,
+        ready_state: Mut<FileReaderReadyState>,
+        error: Mut<Option<JS<DOMException>>>,
+        result: Layout<Option<DOMString>>,
+        generation_id: Mut<GenerationId>,
+    }
 }
 
 impl FileReader {
-    pub fn new_inherited(global: GlobalRef) -> FileReader {
-        FileReader {
-            eventtarget: EventTarget::new_inherited(),
-            global: GlobalField::from_rooted(&global),
-            ready_state: Cell::new(FileReaderReadyState::Empty),
-            error: MutNullableHeap::new(None),
-            result: RefCell::new(None),
-            generation_id: Cell::new(GenerationId(0)),
-        }
+    pub fn new_inherited(&mut self, global: GlobalRef) {
+        self.eventtarget.new_inherited();
+        self.global.init(GlobalField::from_rooted(&global));
+        self.ready_state.init(FileReaderReadyState::Empty);
+        self.error.init(None);
+        self.result.init(None);
+        self.generation_id.init(GenerationId(0));
     }
 
     pub fn new(global: GlobalRef) -> Root<FileReader> {
-        reflect_dom_object(box FileReader::new_inherited(global),
-                           global, FileReaderBinding::Wrap)
+        let mut obj = alloc_dom_object::<FileReader>(global);
+        obj.new_inherited(global);
+        obj.into_root()
     }
 
     pub fn Constructor(global: GlobalRef) -> Fallible<Root<FileReader>> {
@@ -302,7 +302,7 @@ impl FileReaderMethods for FileReader {
 
     // https://w3c.github.io/FileAPI/#dfn-error
     fn GetError(&self) -> Option<Root<DOMException>> {
-        self.error.get_rooted()
+        self.error.get().map(Root::from_rooted)
     }
 
     // https://w3c.github.io/FileAPI/#dfn-result

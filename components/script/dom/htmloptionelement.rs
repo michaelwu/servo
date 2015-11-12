@@ -20,34 +20,34 @@ use dom::virtualmethods::VirtualMethods;
 use std::cell::Cell;
 use util::str::{DOMString, split_html_space_chars, str_join};
 
-#[dom_struct]
-pub struct HTMLOptionElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLOptionElement {
+        htmlelement: Base<HTMLElement>,
 
-    /// https://html.spec.whatwg.org/multipage/#attr-option-selected
-    selectedness: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#attr-option-selected
+        selectedness: Mut<bool>,
 
-    /// https://html.spec.whatwg.org/multipage/#concept-option-dirtiness
-    dirtiness: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#concept-option-dirtiness
+        dirtiness: Mut<bool>,
+    }
 }
 
 impl HTMLOptionElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLOptionElement {
-        HTMLOptionElement {
-            htmlelement: HTMLElement::new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document),
-            selectedness: Cell::new(false),
-            dirtiness: Cell::new(false),
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
+        self.selectedness.init(false);
+        self.dirtiness.init(false);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLOptionElement> {
-        let element = HTMLOptionElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLOptionElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLOptionElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

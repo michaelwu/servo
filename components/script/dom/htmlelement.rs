@@ -12,8 +12,7 @@ use dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
 use dom::bindings::codegen::InheritTypes::{ElementTypeId, HTMLElementTypeId, NodeTypeId};
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult};
-use dom::bindings::js::{JS, MutNullableHeap, Root};
-use dom::bindings::utils::Reflectable;
+use dom::bindings::js::{JS, Root};
 use dom::cssstyledeclaration::{CSSModificationAccess, CSSStyleDeclaration};
 use dom::document::Document;
 use dom::domstringmap::DOMStringMap;
@@ -34,11 +33,12 @@ use std::rc::Rc;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLElement {
-    element: Element,
-    style_decl: MutNullableHeap<JS<CSSStyleDeclaration>>,
-    dataset: MutNullableHeap<JS<DOMStringMap>>,
+magic_dom_struct! {
+    pub struct HTMLElement {
+        element: Base<Element>,
+        style_decl: Mut<Option<JS<CSSStyleDeclaration>>>,
+        dataset: Mut<Option<JS<DOMStringMap>>>,
+    }
 }
 
 impl PartialEq for HTMLElement {
@@ -48,25 +48,24 @@ impl PartialEq for HTMLElement {
 }
 
 impl HTMLElement {
-    pub fn new_inherited(tag_name: DOMString, prefix: Option<DOMString>,
-                         document: &Document) -> HTMLElement {
+    pub fn new_inherited(&mut self, tag_name: DOMString, prefix: Option<DOMString>,
+                         document: &Document) {
         HTMLElement::new_inherited_with_state(EventState::empty(), tag_name, prefix, document)
     }
 
-    pub fn new_inherited_with_state(state: EventState, tag_name: DOMString,
+    pub fn new_inherited_with_state(&mut self, state: EventState, tag_name: DOMString,
                                     prefix: Option<DOMString>, document: &Document)
-                                    -> HTMLElement {
-        HTMLElement {
-            element: Element::new_inherited_with_state(state, tag_name, ns!(HTML), prefix, document),
-            style_decl: Default::default(),
-            dataset: Default::default(),
-        }
+                                    {
+        self.element.new_inherited_with_state(state, tag_name, ns!(HTML), prefix, document);
+        self.style_decl.init(Default::default());
+        self.dataset.init(Default::default());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> Root<HTMLElement> {
-        let element = HTMLElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     fn is_body_or_frameset(&self) -> bool {
@@ -309,7 +308,7 @@ impl VirtualMethods for HTMLElement {
                 let window = window_from_node(self);
                 let (cx, url, reflector) = (window.r().get_cx(),
                                             window.r().get_url(),
-                                            window.r().reflector().get_jsobject());
+                                            window.handle());
                 let evtarget = self.upcast::<EventTarget>();
                 evtarget.set_event_handler_uncompiled(cx, url, reflector,
                                                       &name[2..],

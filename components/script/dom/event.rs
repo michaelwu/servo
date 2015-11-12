@@ -7,8 +7,8 @@ use dom::bindings::codegen::Bindings::EventBinding;
 use dom::bindings::codegen::Bindings::EventBinding::{EventConstants, EventMethods};
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::js::{JS, Root};
+use dom::bindings::magic::alloc_dom_object;
 use dom::eventtarget::EventTarget;
 use std::borrow::ToOwned;
 use std::cell::Cell;
@@ -38,48 +38,45 @@ pub enum EventCancelable {
     NotCancelable
 }
 
-#[dom_struct]
-pub struct Event {
-    reflector_: Reflector,
-    current_target: MutNullableHeap<JS<EventTarget>>,
-    target: MutNullableHeap<JS<EventTarget>>,
-    type_: DOMRefCell<DOMString>,
-    phase: Cell<EventPhase>,
-    canceled: Cell<bool>,
-    stop_propagation: Cell<bool>,
-    stop_immediate: Cell<bool>,
-    cancelable: Cell<bool>,
-    bubbles: Cell<bool>,
-    trusted: Cell<bool>,
-    dispatching: Cell<bool>,
-    initialized: Cell<bool>,
-    timestamp: u64,
+magic_dom_struct! {
+    pub struct Event {
+        current_target: Mut<Option<JS<EventTarget>>>,
+        target: Mut<Option<JS<EventTarget>>>,
+        type_: Layout<DOMString>,
+        phase: Mut<EventPhase>,
+        canceled: Mut<bool>,
+        stop_propagation: Mut<bool>,
+        stop_immediate: Mut<bool>,
+        cancelable: Mut<bool>,
+        bubbles: Mut<bool>,
+        trusted: Mut<bool>,
+        dispatching: Mut<bool>,
+        initialized: Mut<bool>,
+        timestamp: u64,
+    }
 }
 
 impl Event {
-    pub fn new_inherited() -> Event {
-        Event {
-            reflector_: Reflector::new(),
-            current_target: Default::default(),
-            target: Default::default(),
-            type_: DOMRefCell::new("".to_owned()),
-            phase: Cell::new(EventPhase::None),
-            canceled: Cell::new(false),
-            stop_propagation: Cell::new(false),
-            stop_immediate: Cell::new(false),
-            cancelable: Cell::new(false),
-            bubbles: Cell::new(false),
-            trusted: Cell::new(false),
-            dispatching: Cell::new(false),
-            initialized: Cell::new(false),
-            timestamp: time::get_time().sec as u64,
-        }
+    pub fn new_inherited(&mut self) {
+        self.current_target.init(Default::default());
+        self.target.init(Default::default());
+        self.type_.init("".to_owned());
+        self.phase.init(EventPhase::None);
+        self.canceled.init(false);
+        self.stop_propagation.init(false);
+        self.stop_immediate.init(false);
+        self.cancelable.init(false);
+        self.bubbles.init(false);
+        self.trusted.init(false);
+        self.dispatching.init(false);
+        self.initialized.init(false);
+        self.timestamp.init(time::get_time().sec as u64);
     }
 
     pub fn new_uninitialized(global: GlobalRef) -> Root<Event> {
-        reflect_dom_object(box Event::new_inherited(),
-                           global,
-                           EventBinding::Wrap)
+        let mut obj = alloc_dom_object::<Event>(global);
+        obj.new_inherited();
+        obj.into_root()
     }
 
     pub fn new(global: GlobalRef,
@@ -168,12 +165,12 @@ impl EventMethods for Event {
 
     // https://dom.spec.whatwg.org/#dom-event-target
     fn GetTarget(&self) -> Option<Root<EventTarget>> {
-        self.target.get_rooted()
+        self.target.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-event-currenttarget
     fn GetCurrentTarget(&self) -> Option<Root<EventTarget>> {
-        self.current_target.get_rooted()
+        self.current_target.get().map(Root::from_rooted)
     }
 
     // https://dom.spec.whatwg.org/#dom-event-defaultprevented

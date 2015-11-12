@@ -9,25 +9,25 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLOListElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLOListElement {
+        htmlelement: Base<HTMLElement>,
+    }
 }
 
 impl HTMLOListElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLOListElement {
-        HTMLOListElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLOListElement> {
-        let element = HTMLOListElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLOListElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLOListElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

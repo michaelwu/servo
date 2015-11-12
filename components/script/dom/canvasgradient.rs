@@ -10,14 +10,14 @@ use dom::bindings::error::{Error, ErrorResult};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
 use dom::bindings::num::Finite;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::canvasrenderingcontext2d::parse_color;
 
 // https://html.spec.whatwg.org/multipage/#canvasgradient
-#[dom_struct]
-pub struct CanvasGradient {
-    reflector_: Reflector,
-    extra: Box<CanvasGradientExtra>,
+magic_dom_struct! {
+    pub struct CanvasGradient {
+        extra: Box<CanvasGradientExtra>,
+    }
 }
 
 #[derive(JSTraceable, HeapSizeOf)]
@@ -33,19 +33,17 @@ pub enum CanvasGradientStyle {
 }
 
 impl CanvasGradient {
-    fn new_inherited(style: CanvasGradientStyle) -> CanvasGradient {
-        CanvasGradient {
-            reflector_: Reflector::new(),
-            extra: box CanvasGradientExtra {
-                style: style,
-                stops: DOMRefCell::new(Vec::new()),
-            },
-        }
+    fn new_inherited(&mut self, style: CanvasGradientStyle) {
+        self.extra.init(box CanvasGradientExtra {
+            style: style,
+            stops: DOMRefCell::new(Vec::new()),
+        });
     }
 
     pub fn new(global: GlobalRef, style: CanvasGradientStyle) -> Root<CanvasGradient> {
-        reflect_dom_object(box CanvasGradient::new_inherited(style),
-                           global, CanvasGradientBinding::Wrap)
+        let mut obj = alloc_dom_object::<CanvasGradient>(global);
+        obj.new_inherited(style);
+        obj.into_root()
     }
 }
 

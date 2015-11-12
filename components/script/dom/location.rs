@@ -7,30 +7,27 @@ use dom::bindings::codegen::Bindings::LocationBinding::LocationMethods;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
 use dom::bindings::str::USVString;
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::urlhelper::UrlHelper;
 use dom::window::Window;
 use url::{Url, UrlParser};
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct Location {
-    reflector_: Reflector,
-    window: JS<Window>,
+magic_dom_struct! {
+    pub struct Location {
+        window: JS<Window>,
+    }
 }
 
 impl Location {
-    fn new_inherited(window: &Window) -> Location {
-        Location {
-            reflector_: Reflector::new(),
-            window: JS::from_ref(window)
-        }
+    fn new_inherited(&mut self, window: &Window) {
+        self.window.init(JS::from_ref(window));
     }
 
     pub fn new(window: &Window) -> Root<Location> {
-        reflect_dom_object(box Location::new_inherited(window),
-                           GlobalRef::Window(window),
-                           LocationBinding::Wrap)
+        let mut obj = alloc_dom_object::<Location>(GlobalRef::Window(window));
+        obj.new_inherited(window);
+        obj.into_root()
     }
 
     fn get_url(&self) -> Url {

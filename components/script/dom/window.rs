@@ -16,10 +16,10 @@ use dom::bindings::error::{Error, Fallible, report_pending_exception};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::global::global_object_for_js_object;
 use dom::bindings::js::RootedReference;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
+use dom::bindings::js::{JS, Root};
 use dom::bindings::num::Finite;
 use dom::bindings::magic::{MagicDOMClass, alloc_dom_global, GlobalObjectSlots};
-use dom::bindings::utils::{GlobalStaticData, Reflectable, WindowProxyHandler};
+use dom::bindings::utils::{GlobalStaticData, WindowProxyHandler};
 use dom::browsercontext::BrowsingContext;
 use dom::console::Console;
 use dom::crypto::Crypto;
@@ -106,42 +106,43 @@ pub enum ReflowReason {
 
 pub type ScrollPoint = Point2D<Au>;
 
-#[dom_struct]
-pub struct Window {
-    eventtarget: EventTarget,
-    console: MutNullableHeap<JS<Console>>,
-    crypto: MutNullableHeap<JS<Crypto>>,
-    navigator: MutNullableHeap<JS<Navigator>>,
-    global_slots: GlobalObjectSlots,
-    page: Rc<Page>,
-    performance: MutNullableHeap<JS<Performance>>,
-    screen: MutNullableHeap<JS<Screen>>,
-    session_storage: MutNullableHeap<JS<Storage>>,
-    local_storage: MutNullableHeap<JS<Storage>>,
+magic_dom_struct! {
+    pub struct Window {
+        eventtarget: Base<EventTarget>,
+        console: Mut<Option<JS<Console>>>,
+        crypto: Mut<Option<JS<Crypto>>>,
+        navigator: Mut<Option<JS<Navigator>>>,
+        global_slots: GlobalObjectSlots,
+        page: Rc<Page>,
+        performance: Mut<Option<JS<Performance>>>,
+        screen: Mut<Option<JS<Screen>>>,
+        session_storage: Mut<Option<JS<Storage>>>,
+        local_storage: Mut<Option<JS<Storage>>>,
 
-    next_worker_id: Cell<WorkerId>,
+        next_worker_id: Mut<WorkerId>,
 
-    /// A flag to indicate whether the developer tools have requested live updates of
-    /// page changes.
-    devtools_wants_updates: Cell<bool>,
+        /// A flag to indicate whether the developer tools have requested live updates of
+        /// page changes.
+        devtools_wants_updates: Mut<bool>,
 
-    next_subpage_id: Cell<SubpageId>,
+        next_subpage_id: Mut<SubpageId>,
 
-    /// Pipeline id associated with this page.
-    id: PipelineId,
+        /// Pipeline id associated with this page.
+        id: PipelineId,
 
-    /// Subpage id associated with this page, if any.
-    parent_info: Option<(PipelineId, SubpageId)>,
+        /// Subpage id associated with this page, if any.
+        parent_info: Option<(PipelineId, SubpageId)>,
 
-    /// Unique id for last reflow request; used for confirming completion reply.
-    last_reflow_id: Cell<u32>,
+        /// Unique id for last reflow request; used for confirming completion reply.
+        last_reflow_id: Mut<u32>,
 
-    /// The JavaScript runtime.
-    #[ignore_heap_size_of = "Rc<T> is hard"]
-    js_runtime: DOMRefCell<Option<Rc<Runtime>>>,
+        /// The JavaScript runtime.
+        #[ignore_heap_size_of = "Rc<T> is hard"]
+        js_runtime: Layout<Option<Rc<Runtime>>>,
 
-    /// Extra data
-    extra: Box<WindowExtra>,
+        /// Extra data
+        extra: Box<WindowExtra>,
+    }
 }
 
 #[must_root]
@@ -769,7 +770,7 @@ pub trait ScriptHelpers {
                                              rval: MutableHandleValue);
 }
 
-impl<'a, T: Reflectable> ScriptHelpers for &'a T {
+impl<'a, T: MagicDOMClass> ScriptHelpers for &'a T {
     fn evaluate_js_on_global_with_result(self, code: &str,
                                          rval: MutableHandleValue) {
         self.evaluate_script_on_global_with_result(code, "", rval)
@@ -778,11 +779,11 @@ impl<'a, T: Reflectable> ScriptHelpers for &'a T {
     #[allow(unsafe_code)]
     fn evaluate_script_on_global_with_result(self, code: &str, filename: &str,
                                              rval: MutableHandleValue) {
-        let this = self.reflector().get_jsobject();
+        let this = self.handle();
         let global = global_object_for_js_object(this.get());
         let cx = global.r().get_cx();
         let _ar = JSAutoRequest::new(cx);
-        let globalhandle = global.r().reflector().get_jsobject();
+        let globalhandle = global.handle();
         let code: Vec<u16> = code.utf16_units().collect();
         let filename = CString::new(filename).unwrap();
 
@@ -1267,7 +1268,7 @@ impl Window {
 }
 
 impl Window {
-    pub fn new_inherited(runtime: Rc<Runtime>,
+    pub fn new_inherited(&mut self, runtime: Rc<Runtime>,
                          page: Rc<Page>,
                          script_chan: MainThreadScriptChan,
                          image_cache_chan: ImageCacheChan,
@@ -1286,57 +1287,55 @@ impl Window {
                          parent_info: Option<(PipelineId, SubpageId)>,
                          window_size: Option<WindowSizeData>,
                          layout_rpc: Box<LayoutRPC>)
-                         -> Window {
-        Window {
-            eventtarget: EventTarget::new_inherited(),
-            console: Default::default(),
-            crypto: Default::default(),
-            navigator: Default::default(),
-            page: page,
-            performance: Default::default(),
-            screen: Default::default(),
-            session_storage: Default::default(),
-            local_storage: Default::default(),
-            next_worker_id: Cell::new(WorkerId(0)),
-            devtools_wants_updates: Cell::new(false),
-            next_subpage_id: Cell::new(SubpageId(0)),
-            id: id,
-            parent_info: parent_info,
-            last_reflow_id: Cell::new(0),
-            js_runtime: DOMRefCell::new(Some(runtime.clone())),
+                         {
+        self.eventtarget.new_inherited();
+        self.console.init(Default::default());
+        self.crypto.init(Default::default());
+        self.navigator.init(Default::default());
+        self.page.init(page);
+        self.performance.init(Default::default());
+        self.screen.init(Default::default());
+        self.session_storage.init(Default::default());
+        self.local_storage.init(Default::default());
+        self.next_worker_id.init(WorkerId(0));
+        self.devtools_wants_updates.init(false);
+        self.next_subpage_id.init(SubpageId(0));
+        self.id.init(id);
+        self.parent_info.init(parent_info);
+        self.last_reflow_id.init(0);
+        self.js_runtime.init(Some(runtime.clone()));
 
-            extra: box WindowExtra {
-                script_chan: script_chan,
-                control_chan: control_chan,
-                image_cache_task: image_cache_task,
-                image_cache_chan: image_cache_chan,
-                compositor: compositor,
-                browsing_context: DOMRefCell::new(None),
-                navigation_start: time::get_time().sec as u64,
-                navigation_start_precise: time::precise_time_ns() as f64,
-                scheduler_chan: scheduler_chan.clone(),
-                timers: ActiveTimers::new(box timer_event_chan, scheduler_chan),
-                mem_profiler_chan: mem_profiler_chan,
-                devtools_chan: devtools_chan,
-                devtools_markers: RefCell::new(HashSet::new()),
-                devtools_marker_sender: RefCell::new(None),
-                resize_event: Cell::new(None),
-                dom_static: GlobalStaticData::new(),
-                layout_chan: layout_chan,
-                layout_rpc: layout_rpc,
-                resource_task: resource_task,
-                storage_task: storage_task,
-                constellation_chan: constellation_chan,
-                fragment_name: DOMRefCell::new(None),
-                page_clip_rect: Cell::new(MAX_RECT),
-                pending_reflow_count: Cell::new(0),
-                current_state: Cell::new(WindowState::Alive),
-                current_viewport: Cell::new(Rect::zero()),
-                layout_join_port: DOMRefCell::new(None),
-                window_size: Cell::new(window_size),
-                webdriver_script_chan: RefCell::new(None),
-            },
-        }
+        self.extra.init(box WindowExtra {
+            script_chan: script_chan,
+            control_chan: control_chan,
+            image_cache_task: image_cache_task,
+            image_cache_chan: image_cache_chan,
+            compositor: compositor,
+            browsing_context: DOMRefCell::new(None),
+            navigation_start: time::get_time().sec as u64,
+            navigation_start_precise: time::precise_time_ns() as f64,
+            scheduler_chan: scheduler_chan.clone(),
+            timers: ActiveTimers::new(box timer_event_chan, scheduler_chan),
+            mem_profiler_chan: mem_profiler_chan,
+            devtools_chan: devtools_chan,
+            devtools_markers: RefCell::new(HashSet::new()),
+            devtools_marker_sender: RefCell::new(None),
+            resize_event: Cell::new(None),
+            dom_static: GlobalStaticData::new(),
+            layout_chan: layout_chan,
+            layout_rpc: layout_rpc,
+            resource_task: resource_task,
+            storage_task: storage_task,
+            constellation_chan: constellation_chan,
+            fragment_name: DOMRefCell::new(None),
+            page_clip_rect: Cell::new(MAX_RECT),
+            pending_reflow_count: Cell::new(0),
+            current_state: Cell::new(WindowState::Alive),
+            current_viewport: Cell::new(Rect::zero()),
+            layout_join_port: DOMRefCell::new(None),
+            window_size: Cell::new(window_size),
+            webdriver_script_chan: RefCell::new(None),
+        });
     }
 
     pub fn new(runtime: Rc<Runtime>,

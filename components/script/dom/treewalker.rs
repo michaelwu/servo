@@ -11,34 +11,31 @@ use dom::bindings::codegen::Bindings::TreeWalkerBinding::TreeWalkerMethods;
 use dom::bindings::error::Fallible;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::js::{JS, MutHeap};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::js::{JS};
+use dom::bindings::magic::alloc_dom_object;
 use dom::document::Document;
 use dom::node::Node;
 use std::rc::Rc;
 
 // https://dom.spec.whatwg.org/#interface-treewalker
-#[dom_struct]
-pub struct TreeWalker {
-    reflector_: Reflector,
-    root_node: JS<Node>,
-    current_node: MutHeap<JS<Node>>,
-    what_to_show: u32,
-    #[ignore_heap_size_of = "function pointers and Rc<T> are hard"]
-    filter: Filter
+magic_dom_struct! {
+    pub struct TreeWalker {
+        root_node: JS<Node>,
+        current_node: Mut<JS<Node>>,
+        what_to_show: u32,
+        #[ignore_heap_size_of = "function pointers and Rc<T> are hard"]
+        filter: Filter
+    }
 }
 
 impl TreeWalker {
-    fn new_inherited(root_node: &Node,
+    fn new_inherited(&mut self, root_node: &Node,
                          what_to_show: u32,
-                         filter: Filter) -> TreeWalker {
-        TreeWalker {
-            reflector_: Reflector::new(),
-            root_node: JS::from_ref(root_node),
-            current_node: MutHeap::new(root_node),
-            what_to_show: what_to_show,
-            filter: filter
-        }
+                         filter: Filter) {
+        self.root_node.init(JS::from_ref(root_node));
+        self.current_node.init(root_node);
+        self.what_to_show.init(what_to_show);
+        self.filter.init(filter);
     }
 
     pub fn new_with_filter(document: &Document,
@@ -46,9 +43,9 @@ impl TreeWalker {
                            what_to_show: u32,
                            filter: Filter) -> Root<TreeWalker> {
         let window = document.window();
-        reflect_dom_object(box TreeWalker::new_inherited(root_node, what_to_show, filter),
-                           GlobalRef::Window(window.r()),
-                           TreeWalkerBinding::Wrap)
+        let mut obj = alloc_dom_object::<TreeWalker>(GlobalRef::Window(window.r()));
+        obj.new_inherited(root_node, what_to_show, filter);
+        obj.into_root()
     }
 
     pub fn new(document: &Document,

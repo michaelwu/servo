@@ -9,26 +9,25 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLDirectoryElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLDirectoryElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLDirectoryElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLDirectoryElement {
-        HTMLDirectoryElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLDirectoryElement> {
-        let element = HTMLDirectoryElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLDirectoryElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLDirectoryElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

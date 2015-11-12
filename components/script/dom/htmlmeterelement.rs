@@ -9,25 +9,25 @@ use dom::htmlelement::HTMLElement;
 use dom::node::Node;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLMeterElement {
-    htmlelement: HTMLElement
+magic_dom_struct! {
+    pub struct HTMLMeterElement {
+        htmlelement: Base<HTMLElement>
+    }
 }
 
 impl HTMLMeterElement {
-    fn new_inherited(localName: DOMString,
+    fn new_inherited(&mut self, localName: DOMString,
                      prefix: Option<DOMString>,
-                     document: &Document) -> HTMLMeterElement {
-        HTMLMeterElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document)
-        }
+                     document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document)
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLMeterElement> {
-        let element = HTMLMeterElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLMeterElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLMeterElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }

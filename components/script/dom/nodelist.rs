@@ -6,8 +6,8 @@ use dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use dom::bindings::codegen::Bindings::NodeListBinding;
 use dom::bindings::codegen::Bindings::NodeListBinding::NodeListMethods;
 use dom::bindings::global::{GlobalRef, global_object_for_dom_object};
-use dom::bindings::js::{JS, MutNullableHeap, Root, RootedReference};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::js::{JS, Root, RootedReference};
+use dom::bindings::magic::alloc_dom_object;
 use dom::node::{ChildrenMutation, Node};
 use dom::window::Window;
 use std::cell::Cell;
@@ -19,24 +19,22 @@ pub enum NodeListType {
 }
 
 // https://dom.spec.whatwg.org/#interface-nodelist
-#[dom_struct]
-pub struct NodeList {
-    reflector_: Reflector,
-    list_type: NodeListType,
+magic_dom_struct! {
+    pub struct NodeList {
+        list_type: NodeListType,
+    }
 }
 
 impl NodeList {
-    fn new_inherited(list_type: NodeListType) -> NodeList {
-        NodeList {
-            reflector_: Reflector::new(),
-            list_type: list_type,
-        }
+    fn new_inherited(&mut self, list_type: NodeListType) {
+        self.list_type.init(list_type);
     }
 
     pub fn new(window: &Window,
                list_type: NodeListType) -> Root<NodeList> {
-        reflect_dom_object(box NodeList::new_inherited(list_type),
-                           GlobalRef::Window(window), NodeListBinding::Wrap)
+        let mut obj = alloc_dom_object::<NodeList>(GlobalRef::Window(window));
+        obj.new_inherited(list_type);
+        obj.into_root()
     }
 
     pub fn new_simple_list<T>(window: &Window, iter: T)
@@ -89,11 +87,12 @@ impl NodeList {
     }
 }
 
-#[dom_struct]
-pub struct ChildrenList {
-    node: JS<Node>,
-    last_visited: MutNullableHeap<JS<Node>>,
-    last_index: Cell<u32>,
+magic_dom_struct! {
+    pub struct ChildrenList {
+        node: JS<Node>,
+        last_visited: Mut<Option<JS<Node>>>,
+        last_index: Mut<u32>,
+    }
 }
 
 anonymous_dom_object!(ChildrenList);

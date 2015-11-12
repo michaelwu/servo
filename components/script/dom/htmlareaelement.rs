@@ -6,8 +6,7 @@ use dom::attr::AttrValue;
 use dom::bindings::codegen::Bindings::HTMLAreaElementBinding;
 use dom::bindings::codegen::Bindings::HTMLAreaElementBinding::HTMLAreaElementMethods;
 use dom::bindings::conversions::Castable;
-use dom::bindings::js::{JS, MutNullableHeap, Root};
-use dom::bindings::utils::Reflectable;
+use dom::bindings::js::{JS, Root};
 use dom::document::Document;
 use dom::domtokenlist::DOMTokenList;
 use dom::htmlelement::HTMLElement;
@@ -17,26 +16,26 @@ use std::default::Default;
 use string_cache::Atom;
 use util::str::DOMString;
 
-#[dom_struct]
-pub struct HTMLAreaElement {
-    htmlelement: HTMLElement,
-    rel_list: MutNullableHeap<JS<DOMTokenList>>,
+magic_dom_struct! {
+    pub struct HTMLAreaElement {
+        htmlelement: Base<HTMLElement>,
+        rel_list: Mut<Option<JS<DOMTokenList>>>,
+    }
 }
 
 impl HTMLAreaElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document) -> HTMLAreaElement {
-        HTMLAreaElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            rel_list: Default::default(),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.rel_list.init(Default::default());
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString,
                prefix: Option<DOMString>,
                document: &Document) -> Root<HTMLAreaElement> {
-        let element = HTMLAreaElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLAreaElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLAreaElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 }
 

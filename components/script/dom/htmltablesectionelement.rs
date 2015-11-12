@@ -19,26 +19,26 @@ use dom::virtualmethods::VirtualMethods;
 use std::cell::Cell;
 use util::str::{self, DOMString};
 
-#[dom_struct]
-pub struct HTMLTableSectionElement {
-    htmlelement: HTMLElement,
-    background_color: Cell<Option<RGBA>>,
+magic_dom_struct! {
+    pub struct HTMLTableSectionElement {
+        htmlelement: Base<HTMLElement>,
+        background_color: Mut<Option<RGBA>>,
+    }
 }
 
 impl HTMLTableSectionElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document)
-                     -> HTMLTableSectionElement {
-        HTMLTableSectionElement {
-            htmlelement: HTMLElement::new_inherited(localName, prefix, document),
-            background_color: Cell::new(None),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document)
+                     {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.background_color.init(None);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document)
                -> Root<HTMLTableSectionElement> {
-        let element = HTMLTableSectionElement::new_inherited(localName, prefix, document);
-        Node::reflect_node(box element, document, HTMLTableSectionElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLTableSectionElement>(document);
+        obj.new_inherited(localName, prefix, document);
+        obj.into_root()
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {

@@ -7,25 +7,24 @@ use canvas_traits::{CanvasMsg, CanvasWebGLMsg};
 use dom::bindings::codegen::Bindings::WebGLRenderbufferBinding;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::Root;
-use dom::bindings::utils::reflect_dom_object;
+use dom::bindings::magic::alloc_dom_object;
 use dom::webglobject::WebGLObject;
 use ipc_channel::ipc::{self, IpcSender};
 use std::cell::Cell;
 
-#[dom_struct]
-pub struct WebGLRenderbuffer {
-    webgl_object: WebGLObject,
-    id: u32,
-    is_deleted: Cell<bool>,
+magic_dom_struct! {
+    pub struct WebGLRenderbuffer {
+        webgl_object: Base<WebGLObject>,
+        id: u32,
+        is_deleted: Mut<bool>,
+    }
 }
 
 impl WebGLRenderbuffer {
-    fn new_inherited(id: u32) -> WebGLRenderbuffer {
-        WebGLRenderbuffer {
-            webgl_object: WebGLObject::new_inherited(),
-            id: id,
-            is_deleted: Cell::new(false),
-        }
+    fn new_inherited(&mut self, id: u32) {
+        self.webgl_object.new_inherited();
+        self.id.init(id);
+        self.is_deleted.init(false);
     }
 
     pub fn maybe_new(global: GlobalRef, renderer: &IpcSender<CanvasMsg>)
@@ -38,7 +37,9 @@ impl WebGLRenderbuffer {
     }
 
     pub fn new(global: GlobalRef, id: u32) -> Root<WebGLRenderbuffer> {
-        reflect_dom_object(box WebGLRenderbuffer::new_inherited(id), global, WebGLRenderbufferBinding::Wrap)
+        let mut obj = alloc_dom_object::<WebGLRenderbuffer>(global);
+        obj.new_inherited(id);
+        obj.into_root()
     }
 }
 

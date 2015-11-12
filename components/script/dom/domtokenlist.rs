@@ -8,34 +8,31 @@ use dom::bindings::codegen::Bindings::DOMTokenListBinding::DOMTokenListMethods;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::utils::{Reflector, reflect_dom_object};
+use dom::bindings::magic::alloc_dom_object;
 use dom::element::Element;
 use dom::node::window_from_node;
 use std::borrow::ToOwned;
 use string_cache::Atom;
 use util::str::{DOMString, HTML_SPACE_CHARACTERS, str_join};
 
-#[dom_struct]
-pub struct DOMTokenList {
-    reflector_: Reflector,
-    element: JS<Element>,
-    local_name: Atom,
+magic_dom_struct! {
+    pub struct DOMTokenList {
+        element: JS<Element>,
+        local_name: Atom,
+    }
 }
 
 impl DOMTokenList {
-    pub fn new_inherited(element: &Element, local_name: Atom) -> DOMTokenList {
-        DOMTokenList {
-            reflector_: Reflector::new(),
-            element: JS::from_ref(element),
-            local_name: local_name,
-        }
+    pub fn new_inherited(&mut self, element: &Element, local_name: Atom) {
+        self.element.init(JS::from_ref(element));
+        self.local_name.init(local_name);
     }
 
     pub fn new(element: &Element, local_name: &Atom) -> Root<DOMTokenList> {
         let window = window_from_node(element);
-        reflect_dom_object(box DOMTokenList::new_inherited(element, local_name.clone()),
-                           GlobalRef::Window(window.r()),
-                           DOMTokenListBinding::Wrap)
+        let mut obj = alloc_dom_object::<DOMTokenList>(GlobalRef::Window(window.r()));
+        obj.new_inherited(element, local_name.clone());
+        obj.into_root()
     }
 
     fn attribute(&self) -> Option<Root<Attr>> {

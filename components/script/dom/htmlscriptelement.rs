@@ -43,54 +43,53 @@ use std::sync::{Arc, Mutex};
 use url::{Url, UrlParser};
 use util::str::{DOMString, HTML_SPACE_CHARACTERS, StaticStringVec};
 
-#[dom_struct]
-pub struct HTMLScriptElement {
-    htmlelement: HTMLElement,
+magic_dom_struct! {
+    pub struct HTMLScriptElement {
+        htmlelement: Base<HTMLElement>,
 
-    /// https://html.spec.whatwg.org/multipage/#already-started
-    already_started: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#already-started
+        already_started: Mut<bool>,
 
-    /// https://html.spec.whatwg.org/multipage/#parser-inserted
-    parser_inserted: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#parser-inserted
+        parser_inserted: Mut<bool>,
 
-    /// https://html.spec.whatwg.org/multipage/#non-blocking
-    ///
-    /// (currently unused)
-    non_blocking: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#non-blocking
+        ///
+        /// (currently unused)
+        non_blocking: Mut<bool>,
 
-    /// https://html.spec.whatwg.org/multipage/#ready-to-be-parser-executed
-    ///
-    /// (currently unused)
-    ready_to_be_parser_executed: Cell<bool>,
+        /// https://html.spec.whatwg.org/multipage/#ready-to-be-parser-executed
+        ///
+        /// (currently unused)
+        ready_to_be_parser_executed: Mut<bool>,
 
-    /// Document of the parser that created this element
-    parser_document: JS<Document>,
+        /// Document of the parser that created this element
+        parser_document: JS<Document>,
 
-    #[ignore_heap_size_of = "Defined in rust-encoding"]
-    /// https://html.spec.whatwg.org/multipage/#concept-script-encoding
-    block_character_encoding: DOMRefCell<EncodingRef>,
+        #[ignore_heap_size_of = "Defined in rust-encoding"]
+        /// https://html.spec.whatwg.org/multipage/#concept-script-encoding
+        block_character_encoding: Layout<EncodingRef>,
+    }
 }
 
 impl HTMLScriptElement {
-    fn new_inherited(localName: DOMString, prefix: Option<DOMString>, document: &Document,
-                     creator: ElementCreator) -> HTMLScriptElement {
-        HTMLScriptElement {
-            htmlelement:
-                HTMLElement::new_inherited(localName, prefix, document),
-            already_started: Cell::new(false),
-            parser_inserted: Cell::new(creator == ElementCreator::ParserCreated),
-            non_blocking: Cell::new(creator != ElementCreator::ParserCreated),
-            ready_to_be_parser_executed: Cell::new(false),
-            parser_document: JS::from_ref(document),
-            block_character_encoding: DOMRefCell::new(UTF_8 as EncodingRef),
-        }
+    fn new_inherited(&mut self, localName: DOMString, prefix: Option<DOMString>, document: &Document,
+                     creator: ElementCreator) {
+        self.htmlelement.new_inherited(localName, prefix, document);
+        self.already_started.init(false);
+        self.parser_inserted.init(creator == ElementCreator::ParserCreated);
+        self.non_blocking.init(creator != ElementCreator::ParserCreated);
+        self.ready_to_be_parser_executed.init(false);
+        self.parser_document.init(JS::from_ref(document));
+        self.block_character_encoding.init(UTF_8 as EncodingRef);
     }
 
     #[allow(unrooted_must_root)]
     pub fn new(localName: DOMString, prefix: Option<DOMString>, document: &Document,
                creator: ElementCreator) -> Root<HTMLScriptElement> {
-        let element = HTMLScriptElement::new_inherited(localName, prefix, document, creator);
-        Node::reflect_node(box element, document, HTMLScriptElementBinding::Wrap)
+        let mut obj = Node::alloc_node::<HTMLScriptElement>(document);
+        obj.new_inherited(localName, prefix, document, creator);
+        obj.into_root()
     }
 }
 

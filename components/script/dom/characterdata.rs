@@ -18,18 +18,17 @@ use std::cell::Ref;
 use util::str::DOMString;
 
 // https://dom.spec.whatwg.org/#characterdata
-#[dom_struct]
-pub struct CharacterData {
-    node: Node,
-    data: DOMRefCell<DOMString>,
+magic_dom_struct! {
+    pub struct CharacterData {
+        node: Base<Node>,
+        data: Layout<DOMString>,
+    }
 }
 
 impl CharacterData {
-    pub fn new_inherited(data: DOMString, document: &Document) -> CharacterData {
-        CharacterData {
-            node: Node::new_inherited(document),
-            data: DOMRefCell::new(data),
-        }
+    pub fn new_inherited(&mut self, data: DOMString, document: &Document) {
+        self.node.new_inherited(document);
+        self.data.init(data);
     }
 }
 
