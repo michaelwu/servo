@@ -237,17 +237,17 @@ impl Document {
 
     #[inline]
     pub fn window(&self) -> Root<Window> {
-        self.window.root()
+        self.window.get().root()
     }
 
     #[inline]
     pub fn encoding_name(&self) -> Ref<DOMString> {
-        self.encoding_name.borrow()
+        self.encoding_name.get()
     }
 
     #[inline]
     pub fn is_html_document(&self) -> bool {
-        self.is_html_document
+        self.is_html_document.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#fully-active
@@ -316,7 +316,7 @@ impl Document {
     }
 
     pub fn set_encoding_name(&self, name: DOMString) {
-        *self.encoding_name.borrow_mut() = name;
+        self.encoding_name.set(name);
     }
 
     pub fn content_changed(&self, node: &Node, damage: NodeDamage) {
@@ -987,7 +987,7 @@ impl LayoutDocumentHelpers for LayoutJS<Document> {
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn is_html_document_for_layout(&self) -> bool {
-        (*self.unsafe_get()).is_html_document
+        (*self.unsafe_get()).is_html_document.get()
     }
 }
 
@@ -1098,7 +1098,7 @@ impl Document {
     /// https://html.spec.whatwg.org/multipage/#appropriate-template-contents-owner-document
     pub fn appropriate_template_contents_owner_document(&self) -> Root<Document> {
         self.appropriate_template_contents_owner_document.or_init(|| {
-            let doctype = if self.is_html_document {
+            let doctype = if self.is_html_document.get() {
                 IsHTMLDocument::HTMLDocument
             } else {
                 IsHTMLDocument::NonHTMLDocument
@@ -1188,17 +1188,17 @@ impl DocumentMethods for Document {
 
     // https://dom.spec.whatwg.org/#dom-document-characterset
     fn CharacterSet(&self) -> DOMString {
-        self.encoding_name.borrow().clone()
+        self.encoding_name.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-document-inputencoding
     fn InputEncoding(&self) -> DOMString {
-        self.encoding_name.borrow().clone()
+        self.encoding_name.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-document-content_type
     fn ContentType(&self) -> DOMString {
-        self.content_type.clone()
+        self.content_type.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-document-doctype
@@ -1239,7 +1239,7 @@ impl DocumentMethods for Document {
             debug!("Not a valid element name");
             return Err(Error::InvalidCharacter);
         }
-        if self.is_html_document {
+        if self.is_html_document.get() {
             local_name.make_ascii_lowercase();
         }
         let name = QualName::new(ns!(HTML), Atom::from_slice(&local_name));
@@ -1347,7 +1347,7 @@ impl DocumentMethods for Document {
     // https://dom.spec.whatwg.org/#dom-document-createevent
     fn CreateEvent(&self, mut interface: DOMString) -> Fallible<Root<Event>> {
         interface.make_ascii_lowercase();
-        let window = self.window.root();
+        let window = self.window.get().root();
         match &*interface {
             "uievents" | "uievent" =>
                 Ok(Root::upcast(UIEvent::new_uninitialized(window.r()))),
@@ -1368,7 +1368,7 @@ impl DocumentMethods for Document {
 
     // https://html.spec.whatwg.org/multipage/#dom-document-lastmodified
     fn LastModified(&self) -> DOMString {
-        match self.last_modified {
+        match self.last_modified.get() {
             Some(ref t) => t.clone(),
             None => time::now().strftime("%m/%d/%Y %H:%M:%S").unwrap().to_string(),
         }
@@ -1667,7 +1667,7 @@ impl DocumentMethods for Document {
 
     // https://html.spec.whatwg.org/multipage/#dom-document-defaultview
     fn DefaultView(&self) -> Root<Window> {
-        self.window.root()
+        self.window.get().root()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-document-cookie
@@ -1678,7 +1678,7 @@ impl DocumentMethods for Document {
             return Err(Error::Security);
         }
         let (tx, rx) = ipc::channel().unwrap();
-        let _ = self.window.root().resource_task().send(GetCookiesForUrl((*url).clone(), tx, NonHTTP));
+        let _ = self.window.get().root().resource_task().send(GetCookiesForUrl((*url).clone(), tx, NonHTTP));
         let cookies = rx.recv().unwrap();
         Ok(cookies.unwrap_or("".to_owned()))
     }
@@ -1690,7 +1690,7 @@ impl DocumentMethods for Document {
         if !is_scheme_host_port_tuple(url) {
             return Err(Error::Security);
         }
-        let _ = self.window.root().resource_task().send(SetCookiesForUrl((*url).clone(), cookie, NonHTTP));
+        let _ = self.window.get().root().resource_task().send(SetCookiesForUrl((*url).clone(), cookie, NonHTTP));
         Ok(())
     }
 

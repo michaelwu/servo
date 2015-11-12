@@ -236,14 +236,14 @@ impl Window {
     #[allow(unsafe_code)]
     pub fn clear_js_runtime_for_script_deallocation(&self) {
         unsafe {
-            *self.js_runtime.borrow_for_script_deallocation() = None;
+            self.js_runtime.set(None);
             *self.extra.browsing_context.borrow_for_script_deallocation() = None;
             self.extra.current_state.set(WindowState::Zombie);
         }
     }
 
     pub fn get_cx(&self) -> *mut JSContext {
-        self.js_runtime.borrow().as_ref().unwrap().cx()
+        self.js_runtime.get().as_ref().unwrap().cx()
     }
 
     pub fn script_chan(&self) -> Box<ScriptChan + Send> {
@@ -267,15 +267,15 @@ impl Window {
     }
 
     pub fn pipeline(&self) -> PipelineId {
-        self.id
+        self.id.get()
     }
 
     pub fn subpage(&self) -> Option<SubpageId> {
-        self.parent_info.map(|p| p.1)
+        self.parent_info.get().map(|p| p.1)
     }
 
     pub fn parent_info(&self) -> Option<(PipelineId, SubpageId)> {
-        self.parent_info
+        self.parent_info.get()
     }
 
     pub fn new_script_pair(&self) -> (Box<ScriptChan + Send>, Box<ScriptPort + Send>) {
@@ -296,7 +296,7 @@ impl Window {
     }
 
     pub fn page(&self) -> &Page {
-        &*self.page
+        &*self.page.get()
     }
 
     pub fn storage_task(&self) -> StorageTask {
@@ -389,7 +389,7 @@ impl WindowMethods for Window {
 
     // https://html.spec.whatwg.org/multipage/#dom-window-close
     fn Close(&self) {
-        self.main_thread_script_chan().send(MainThreadScriptMsg::ExitWindow(self.id.clone())).unwrap();
+        self.main_thread_script_chan().send(MainThreadScriptMsg::ExitWindow(self.id.get())).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-document-0
@@ -438,7 +438,7 @@ impl WindowMethods for Window {
                                                   args,
                                                   timeout,
                                                   IsInterval::NonInterval,
-                                                  TimerSource::FromWindow(self.id.clone()))
+                                                  TimerSource::FromWindow(self.id.get()))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-settimeout
@@ -447,7 +447,7 @@ impl WindowMethods for Window {
                                                   args,
                                                   timeout,
                                                   IsInterval::NonInterval,
-                                                  TimerSource::FromWindow(self.id.clone()))
+                                                  TimerSource::FromWindow(self.id.get()))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-cleartimeout
@@ -461,7 +461,7 @@ impl WindowMethods for Window {
                                                   args,
                                                   timeout,
                                                   IsInterval::Interval,
-                                                  TimerSource::FromWindow(self.id.clone()))
+                                                  TimerSource::FromWindow(self.id.get()))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-setinterval
@@ -470,7 +470,7 @@ impl WindowMethods for Window {
                                                   args,
                                                   timeout,
                                                   IsInterval::Interval,
-                                                  TimerSource::FromWindow(self.id.clone()))
+                                                  TimerSource::FromWindow(self.id.get()))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-windowtimers-clearinterval
@@ -816,7 +816,7 @@ impl Window {
         self.Gc();
 
         self.extra.current_state.set(WindowState::Zombie);
-        *self.js_runtime.borrow_mut() = None;
+        self.js_runtime.set(None);
         *self.extra.browsing_context.borrow_mut() = None;
     }
 
@@ -1057,7 +1057,7 @@ impl Window {
                     ReflowQueryType::OffsetParentQuery(node),
                     ReflowReason::Query);
         let response = self.extra.layout_rpc.offset_parent();
-        let js_runtime = self.js_runtime.borrow();
+        let js_runtime = self.js_runtime.get();
         let js_runtime = js_runtime.as_ref().unwrap();
         let element = response.node_address.and_then(|parent_node_address| {
             let node = from_untrusted_node_address(js_runtime.rt(), parent_node_address);
@@ -1082,7 +1082,7 @@ impl Window {
     /// Commence a new URL load which will either replace this window or scroll to a fragment.
     pub fn load_url(&self, url: Url) {
         self.main_thread_script_chan().send(
-            MainThreadScriptMsg::Navigate(self.id, LoadData::new(url))).unwrap();
+            MainThreadScriptMsg::Navigate(self.id.get(), LoadData::new(url))).unwrap();
     }
 
     pub fn handle_fire_timer(&self, timer_id: TimerEventId) {

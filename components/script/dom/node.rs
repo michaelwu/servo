@@ -759,10 +759,10 @@ impl Node {
     }
 
     pub fn get_unique_id(&self) -> String {
-        if self.unique_id.borrow().is_empty() {
-            *self.unique_id.borrow_mut() = uuid::Uuid::new_v4().to_simple_string();
+        if self.unique_id.get().is_empty() {
+            self.unique_id.set(uuid::Uuid::new_v4().to_simple_string());
         }
-        self.unique_id.borrow().clone()
+        self.unique_id.get()
     }
 
     pub fn summarize(&self) -> NodeInfo {
@@ -1003,7 +1003,7 @@ impl LayoutNodeHelpers for LayoutJS<Node> {
     #[allow(unsafe_code)]
     unsafe fn layout_data(&self) -> Ref<Option<LayoutData>> {
         debug_assert!(task_state::get().is_layout());
-        (*self.unsafe_get()).layout_data.borrow()
+        (*self.unsafe_get()).layout_data.get()
     }
 
     #[inline]

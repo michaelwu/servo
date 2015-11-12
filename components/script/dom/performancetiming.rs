@@ -38,13 +38,13 @@ impl PerformanceTimingMethods for PerformanceTiming {
     // https://dvcs.w3.org/hg/webperf/raw-file/tip/specs/
     // NavigationTiming/Overview.html#dom-performancetiming-navigationstart
     fn NavigationStart(&self) -> u64 {
-        self.navigationStart
+        self.navigationStart.get()
     }
 }
 
 
 impl PerformanceTiming {
     pub fn NavigationStartPrecise(&self) -> f64 {
-        self.navigationStartPrecise
+        self.navigationStartPrecise.get()
     }
 }

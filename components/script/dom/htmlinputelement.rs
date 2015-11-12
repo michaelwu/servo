@@ -164,7 +164,7 @@ impl LayoutHTMLInputElementHelpers for LayoutJS<HTMLInputElement> {
             if !textinput.is_empty() {
                 textinput
             } else {
-                (*input.unsafe_get()).placeholder.borrow_for_layout().to_owned()
+                (*input.unsafe_get()).placeholder.layout_get().to_owned()
             }
         }
 

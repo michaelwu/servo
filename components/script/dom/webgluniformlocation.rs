@@ -29,6 +29,6 @@ impl WebGLUniformLocation {
 
 impl WebGLUniformLocation {
     pub fn id(&self) -> i32 {
-        self.id
+        self.id.get()
     }
 }

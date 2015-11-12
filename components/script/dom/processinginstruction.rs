@@ -34,13 +34,13 @@ impl ProcessingInstruction {
 
 impl ProcessingInstruction {
     pub fn target(&self) -> &DOMString {
-        &self.target
+        &self.target.get()
     }
 }
 
 impl ProcessingInstructionMethods for ProcessingInstruction {
     // https://dom.spec.whatwg.org/#dom-processinginstruction-target
     fn Target(&self) -> DOMString {
-        self.target.clone()
+        self.target.get()
     }
 }

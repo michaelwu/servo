@@ -187,7 +187,7 @@ pub trait RawLayoutElementHelpers {
 pub unsafe fn get_attr_for_layout<'a>(elem: &'a Element, namespace: &Namespace, name: &Atom)
                                       -> Option<LayoutJS<Attr>> {
     // cast to point to T in RefCell<T> directly
-    let attrs = elem.attrs.borrow_for_layout();
+    let attrs = elem.attrs.layout_get();
     attrs.iter().find(|attr| {
         let attr = attr.to_layout();
         *name == attr.local_name_atom_forever() &&
@@ -214,7 +214,7 @@ impl RawLayoutElementHelpers for Element {
 
     #[inline]
     unsafe fn get_attr_vals_for_layout<'a>(&'a self, name: &Atom) -> Vec<&'a str> {
-        let attrs = self.attrs.borrow_for_layout();
+        let attrs = self.attrs.layout_get();
         attrs.iter().filter_map(|attr| {
             let attr = attr.to_layout();
             if *name == attr.local_name_atom_forever() {
@@ -539,7 +539,7 @@ impl LayoutElementHelpers for LayoutJS<Element> {
     #[inline]
     #[allow(unsafe_code)]
     unsafe fn html_element_in_html_document_for_layout(&self) -> bool {
-        if (*self.unsafe_get()).namespace != ns!(HTML) {
+        if (*self.unsafe_get()).namespace.get() != ns!(HTML) {
             return false
         }
         self.upcast::<Node>().owner_doc_for_layout().is_html_document_for_layout()
@@ -553,28 +553,28 @@ impl LayoutElementHelpers for LayoutJS<Element> {
     #[allow(unsafe_code)]
     fn id_attribute(&self) -> *const Option<Atom> {
         unsafe {
-            (*self.unsafe_get()).id_attribute.borrow_for_layout()
+            (*self.unsafe_get()).id_attribute.layout_get()
         }
     }
 
     #[allow(unsafe_code)]
     fn style_attribute(&self) -> *const Option<PropertyDeclarationBlock> {
         unsafe {
-            (*self.unsafe_get()).style_attribute.borrow_for_layout()
+            (*self.unsafe_get()).style_attribute.layout_get()
         }
     }
 
     #[allow(unsafe_code)]
     fn local_name(&self) -> &Atom {
         unsafe {
-            &(*self.unsafe_get()).local_name
+            &(*self.unsafe_get()).local_name.get()
         }
     }
 
     #[allow(unsafe_code)]
     fn namespace(&self) -> &Namespace {
         unsafe {
-            &(*self.unsafe_get()).namespace
+            &(*self.unsafe_get()).namespace.get()
         }
     }
 
@@ -620,11 +620,11 @@ pub enum StylePriority {
 
 impl Element {
     pub fn html_element_in_html_document(&self) -> bool {
-        self.namespace == ns!(HTML) && self.upcast::<Node>().is_in_html_doc()
+        self.namespace.get() == ns!(HTML) && self.upcast::<Node>().is_in_html_doc()
     }
 
     pub fn local_name(&self) -> &Atom {
-        &self.local_name
+        &self.local_name.get()
     }
 
     pub fn parsed_name(&self, mut name: DOMString) -> Atom {
@@ -635,15 +635,15 @@ impl Element {
     }
 
     pub fn namespace(&self) -> &Namespace {
-        &self.namespace
+        &self.namespace.get()
     }
 
     pub fn prefix(&self) -> &Option<DOMString> {
-        &self.prefix
+        &self.prefix.get()
     }
 
     pub fn attrs(&self) -> Ref<Vec<JS<Attr>>> {
-        self.attrs.borrow()
+        self.attrs.get()
     }
 
     pub fn style_attribute(&self) -> &DOMRefCell<Option<PropertyDeclarationBlock>> {
@@ -661,10 +661,10 @@ impl Element {
     }
 
     pub fn is_void(&self) -> bool {
-        if self.namespace != ns!(HTML) {
+        if self.namespace.get() != ns!(HTML) {
             return false
         }
-        match &*self.local_name {
+        match &*self.local_name.get() {
             /* List of void elements from
             https://html.spec.whatwg.org/multipage/#html-fragment-serialisation-algorithm */
             "area" | "base" | "basefont" | "bgsound" | "br" | "col" | "embed" |
@@ -758,7 +758,7 @@ impl Element {
     }
 
     pub fn get_inline_style_declaration(&self, property: &Atom) -> Option<Ref<PropertyDeclaration>> {
-        Ref::filter_map(self.style_attribute.borrow(), |inline_declarations| {
+        Ref::filter_map(self.style_attribute.get(), |inline_declarations| {
             inline_declarations.as_ref().and_then(|declarations| {
                 declarations.normal
                             .iter()
@@ -770,7 +770,7 @@ impl Element {
 
     pub fn get_important_inline_style_declaration(&self, property: &Atom)
                                                   -> Option<Ref<PropertyDeclaration>> {
-        Ref::filter_map(self.style_attribute.borrow(), |inline_declarations| {
+        Ref::filter_map(self.style_attribute.get(), |inline_declarations| {
             inline_declarations.as_ref().and_then(|declarations| {
                 declarations.important
                             .iter()
@@ -886,7 +886,7 @@ impl Element {
     }
 
     pub fn get_attribute(&self, namespace: &Namespace, local_name: &Atom) -> Option<Root<Attr>> {
-        self.attrs.borrow().iter().map(JS::root).find(|attr| {
+        self.attrs.get().iter().map(JS::root).find(|attr| {
             attr.local_name() == local_name && attr.namespace() == namespace
         })
     }
@@ -894,7 +894,7 @@ impl Element {
     // https://dom.spec.whatwg.org/#concept-element-attributes-get-by-name
     pub fn get_attribute_by_name(&self, name: DOMString) -> Option<Root<Attr>> {
         let name = &self.parsed_name(name);
-        self.attrs.borrow().iter().map(JS::root)
+        self.attrs.get().iter().map(JS::root)
              .find(|a| a.r().name() == name)
     }
 
@@ -903,7 +903,7 @@ impl Element {
                                      value: DOMString,
                                      prefix: Option<Atom>) {
         // Don't set if the attribute already exists, so we can handle add_attrs_if_missing
-        if self.attrs.borrow().iter().map(JS::root)
+        if self.attrs.get().iter().map(JS::root)
                 .any(|a| *a.r().local_name() == qname.local && *a.r().namespace() == qname.ns) {
             return;
         }
@@ -954,7 +954,7 @@ impl Element {
                                        find: F)
                                        where F: Fn(&Attr)
                                        -> bool {
-        let attr = self.attrs.borrow().iter().map(JS::root).find(|attr| find(&attr));
+        let attr = self.attrs.get().iter().map(JS::root).find(|attr| find(&attr));
         if let Some(attr) = attr {
             attr.set_value(value, self);
         } else {
@@ -985,10 +985,10 @@ impl Element {
     fn remove_first_matching_attribute<F>(&self, find: F) -> Option<Root<Attr>>
         where F: Fn(&Attr) -> bool
     {
-        let idx = self.attrs.borrow().iter().map(JS::root).position(|attr| find(&attr));
+        let idx = self.attrs.get().iter().map(JS::root).position(|attr| find(&attr));
 
         idx.map(|idx| {
-            let attr = (*self.attrs.borrow())[idx].root();
+            let attr = (*self.attrs.get())[idx].root();
             self.attrs.borrow_mut().remove(idx);
             attr.set_owner(None);
             if attr.namespace() == &ns!("") {
@@ -1017,7 +1017,7 @@ impl Element {
 
     pub fn has_attribute(&self, local_name: &Atom) -> bool {
         assert!(local_name.bytes().all(|b| b.to_ascii_lowercase() == b));
-        self.attrs.borrow().iter().map(JS::root).any(|attr| {
+        self.attrs.get().iter().map(JS::root).any(|attr| {
             attr.r().local_name() == local_name && attr.r().namespace() == &ns!("")
         })
     }
@@ -1105,26 +1105,26 @@ impl Element {
 impl ElementMethods for Element {
     // https://dom.spec.whatwg.org/#dom-element-namespaceuri
     fn GetNamespaceURI(&self) -> Option<DOMString> {
-        Node::namespace_to_string(self.namespace.clone())
+        Node::namespace_to_string(self.namespace.get())
     }
 
     // https://dom.spec.whatwg.org/#dom-element-localname
     fn LocalName(&self) -> DOMString {
-        (*self.local_name).to_owned()
+        (*self.local_name.get()).to_owned()
     }
 
     // https://dom.spec.whatwg.org/#dom-element-prefix
     fn GetPrefix(&self) -> Option<DOMString> {
-        self.prefix.clone()
+        self.prefix.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-element-tagname
     fn TagName(&self) -> DOMString {
-        let qualified_name = match self.prefix {
+        let qualified_name = match self.prefix.get() {
             Some(ref prefix) => {
-                Cow::Owned(format!("{}:{}", &**prefix, &*self.local_name))
+                Cow::Owned(format!("{}:{}", &**prefix, &*self.local_name.get()))
             },
-            None => Cow::Borrowed(&*self.local_name)
+            None => Cow::Borrowed(&*self.local_name.get())
         };
         if self.html_element_in_html_document() {
             qualified_name.to_ascii_uppercase()
@@ -1557,7 +1557,7 @@ impl VirtualMethods for Element {
 
         if !tree_in_doc { return; }
 
-        if let Some(ref value) = *self.id_attribute.borrow() {
+        if let Some(ref value) = *self.id_attribute.get() {
             let doc = document_from_node(self);
             doc.register_named_element(self, value.clone());
         }
@@ -1570,7 +1570,7 @@ impl VirtualMethods for Element {
 
         if !tree_in_doc { return; }
 
-        if let Some(ref value) = *self.id_attribute.borrow() {
+        if let Some(ref value) = *self.id_attribute.get() {
             let doc = document_from_node(self);
             doc.unregister_named_element(self, value.clone());
         }
@@ -1659,7 +1659,7 @@ impl<'a> ::selectors::Element for Root<Element> {
     }
 
     fn get_id(&self) -> Option<Atom> {
-        self.id_attribute.borrow().clone()
+        self.id_attribute.get()
     }
     fn get_disabled_state(&self) -> bool {
         Element::get_disabled_state(self)
@@ -1723,7 +1723,7 @@ impl<'a> ::selectors::Element for Root<Element> {
                     })
             },
             NamespaceConstraint::Any => {
-                self.attrs.borrow().iter().map(JS::root).any(|attr| {
+                self.attrs.get().iter().map(JS::root).any(|attr| {
                      attr.local_name() == local_name && test(&attr.value())
                 })
             }

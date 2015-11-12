@@ -35,23 +35,23 @@ impl CharacterData {
 impl CharacterDataMethods for CharacterData {
     // https://dom.spec.whatwg.org/#dom-characterdata-data
     fn Data(&self) -> DOMString {
-        self.data.borrow().clone()
+        self.data.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-characterdata-data
     fn SetData(&self, data: DOMString) {
-        *self.data.borrow_mut() = data;
+        self.data.set(data);
         self.content_changed();
     }
 
     // https://dom.spec.whatwg.org/#dom-characterdata-length
     fn Length(&self) -> u32 {
-        self.data.borrow().chars().map(|c| c.len_utf16()).sum::<usize>() as u32
+        self.data.get().chars().map(|c| c.len_utf16()).sum::<usize>() as u32
     }
 
     // https://dom.spec.whatwg.org/#dom-characterdata-substringdata
     fn SubstringData(&self, offset: u32, count: u32) -> Fallible<DOMString> {
-        let data = self.data.borrow();
+        let data = self.data.get();
         // Step 1.
         let data_from_offset = match find_utf16_code_unit_offset(&data, offset) {
             Some(offset_bytes) => &data[offset_bytes..],
@@ -85,7 +85,7 @@ impl CharacterDataMethods for CharacterData {
     // https://dom.spec.whatwg.org/#dom-characterdata-replacedata
     fn ReplaceData(&self, offset: u32, count: u32, arg: DOMString) -> ErrorResult {
         let new_data = {
-            let data = self.data.borrow();
+            let data = self.data.get();
             let (prefix, data_from_offset) = match find_utf16_code_unit_offset(&data, offset) {
                 Some(offset_bytes) => data.split_at(offset_bytes),
                 // Step 2.
@@ -104,7 +104,7 @@ impl CharacterDataMethods for CharacterData {
             new_data.push_str(suffix);
             new_data
         };
-        *self.data.borrow_mut() = new_data;
+        self.data.set(new_data);
         self.content_changed();
         // FIXME: Once we have `Range`, we should implement step 8 to step 11
         Ok(())
@@ -145,7 +145,7 @@ impl CharacterDataMethods for CharacterData {
 impl CharacterData {
     #[inline]
     pub fn data(&self) -> Ref<DOMString> {
-        self.data.borrow()
+        self.data.get()
     }
     #[inline]
     pub fn append_data(&self, data: &str) {
@@ -169,7 +169,7 @@ pub trait LayoutCharacterDataHelpers {
 impl LayoutCharacterDataHelpers for LayoutJS<CharacterData> {
     #[inline]
     unsafe fn data_for_layout(&self) -> &str {
-        &(*self.unsafe_get()).data.borrow_for_layout()
+        &(*self.unsafe_get()).data.layout_get()
     }
 }
 

@@ -95,11 +95,11 @@ impl MessageEventMethods for MessageEvent {
 
     // https://html.spec.whatwg.org/multipage/#dom-messageevent-origin
     fn Origin(&self) -> DOMString {
-        self.origin.clone()
+        self.origin.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-messageevent-lasteventid
     fn LastEventId(&self) -> DOMString {
-        self.lastEventId.clone()
+        self.lastEventId.get()
     }
 }

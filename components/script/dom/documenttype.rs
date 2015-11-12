@@ -48,34 +48,34 @@ impl DocumentType {
 
     #[inline]
     pub fn name(&self) -> &DOMString {
-        &self.name
+        &self.name.get()
     }
 
     #[inline]
     pub fn public_id(&self) -> &DOMString {
-        &self.public_id
+        &self.public_id.get()
     }
 
     #[inline]
     pub fn system_id(&self) -> &DOMString {
-        &self.system_id
+        &self.system_id.get()
     }
 }
 
 impl DocumentTypeMethods for DocumentType {
     // https://dom.spec.whatwg.org/#dom-documenttype-name
     fn Name(&self) -> DOMString {
-        self.name.clone()
+        self.name.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-documenttype-publicid
     fn PublicId(&self) -> DOMString {
-        self.public_id.clone()
+        self.public_id.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-documenttype-systemid
     fn SystemId(&self) -> DOMString {
-        self.system_id.clone()
+        self.system_id.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-childnode-before

@@ -68,7 +68,7 @@ impl TestBindingMethods for TestBinding {
     fn EnumAttribute(&self) -> TestEnum { _empty }
     fn SetEnumAttribute(&self, _: TestEnum) {}
     fn InterfaceAttribute(&self) -> Root<Blob> {
-        let global = self.global.root();
+        let global = self.global.get().root();
         Blob::new(global.r(), None, "")
     }
     fn SetInterfaceAttribute(&self, _: &Blob) {}
@@ -123,7 +123,7 @@ impl TestBindingMethods for TestBinding {
     fn SetAttr_to_automatically_rename(&self, _: DOMString) {}
     fn GetEnumAttributeNullable(&self) -> Option<TestEnum> { Some(_empty) }
     fn GetInterfaceAttributeNullable(&self) -> Option<Root<Blob>> {
-        let global = self.global.root();
+        let global = self.global.get().root();
         Some(Blob::new(global.r(), None, ""))
     }
     fn SetInterfaceAttributeNullable(&self, _: Option<&Blob>) {}
@@ -153,7 +153,7 @@ impl TestBindingMethods for TestBinding {
     fn ReceiveByteString(&self) -> ByteString { ByteString::new(vec!()) }
     fn ReceiveEnum(&self) -> TestEnum { _empty }
     fn ReceiveInterface(&self) -> Root<Blob> {
-        let global = self.global.root();
+        let global = self.global.get().root();
         Blob::new(global.r(), None, "")
     }
     fn ReceiveAny(&self, _: *mut JSContext) -> JSVal { NullValue() }
@@ -179,7 +179,7 @@ impl TestBindingMethods for TestBinding {
     fn ReceiveNullableByteString(&self) -> Option<ByteString> { Some(ByteString::new(vec!())) }
     fn ReceiveNullableEnum(&self) -> Option<TestEnum> { Some(_empty) }
     fn ReceiveNullableInterface(&self) -> Option<Root<Blob>> {
-        let global = self.global.root();
+        let global = self.global.get().root();
         Some(Blob::new(global.r(), None, ""))
     }
     fn ReceiveNullableObject(&self, _: *mut JSContext) -> *mut JSObject { ptr::null_mut() }

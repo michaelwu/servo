@@ -51,14 +51,14 @@ impl DOMImplementationMethods for DOMImplementation {
     fn CreateDocumentType(&self, qualified_name: DOMString, pubid: DOMString, sysid: DOMString)
                           -> Fallible<Root<DocumentType>> {
         try!(validate_qualified_name(&qualified_name));
-        let document = self.document.root();
+        let document = self.document.get().root();
         Ok(DocumentType::new(qualified_name, Some(pubid), Some(sysid), document.r()))
     }
 
     // https://dom.spec.whatwg.org/#dom-domimplementation-createdocument
     fn CreateDocument(&self, namespace: Option<DOMString>, qname: DOMString,
                       maybe_doctype: Option<&DocumentType>) -> Fallible<Root<Document>> {
-        let doc = self.document.root();
+        let doc = self.document.get().root();
         let doc = doc.r();
         let win = doc.window();
         let loader = DocumentLoader::new(&*doc.loader());
@@ -99,7 +99,7 @@ impl DOMImplementationMethods for DOMImplementation {
 
     // https://dom.spec.whatwg.org/#dom-domimplementation-createhtmldocument
     fn CreateHTMLDocument(&self, title: Option<DOMString>) -> Root<Document> {
-        let document = self.document.root();
+        let document = self.document.get().root();
         let document = document.r();
         let win = document.window();
         let loader = DocumentLoader::new(&*document.loader());

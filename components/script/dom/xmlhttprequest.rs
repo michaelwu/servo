@@ -333,7 +333,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
                 *self.extra.request_method.borrow_mut() = parsed_method;
 
                 // Step 6
-                let base = self.global.root().r().get_url();
+                let base = self.global.get().root().r().get_url();
                 let parsed_url = match UrlParser::new().base_url(&base).parse(&url) {
                     Ok(parsed) => parsed,
                     Err(_) => return Err(Error::Syntax) // Step 7
@@ -352,7 +352,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
                 *self.extra.request_url.borrow_mut() = Some(parsed_url);
                 *self.extra.request_headers.borrow_mut() = Headers::new();
                 self.send_flag.set(false);
-                *self.status_text.borrow_mut() = ByteString::new(vec!());
+                self.status_text.set(ByteString::new(vec!()));
                 self.status.set(0);
 
                 // Step 13
@@ -465,7 +465,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
             XMLHttpRequestState::Loading |
             XMLHttpRequestState::Done => Err(Error::InvalidState),
             _ if self.send_flag.get() => Err(Error::InvalidState),
-            _ => match self.global.root() {
+            _ => match self.global.get().root() {
                 GlobalRoot::Window(_) if self.sync.get() => Err(Error::InvalidAccess),
                 _ => {
                     self.with_credentials.set(with_credentials);
@@ -477,7 +477,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-upload-attribute
     fn Upload(&self) -> Root<XMLHttpRequestUpload> {
-        self.upload.root()
+        self.upload.get().root()
     }
 
     // https://xhr.spec.whatwg.org/#the-send()-method
@@ -504,7 +504,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
         if !self.sync.get() {
             // Step 8
-            let upload_target = self.upload.root();
+            let upload_target = self.upload.get().root();
             let event_target = upload_target.r().upcast::<EventTarget>();
             if event_target.has_handlers() {
                 self.upload_events.set(true);
@@ -528,7 +528,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
         }
 
-        let global = self.global.root();
+        let global = self.global.get().root();
         let pipeline_id = global.r().pipeline();
         let mut load_data = LoadData::new(self.extra.request_url.borrow().clone().unwrap(), Some(pipeline_id));
         load_data.data = extracted;
@@ -565,8 +565,8 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
         load_data.method = (*self.extra.request_method.borrow()).clone();
 
         // CORS stuff
-        let global = self.global.root();
-        let referer_url = self.global.root().r().get_url();
+        let global = self.global.get().root();
+        let referer_url = self.global.get().root().r().get_url();
         let mode = if self.upload_events.get() {
             RequestMode::ForcedPreflight
         } else {
@@ -632,7 +632,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-responseurl-attribute
     fn ResponseURL(&self) -> DOMString {
-        self.response_url.clone()
+        self.response_url.get()
     }
 
     // https://xhr.spec.whatwg.org/#the-status-attribute
@@ -642,7 +642,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-statustext-attribute
     fn StatusText(&self) -> ByteString {
-        self.status_text.borrow().clone()
+        self.status_text.get()
     }
 
     // https://xhr.spec.whatwg.org/#the-getresponseheader()-method
@@ -666,7 +666,7 @@ impl XMLHttpRequestMethods for XMLHttpRequest {
 
     // https://xhr.spec.whatwg.org/#the-responsetype-attribute
     fn SetResponseType(&self, response_type: XMLHttpRequestResponseType) -> ErrorResult {
-        match self.global.root() {
+        match self.global.get().root() {
             GlobalRoot::Worker(_) if response_type == XMLHttpRequestResponseType::Document
             => return Ok(()),
             _ => {}
@@ -744,7 +744,7 @@ impl XMLHttpRequest {
     fn change_ready_state(&self, rs: XMLHttpRequestState) {
         assert!(self.ready_state.get() != rs);
         self.ready_state.set(rs);
-        let global = self.global.root();
+        let global = self.global.get().root();
         let event = Event::new(global.r(),
                                "readystatechange".to_owned(),
                                EventBubbles::DoesNotBubble,
@@ -834,7 +834,7 @@ impl XMLHttpRequest {
                 // Substep 2
                 status.map(|RawStatus(code, reason)| {
                     self.status.set(code);
-                    *self.status_text.borrow_mut() = ByteString::new(reason.into_owned().into_bytes());
+                    self.status_text.set(ByteString::new(reason.into_owned().into_bytes()));
                 });
                 headers.as_ref().map(|h| *self.extra.response_headers.borrow_mut() = h.clone());
 
@@ -926,8 +926,8 @@ impl XMLHttpRequest {
     }
 
     fn dispatch_progress_event(&self, upload: bool, type_: DOMString, loaded: u64, total: Option<u64>) {
-        let global = self.global.root();
-        let upload_target = self.upload.root();
+        let global = self.global.get().root();
+        let upload_target = self.upload.get().root();
         let progressevent = ProgressEvent::new(global.r(),
                                                type_, EventBubbles::DoesNotBubble, EventCancelable::NotCancelable,
                                                total.is_some(), loaded,
@@ -971,7 +971,7 @@ impl XMLHttpRequest {
         // Sets up the object to timeout in a given number of milliseconds
         // This will cancel all previous timeouts
         let timeout_target = (*self.extra.timeout_target.borrow().as_ref().unwrap()).clone();
-        let global = self.global.root();
+        let global = self.global.get().root();
         let xhr = Trusted::new(global.r().get_cx(), self, global.r().script_chan());
         let gen_id = self.extra.generation_id.get();
         let (cancel_tx, cancel_rx) = channel();

@@ -151,7 +151,7 @@ impl WorkerGlobalScope {
     }
 
     pub fn get_cx(&self) -> *mut JSContext {
-        self.runtime.cx()
+        self.runtime.get().cx()
     }
 
     pub fn resource_task(&self) -> &ResourceTask {
@@ -163,7 +163,7 @@ impl WorkerGlobalScope {
     }
 
     pub fn get_worker_id(&self) -> WorkerId {
-        self.worker_id.clone()
+        self.worker_id.get()
     }
 
     pub fn get_next_worker_id(&self) -> WorkerId {
@@ -207,7 +207,7 @@ impl WorkerGlobalScopeMethods for WorkerGlobalScope {
                 }
             };
 
-            match self.runtime.evaluate_script(
+            match self.runtime.get().evaluate_script(
                 self.handle(), source, url.serialize(), 1) {
                 Ok(_) => (),
                 Err(_) => {
@@ -295,15 +295,15 @@ impl WorkerGlobalScopeMethods for WorkerGlobalScope {
 
 impl WorkerGlobalScope {
     pub fn execute_script(&self, source: DOMString) {
-        match self.runtime.evaluate_script(
+        match self.runtime.get().evaluate_script(
             self.handle(), source, self.extra.worker_url.serialize(), 1) {
             Ok(_) => (),
             Err(_) => {
                 // TODO: An error needs to be dispatched to the parent.
                 // https://github.com/servo/servo/issues/6422
                 println!("evaluate_script failed");
-                let _ar = JSAutoRequest::new(self.runtime.cx());
-                report_pending_exception(self.runtime.cx(), self.get_jsobj());
+                let _ar = JSAutoRequest::new(self.runtime.get().cx());
+                report_pending_exception(self.runtime.get().cx(), self.get_jsobj());
             }
         }
     }

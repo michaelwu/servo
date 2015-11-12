@@ -47,7 +47,7 @@ impl Sink {
         match child {
             NodeOrText::AppendNode(n) => n.root(),
             NodeOrText::AppendText(t) => {
-                let doc = self.document.root();
+                let doc = self.document.get().root();
                 let text = Text::new(t.into(), &doc);
                 Root::upcast(text)
             }
@@ -194,7 +194,7 @@ pub struct ServoHTMLParserExtra {
 
 impl<'a> Parser for &'a ServoHTMLParser {
     fn parse_chunk(self, input: String) {
-        self.document.root().r().set_current_parser(Some(self));
+        self.document.get().root().r().set_current_parser(Some(self));
         self.extra.pending_input.borrow_mut().push(input);
         self.parse_sync();
     }
@@ -206,10 +206,10 @@ impl<'a> Parser for &'a ServoHTMLParser {
         self.tokenizer().borrow_mut().end();
         debug!("finished parsing");
 
-        let document = self.document.root();
+        let document = self.document.get().root();
         document.r().set_current_parser(None);
 
-        if let Some(pipeline) = self.pipeline {
+        if let Some(pipeline) = self.pipeline.get() {
             ScriptTask::parsing_complete(pipeline);
         }
     }
@@ -303,7 +303,7 @@ impl ServoHTMLParser {
                 break;
             }
 
-            let document = self.document.root();
+            let document = self.document.get().root();
             document.r().reflow_if_reflow_timer_expired();
 
             let mut pending_input = self.extra.pending_input.borrow_mut();
@@ -323,7 +323,7 @@ impl ServoHTMLParser {
     }
 
     fn window(&self) -> Root<Window> {
-        let doc = self.document.root();
+        let doc = self.document.get().root();
         window_from_node(doc.r())
     }
 }

@@ -206,7 +206,7 @@ impl HTMLScriptElement {
         // Step 10.
         let document_from_node_ref = document_from_node(self);
         let document_from_node_ref = document_from_node_ref.r();
-        if self.parser_inserted.get() && self.parser_document.root().r() != document_from_node_ref {
+        if self.parser_inserted.get() && self.parser_document.get().root().r() != document_from_node_ref {
             return NextParserState::Continue;
         }
 
@@ -238,7 +238,7 @@ impl HTMLScriptElement {
         // Step 13.
         if let Some(ref charset) = element.get_attribute(&ns!(""), &atom!("charset")) {
             if let Some(encodingRef) = encoding_from_whatwg_label(&charset.r().Value()) {
-                *self.block_character_encoding.borrow_mut() = encodingRef;
+                self.block_character_encoding.set(encodingRef);
             }
         }
 

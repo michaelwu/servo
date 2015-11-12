@@ -60,7 +60,7 @@ impl DOMException {
 impl DOMExceptionMethods for DOMException {
     // https://heycam.github.io/webidl/#dfn-DOMException
     fn Code(&self) -> u16 {
-        match self.code {
+        match self.code.get() {
             // https://heycam.github.io/webidl/#dfn-throw
             DOMErrorName::EncodingError => 0,
             code => code as u16
@@ -69,12 +69,12 @@ impl DOMExceptionMethods for DOMException {
 
     // https://heycam.github.io/webidl/#idl-DOMException-error-names
     fn Name(&self) -> DOMString {
-        format!("{:?}", self.code)
+        format!("{:?}", self.code.get())
     }
 
     // https://heycam.github.io/webidl/#error-names
     fn Message(&self) -> DOMString {
-        let message = match self.code {
+        let message = match self.code.get() {
             DOMErrorName::IndexSizeError => "The index is not in the allowed range.",
             DOMErrorName::HierarchyRequestError => "The operation would yield an incorrect node tree.",
             DOMErrorName::WrongDocumentError => "The object is in the wrong document.",

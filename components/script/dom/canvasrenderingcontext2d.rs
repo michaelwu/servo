@@ -153,7 +153,7 @@ impl CanvasRenderingContext2D {
     }
 
     fn mark_as_dirty(&self) {
-        self.canvas.root().upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
+        self.canvas.get().root().upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
     }
 
     fn update_transform(&self) {
@@ -295,7 +295,7 @@ impl CanvasRenderingContext2D {
         let smoothing_enabled = self.extra.state.borrow().image_smoothing_enabled;
 
         // If the source and target canvas are the same
-        let msg = if self.canvas.root().r() == canvas {
+        let msg = if self.canvas.get().root().r() == canvas {
             CanvasMsg::Canvas2d(Canvas2dMsg::DrawImageSelf(image_size, dest_rect, source_rect, smoothing_enabled))
         } else { // Source and target canvases are different
             let context = match canvas.get_or_init_2d_context() {
@@ -372,7 +372,7 @@ impl CanvasRenderingContext2D {
 
     #[inline]
     fn request_image_from_cache(&self, url: Url) -> ImageResponse {
-        let canvas = self.canvas.root();
+        let canvas = self.canvas.get().root();
         let window = window_from_node(canvas.r());
         canvas_utils::request_image_from_cache(window.r(), url)
     }
@@ -427,7 +427,7 @@ impl LayoutCanvasRenderingContext2DHelpers for LayoutJS<CanvasRenderingContext2D
 impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-canvas
     fn Canvas(&self) -> Root<HTMLCanvasElement> {
-        self.canvas.root()
+        self.canvas.get().root()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
@@ -847,12 +847,12 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
         let sw = cmp::max(1, sw.abs().to_u32().unwrap());
         let sh = cmp::max(1, sh.abs().to_u32().unwrap());
-        Ok(ImageData::new(self.global.root().r(), sw, sh, None))
+        Ok(ImageData::new(self.global.get().root().r(), sw, sh, None))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-createimagedata
     fn CreateImageData_(&self, imagedata: &ImageData) -> Fallible<Root<ImageData>> {
-        Ok(ImageData::new(self.global.root().r(), imagedata.Width(), imagedata.Height(), None))
+        Ok(ImageData::new(self.global.get().root().r(), imagedata.Width(), imagedata.Height(), None))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-getimagedata
@@ -885,7 +885,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         let (sender, receiver) = ipc::channel::<Vec<u8>>().unwrap();
         let dest_rect = Rect::new(Point2D::new(sx.to_i32().unwrap(), sy.to_i32().unwrap()),
                                   Size2D::new(sw as i32, sh as i32));
-        let canvas_size = self.canvas.root().r().get_size();
+        let canvas_size = self.canvas.get().root().r().get_size();
         let canvas_size = Size2D::new(canvas_size.width as f64, canvas_size.height as f64);
         self.extra.ipc_renderer
             .send(CanvasMsg::Canvas2d(Canvas2dMsg::GetImageData(dest_rect, canvas_size, sender)))
@@ -902,7 +902,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
              chunk[2] = (chunk[2] as f32 / alpha) as u8;
         }
 
-        Ok(ImageData::new(self.global.root().r(), sw, sh, Some(data)))
+        Ok(ImageData::new(self.global.get().root().r(), sw, sh, Some(data)))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
@@ -914,7 +914,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
     fn PutImageData_(&self, imagedata: &ImageData, dx: Finite<f64>, dy: Finite<f64>,
                      dirtyX: Finite<f64>, dirtyY: Finite<f64>, dirtyWidth: Finite<f64>, dirtyHeight: Finite<f64>) {
-        let data = imagedata.get_data_array(&self.global.root().r());
+        let data = imagedata.get_data_array(&self.global.get().root().r());
         let offset = Point2D::new(*dx, *dy);
         let image_data_size = Size2D::new(imagedata.Width() as f64,
                                           imagedata.Height() as f64);
@@ -929,7 +929,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-createlineargradient
     fn CreateLinearGradient(&self, x0: Finite<f64>, y0: Finite<f64>,
                                   x1: Finite<f64>, y1: Finite<f64>) -> Root<CanvasGradient> {
-        CanvasGradient::new(self.global.root().r(),
+        CanvasGradient::new(self.global.get().root().r(),
                             CanvasGradientStyle::Linear(LinearGradientStyle::new(*x0, *y0, *x1, *y1, Vec::new())))
     }
 
@@ -941,7 +941,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
             return Err(Error::IndexSize);
         }
 
-        Ok(CanvasGradient::new(self.global.root().r(),
+        Ok(CanvasGradient::new(self.global.get().root().r(),
                                CanvasGradientStyle::Radial(
                                    RadialGradientStyle::new(*x0, *y0, *r0, *x1, *y1, *r1, Vec::new()))))
     }
@@ -982,7 +982,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         };
 
         if let Ok(rep) = RepetitionStyle::from_str(&repetition) {
-            return Ok(CanvasPattern::new(self.global.root().r(),
+            return Ok(CanvasPattern::new(self.global.get().root().r(),
                                          image_data,
                                          image_size,
                                          rep));

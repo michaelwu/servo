@@ -36,16 +36,16 @@ impl WebGLActiveInfo {
 impl WebGLActiveInfoMethods for WebGLActiveInfo {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.11.1
     fn Size(&self) -> i32 {
-        self.size
+        self.size.get()
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.11.1
     fn Type(&self) -> u32 {
-        self.ty
+        self.ty.get()
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.11.1
     fn Name(&self) -> DOMString {
-        self.name.clone()
+        self.name.get()
     }
 }

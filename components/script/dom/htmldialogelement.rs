@@ -46,12 +46,12 @@ impl HTMLDialogElementMethods for HTMLDialogElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-dialog-returnvalue
     fn ReturnValue(&self) -> DOMString {
-        let return_value = self.return_value.borrow();
+        let return_value = self.return_value.get();
         return_value.clone()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-dialog-returnvalue
     fn SetReturnValue(&self, return_value: DOMString) {
-        *self.return_value.borrow_mut() = return_value;
+        self.return_value.set(return_value);
     }
 }

@@ -41,7 +41,7 @@ magic_dom_struct! {
 
 impl HTMLImageElement {
     pub fn get_url(&self) -> Option<Url>{
-        self.url.borrow().clone()
+        self.url.get()
     }
 }
 
@@ -100,14 +100,14 @@ impl HTMLImageElement {
         let image_cache = window.image_cache_task();
         match value {
             None => {
-                *self.url.borrow_mut() = None;
-                *self.image.borrow_mut() = None;
+                self.url.set(None);
+                self.image.set(None);
             }
             Some((src, base_url)) => {
                 let img_url = UrlParser::new().base_url(&base_url).parse(&src);
                 // FIXME: handle URL parse errors more gracefully.
                 let img_url = img_url.unwrap();
-                *self.url.borrow_mut() = Some(img_url.clone());
+                self.url.set(Some(img_url.clone()));
 
                 let trusted_node = Trusted::new(window.get_cx(), self, window.script_chan());
                 let (responder_sender, responder_receiver) = ipc::channel().unwrap();
@@ -229,7 +229,7 @@ impl HTMLImageElementMethods for HTMLImageElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-img-naturalwidth
     fn NaturalWidth(&self) -> u32 {
-        let image = self.image.borrow();
+        let image = self.image.get();
 
         match *image {
             Some(ref image) => image.width,
@@ -239,7 +239,7 @@ impl HTMLImageElementMethods for HTMLImageElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-img-naturalheight
     fn NaturalHeight(&self) -> u32 {
-        let image = self.image.borrow();
+        let image = self.image.get();
 
         match *image {
             Some(ref image) => image.height,
@@ -249,7 +249,7 @@ impl HTMLImageElementMethods for HTMLImageElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-img-complete
     fn Complete(&self) -> bool {
-        let image = self.image.borrow();
+        let image = self.image.get();
         image.is_some()
     }
 

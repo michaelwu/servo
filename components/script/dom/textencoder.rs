@@ -65,14 +65,14 @@ impl TextEncoder {
 impl TextEncoderMethods for TextEncoder {
     // https://encoding.spec.whatwg.org/#dom-textencoder-encoding
     fn Encoding(&self) -> DOMString {
-        self.encoding.clone()
+        self.encoding.get()
     }
 
     #[allow(unsafe_code)]
     // https://encoding.spec.whatwg.org/#dom-textencoder-encode
     fn Encode(&self, cx: *mut JSContext, input: USVString) -> *mut JSObject {
         unsafe {
-            let encoded = self.encoder.encode(&input.0, EncoderTrap::Strict).unwrap();
+            let encoded = self.encoder.get().encode(&input.0, EncoderTrap::Strict).unwrap();
             let length = encoded.len() as u32;
             let js_object: *mut JSObject = JS_NewUint8Array(cx, length);
 

@@ -316,7 +316,7 @@ impl WebSocketMethods for WebSocket {
 
     // https://html.spec.whatwg.org/multipage/#dom-websocket-url
     fn Url(&self) -> DOMString {
-        self.url.serialize()
+        self.url.get().serialize()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-websocket-readystate
@@ -368,7 +368,7 @@ impl WebSocketMethods for WebSocket {
         if !self.clearing_buffer.get() && self.ready_state.get() == WebSocketRequestState::Open {
             self.clearing_buffer.set(true);
 
-            let global = self.global.root();
+            let global = self.global.get().root();
             let task = box BufferedAmountTask {
                 addr: Trusted::new(global.r().get_cx(), self, global.r().script_chan()),
             };
@@ -389,7 +389,7 @@ impl WebSocketMethods for WebSocket {
             //TODO: Also check if the buffer is full
             if let Some(sender) = sender.as_mut() {
                 let code: u16 = this.code.get();
-                let reason = this.reason.borrow().clone();
+                let reason = this.reason.get();
                 let _ = sender.lock().unwrap().send_message(Message::Close(Some(CloseData::new(code, reason))));
             }
         }
@@ -424,7 +424,7 @@ impl WebSocketMethods for WebSocket {
                     self.code.set(code);
                 }
                 if let Some(reason) = reason {
-                    *self.reason.borrow_mut() = reason.0;
+                    self.reason.set(reason.0);
                 }
                 send_close(self);
                 //Note: After sending the close message, the receive loop confirms a close message from the server and
@@ -506,7 +506,7 @@ impl Runnable for CloseTask {
                                    EventCancelable::Cancelable);
             event.fire(ws.upcast());
         }
-        let rsn = ws.reason.borrow();
+        let rsn = ws.reason.get();
         let rsn_clone = rsn.clone();
         /*In addition, we also have to fire a close even if error event fired
          https://html.spec.whatwg.org/multipage/#closeWebSocket

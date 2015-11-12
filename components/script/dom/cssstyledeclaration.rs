@@ -71,7 +71,7 @@ impl CSSStyleDeclaration {
     }
 
     fn get_computed_style(&self, property: &Atom) -> Option<DOMString> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let node = owner.upcast::<Node>();
         if !node.is_in_doc() {
             // TODO: Node should be matched against the style rules of this window.
@@ -79,14 +79,14 @@ impl CSSStyleDeclaration {
             return None;
         }
         let addr = node.to_trusted_node_address();
-        window_from_node(owner.r()).resolved_style_query(addr, self.pseudo.clone(), property)
+        window_from_node(owner.r()).resolved_style_query(addr, self.pseudo.get(), property)
     }
 }
 
 impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     // https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-length
     fn Length(&self) -> u32 {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let elem = owner.upcast::<Element>();
         let len = match *elem.style_attribute().borrow() {
             Some(ref declarations) => declarations.normal.len() + declarations.important.len(),
@@ -98,7 +98,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     // https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-item
     fn Item(&self, index: u32) -> DOMString {
         let index = index as usize;
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let elem = owner.upcast::<Element>();
         let style_attribute = elem.style_attribute().borrow();
         let result = style_attribute.as_ref().and_then(|declarations| {
@@ -118,13 +118,13 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
 
     // https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-getpropertyvalue
     fn GetPropertyValue(&self, mut property: DOMString) -> DOMString {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
 
         // Step 1
         property.make_ascii_lowercase();
         let property = Atom::from_slice(&property);
 
-        if self.readonly {
+        if self.readonly.get() {
             // Readonly style declarations are used for getComputedStyle.
             return self.get_computed_style(&property).unwrap_or("".to_owned());
         }
@@ -179,7 +179,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
         // Step 3
         } else {
             // FIXME: extra let binding https://github.com/rust-lang/rust/issues/22323
-            let owner = self.owner.root();
+            let owner = self.owner.get().root();
             if owner.get_important_inline_style_declaration(&property).is_some() {
                 return "important".to_owned();
             }
@@ -193,7 +193,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     fn SetProperty(&self, mut property: DOMString, value: DOMString,
                    priority: DOMString) -> ErrorResult {
         // Step 1
-        if self.readonly {
+        if self.readonly.get() {
             return Err(Error::NoModificationAllowed);
         }
 
@@ -218,7 +218,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
         };
 
         // Step 6
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let window = window_from_node(owner.r());
         let declarations = parse_one_declaration(&property, &value, &window.r().get_url());
 
@@ -229,7 +229,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
             return Ok(());
         };
 
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let element = owner.upcast::<Element>();
 
         // Step 8
@@ -247,7 +247,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     // https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-setpropertypriority
     fn SetPropertyPriority(&self, property: DOMString, priority: DOMString) -> ErrorResult {
         // Step 1
-        if self.readonly {
+        if self.readonly.get() {
             return Err(Error::NoModificationAllowed);
         }
 
@@ -263,7 +263,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
             _ => return Ok(()),
         };
 
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let element = owner.upcast::<Element>();
 
         // Step 5 & 6
@@ -286,7 +286,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     // https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-removeproperty
     fn RemoveProperty(&self, mut property: DOMString) -> Fallible<DOMString> {
         // Step 1
-        if self.readonly {
+        if self.readonly.get() {
             return Err(Error::NoModificationAllowed);
         }
 
@@ -296,7 +296,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
         // Step 3
         let value = self.GetPropertyValue(property.clone());
 
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         let elem = owner.upcast::<Element>();
 
         match longhands_from_shorthand(&property) {

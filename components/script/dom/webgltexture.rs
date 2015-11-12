@@ -54,7 +54,7 @@ impl WebGLTexture {
 
 impl WebGLTexture {
     pub fn id(&self) -> u32 {
-        self.id
+        self.id.get()
     }
 
     // NB: Only valid texture targets come here
@@ -67,7 +67,7 @@ impl WebGLTexture {
             self.target.set(Some(target));
         }
 
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindTexture(self.id, target))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindTexture(self.id.get(), target))).unwrap();
 
         Ok(())
     }
@@ -75,7 +75,7 @@ impl WebGLTexture {
     pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteTexture(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteTexture(self.id.get()))).unwrap();
         }
     }
 

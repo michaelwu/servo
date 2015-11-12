@@ -36,7 +36,7 @@ impl NamedNodeMap {
 impl NamedNodeMapMethods for NamedNodeMap {
     // https://dom.spec.whatwg.org/#dom-namednodemap-length
     fn Length(&self) -> u32 {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let attrs = owner.attrs();
@@ -45,7 +45,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
 
     // https://dom.spec.whatwg.org/#dom-namednodemap-item
     fn Item(&self, index: u32) -> Option<Root<Attr>> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let attrs = owner.attrs();
@@ -54,7 +54,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
 
     // https://dom.spec.whatwg.org/#dom-namednodemap-getnameditem
     fn GetNamedItem(&self, name: DOMString) -> Option<Root<Attr>> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         owner.get_attribute_by_name(name)
@@ -63,7 +63,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
     // https://dom.spec.whatwg.org/#dom-namednodemap-getnameditemns
     fn GetNamedItemNS(&self, namespace: Option<DOMString>, local_name: DOMString)
                      -> Option<Root<Attr>> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let ns = namespace_from_domstring(namespace);
@@ -72,7 +72,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
 
     // https://dom.spec.whatwg.org/#dom-namednodemap-removenameditem
     fn RemoveNamedItem(&self, name: DOMString) -> Fallible<Root<Attr>> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let name = owner.parsed_name(name);
@@ -82,7 +82,7 @@ impl NamedNodeMapMethods for NamedNodeMap {
     // https://dom.spec.whatwg.org/#dom-namednodemap-removenameditemns
     fn RemoveNamedItemNS(&self, namespace: Option<DOMString>, local_name: DOMString)
                       -> Fallible<Root<Attr>> {
-        let owner = self.owner.root();
+        let owner = self.owner.get().root();
         // FIXME(https://github.com/rust-lang/rust/issues/23338)
         let owner = owner.r();
         let ns = namespace_from_domstring(namespace);

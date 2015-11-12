@@ -55,18 +55,18 @@ impl WebGLProgram {
     pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteProgram(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteProgram(self.id.get()))).unwrap();
         }
     }
 
     /// glLinkProgram
     pub fn link(&self, renderer: &IpcSender<CanvasMsg>) {
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::LinkProgram(self.id))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::LinkProgram(self.id.get()))).unwrap();
     }
 
     /// glUseProgram
     pub fn use_program(&self, renderer: &IpcSender<CanvasMsg>) {
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::UseProgram(self.id))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::UseProgram(self.id.get()))).unwrap();
     }
 
     /// glAttachShader
@@ -85,7 +85,7 @@ impl WebGLProgram {
 
         shader_slot.set(Some(shader));
 
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::AttachShader(self.id, shader.id()))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::AttachShader(self.id.get(), shader.id()))).unwrap();
 
         Ok(())
     }
@@ -102,7 +102,7 @@ impl WebGLProgram {
         }
 
         let (sender, receiver) = ipc::channel().unwrap();
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetAttribLocation(self.id, name, sender))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetAttribLocation(self.id.get(), name, sender))).unwrap();
         Ok(receiver.recv().unwrap())
     }
 
@@ -118,7 +118,7 @@ impl WebGLProgram {
         }
 
         let (sender, receiver) = ipc::channel().unwrap();
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetUniformLocation(self.id, name, sender))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::GetUniformLocation(self.id.get(), name, sender))).unwrap();
         Ok(receiver.recv().unwrap())
     }
 }

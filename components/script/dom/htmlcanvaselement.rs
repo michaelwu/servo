@@ -73,7 +73,7 @@ impl HTMLCanvasElement {
 
     fn recreate_contexts(&self) {
         let size = self.get_size();
-        if let Some(ref context) = *self.context.borrow() {
+        if let Some(ref context) = *self.context.get() {
             match *context {
                 CanvasContext::Context2d(ref context) => context.root().r().recreate(size),
                 CanvasContext::WebGL(ref context) => context.root().r().recreate(size),
@@ -101,7 +101,7 @@ impl LayoutHTMLCanvasElementHelpers for LayoutJS<HTMLCanvasElement> {
     #[allow(unsafe_code)]
     unsafe fn get_renderer_id(&self) -> Option<usize> {
         let ref canvas = *self.unsafe_get();
-        canvas.context.borrow_for_layout().as_ref().map(|context| {
+        canvas.context.layout_get().as_ref().map(|context| {
             match *context {
                 CanvasContext::Context2d(ref context) => context.to_layout().get_renderer_id(),
                 CanvasContext::WebGL(ref context) => context.to_layout().get_renderer_id(),
@@ -112,7 +112,7 @@ impl LayoutHTMLCanvasElementHelpers for LayoutJS<HTMLCanvasElement> {
     #[allow(unsafe_code)]
     unsafe fn get_ipc_renderer(&self) -> Option<IpcSender<CanvasMsg>> {
         let ref canvas = *self.unsafe_get();
-        canvas.context.borrow_for_layout().as_ref().map(|context| {
+        canvas.context.layout_get().as_ref().map(|context| {
             match *context {
                 CanvasContext::Context2d(ref context) => context.to_layout().get_ipc_renderer(),
                 CanvasContext::WebGL(ref context) => context.to_layout().get_ipc_renderer(),
@@ -134,7 +134,7 @@ impl LayoutHTMLCanvasElementHelpers for LayoutJS<HTMLCanvasElement> {
 
 impl HTMLCanvasElement {
     pub fn ipc_renderer(&self) -> Option<IpcSender<CanvasMsg>> {
-        self.context.borrow().as_ref().map(|context| {
+        self.context.get().as_ref().map(|context| {
             match *context {
                 CanvasContext::Context2d(ref context) => context.root().r().ipc_renderer(),
                 CanvasContext::WebGL(ref context) => context.root().r().ipc_renderer(),
@@ -143,14 +143,14 @@ impl HTMLCanvasElement {
     }
 
     pub fn get_or_init_2d_context(&self) -> Option<Root<CanvasRenderingContext2D>> {
-        if self.context.borrow().is_none() {
+        if self.context.get().is_none() {
             let window = window_from_node(self);
             let size = self.get_size();
             let context = CanvasRenderingContext2D::new(GlobalRef::Window(window.r()), self, size);
-            *self.context.borrow_mut() = Some(CanvasContext::Context2d(JS::from_rooted(&context)));
+            self.context.set(Some(CanvasContext::Context2d(JS::from_rooted(&context))));
         }
 
-        match *self.context.borrow().as_ref().unwrap() {
+        match *self.context.get().as_ref().unwrap() {
             CanvasContext::Context2d(ref context) => Some(context.root()),
             _   => None,
         }
@@ -159,7 +159,7 @@ impl HTMLCanvasElement {
     pub fn get_or_init_webgl_context(&self,
                                  cx: *mut JSContext,
                                  attrs: Option<HandleValue>) -> Option<Root<WebGLRenderingContext>> {
-        if self.context.borrow().is_none() {
+        if self.context.get().is_none() {
             let window = window_from_node(self);
             let size = self.get_size();
 
@@ -176,10 +176,10 @@ impl HTMLCanvasElement {
 
             let maybe_ctx = WebGLRenderingContext::new(GlobalRef::Window(window.r()), self, size, attrs);
 
-            *self.context.borrow_mut() = maybe_ctx.map( |ctx| CanvasContext::WebGL(JS::from_rooted(&ctx)));
+            self.context.set(maybe_ctx.map( |ctx| CanvasContext::WebGL(JS::from_rooted(&ctx))));
         }
 
-        if let Some(ref context) = *self.context.borrow() {
+        if let Some(ref context) = *self.context.get() {
             match *context {
                 CanvasContext::WebGL(ref context) => Some(context.root()),
                 _ => None,

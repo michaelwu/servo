@@ -157,7 +157,7 @@ impl WebGLRenderingContext {
     }
 
     fn mark_as_dirty(&self) {
-        self.canvas.root().upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
+        self.canvas.get().root().upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
     }
 }
 
@@ -170,7 +170,7 @@ impl Drop for WebGLRenderingContext {
 impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.1
     fn Canvas(&self) -> Root<HTMLCanvasElement> {
-        self.canvas.root()
+        self.canvas.get().root()
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.1
@@ -512,34 +512,34 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     // generated objects, either here or in the webgl task
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.5
     fn CreateBuffer(&self) -> Option<Root<WebGLBuffer>> {
-        WebGLBuffer::maybe_new(self.global.root().r(), &self.extra.ipc_renderer)
+        WebGLBuffer::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.6
     fn CreateFramebuffer(&self) -> Option<Root<WebGLFramebuffer>> {
-        WebGLFramebuffer::maybe_new(self.global.root().r(), &self.extra.ipc_renderer)
+        WebGLFramebuffer::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.7
     fn CreateRenderbuffer(&self) -> Option<Root<WebGLRenderbuffer>> {
-        WebGLRenderbuffer::maybe_new(self.global.root().r(), &self.extra.ipc_renderer)
+        WebGLRenderbuffer::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.8
     fn CreateTexture(&self) -> Option<Root<WebGLTexture>> {
-        WebGLTexture::maybe_new(self.global.root().r(), &self.extra.ipc_renderer)
+        WebGLTexture::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn CreateProgram(&self) -> Option<Root<WebGLProgram>> {
-        WebGLProgram::maybe_new(self.global.root().r(), &self.extra.ipc_renderer)
+        WebGLProgram::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer)
     }
 
     // TODO(ecoal95): Check if constants are cross-platform or if we must make a translation
     // between WebGL constants and native ones.
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
     fn CreateShader(&self, shader_type: u32) -> Option<Root<WebGLShader>> {
-        WebGLShader::maybe_new(self.global.root().r(), &self.extra.ipc_renderer, shader_type)
+        WebGLShader::maybe_new(self.global.get().root().r(), &self.extra.ipc_renderer, shader_type)
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.5
@@ -650,7 +650,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
                           name: DOMString) -> Option<Root<WebGLUniformLocation>> {
         if let Some(program) = program {
             handle_potential_webgl_error!(self, program.get_uniform_location(&self.extra.ipc_renderer, name), None)
-                .map(|location| WebGLUniformLocation::new(self.global.root().r(), location))
+                .map(|location| WebGLUniformLocation::new(self.global.get().root().r(), location))
         } else {
             None
         }
@@ -843,7 +843,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
 
         let (pixels, size) = match source {
             ImageDataOrHTMLImageElementOrHTMLCanvasElementOrHTMLVideoElement::eImageData(image_data) => {
-                let global = self.global.root();
+                let global = self.global.get().root();
                 (image_data.get_data_array(&global.r()), image_data.get_size())
             },
             ImageDataOrHTMLImageElementOrHTMLCanvasElementOrHTMLVideoElement::eHTMLImageElement(image) => {
@@ -852,7 +852,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
                     None => return,
                 };
 
-                let canvas = self.canvas.root();
+                let canvas = self.canvas.get().root();
                 let window = window_from_node(canvas.r());
 
                 let img = match canvas_utils::request_image_from_cache(window.r(), img_url) {

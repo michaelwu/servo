@@ -45,17 +45,17 @@ impl WebGLRenderbuffer {
 
 impl WebGLRenderbuffer {
     pub fn id(&self) -> u32 {
-        self.id
+        self.id.get()
     }
 
     pub fn bind(&self, renderer: &IpcSender<CanvasMsg>, target: u32) {
-        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindRenderbuffer(target, self.id))).unwrap();
+        renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::BindRenderbuffer(target, self.id.get()))).unwrap();
     }
 
     pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteRenderbuffer(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteRenderbuffer(self.id.get()))).unwrap();
         }
     }
 }

@@ -160,7 +160,7 @@ impl EventMethods for Event {
 
     // https://dom.spec.whatwg.org/#dom-event-type
     fn Type(&self) -> DOMString {
-        self.type_.borrow().clone()
+        self.type_.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-event-target
@@ -208,7 +208,7 @@ impl EventMethods for Event {
 
     // https://dom.spec.whatwg.org/#dom-event-timestamp
     fn TimeStamp(&self) -> u64 {
-        self.timestamp
+        self.timestamp.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-event-initevent
@@ -226,7 +226,7 @@ impl EventMethods for Event {
         self.canceled.set(false);
         self.trusted.set(false);
         self.target.set(None);
-        *self.type_.borrow_mut() = type_;
+        self.type_.set(type_);
         self.bubbles.set(bubbles);
         self.cancelable.set(cancelable);
     }

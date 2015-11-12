@@ -111,7 +111,7 @@ impl HTMLFontElement {
 
     #[allow(unsafe_code)]
     pub fn get_face(&self) -> Option<Atom> {
-        let face = unsafe { self.face.borrow_for_layout() };
+        let face = unsafe { self.face.layout_get() };
         match *face {
             Some(ref s) => Some(s.clone()),
             None => None,

@@ -24,7 +24,7 @@ magic_dom_struct! {
 impl WebGLContextEventMethods for WebGLContextEvent {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15
     fn StatusMessage(&self) -> DOMString {
-        self.status_message.clone()
+        self.status_message.get()
     }
 }
 

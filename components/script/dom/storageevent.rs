@@ -84,22 +84,22 @@ impl StorageEvent {
 impl StorageEventMethods for StorageEvent {
     // https://html.spec.whatwg.org/multipage/#dom-storageevent-key
     fn GetKey(&self) -> Option<DOMString> {
-        self.key.clone()
+        self.key.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-storageevent-oldvalue
     fn GetOldValue(&self) -> Option<DOMString> {
-        self.oldValue.clone()
+        self.oldValue.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-storageevent-newvalue
     fn GetNewValue(&self) -> Option<DOMString> {
-        self.newValue.clone()
+        self.newValue.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-storageevent-url
     fn Url(&self) -> DOMString {
-        self.url.clone()
+        self.url.get()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-storageevent-storagearea

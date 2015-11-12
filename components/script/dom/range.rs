@@ -61,7 +61,7 @@ impl Range {
 
     // https://dom.spec.whatwg.org/#contained
     fn contains(&self, node: &Node) -> bool {
-        let inner = self.inner.borrow();
+        let inner = self.inner.get().borrow();
         let start = &inner.start;
         let end = &inner.end;
         match (bp_position(node, 0, start.node().r(), start.offset()),
@@ -73,7 +73,7 @@ impl Range {
 
     // https://dom.spec.whatwg.org/#partially-contained
     fn partially_contains(&self, node: &Node) -> bool {
-        let inner = self.inner.borrow();
+        let inner = self.inner.get().borrow();
         inner.start.node().inclusive_ancestors().any(|n| n.r() == node) !=
             inner.end.node().inclusive_ancestors().any(|n| n.r() == node)
     }
@@ -123,7 +123,7 @@ impl Range {
 
 impl Range {
     pub fn inner(&self) -> &Rc<RefCell<RangeInner>> {
-        &self.inner
+        &self.inner.get()
     }
 }
 
@@ -339,7 +339,7 @@ impl RangeMethods for Range {
     // https://dom.spec.whatwg.org/#dom-range-clonecontents
     // https://dom.spec.whatwg.org/#concept-range-clone
     fn CloneContents(&self) -> Fallible<Root<DocumentFragment>> {
-        let inner = self.inner.borrow();
+        let inner = self.inner.get().borrow();
         let start = &inner.start;
         let end = &inner.end;
 
@@ -451,7 +451,7 @@ impl RangeMethods for Range {
 
         // Step 3.
         let (start_node, start_offset, end_node, end_offset) = {
-            let inner = self.inner.borrow();
+            let inner = self.inner.get().borrow();
             let start = &inner.start;
             let end = &inner.end;
             (start.node(), start.offset(), end.node(), end.offset())

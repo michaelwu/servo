@@ -65,17 +65,17 @@ impl NodeIterator {
 impl NodeIteratorMethods for NodeIterator {
     // https://dom.spec.whatwg.org/#dom-nodeiterator-root
     fn Root(&self) -> Root<Node> {
-        self.root_node.root()
+        self.root_node.get().root()
     }
 
     // https://dom.spec.whatwg.org/#dom-nodeiterator-whattoshow
     fn WhatToShow(&self) -> u32 {
-        self.what_to_show
+        self.what_to_show.get()
     }
 
     // https://dom.spec.whatwg.org/#dom-nodeiterator-filter
     fn GetFilter(&self) -> Option<Rc<NodeFilter>> {
-        match self.filter {
+        match self.filter.get() {
             Filter::None => None,
             Filter::Callback(ref nf) => Some((*nf).clone()),
             Filter::Native(_) => panic!("Cannot convert native node filter to DOM NodeFilter")
@@ -119,7 +119,7 @@ impl NodeIteratorMethods for NodeIterator {
         }
 
         // Step 3-1.
-        for following_node in node.r().following_nodes(self.root_node.root().r()) {
+        for following_node in node.r().following_nodes(self.root_node.get().root().r()) {
             // Step 3-2.
             let result = try!(self.accept_node(following_node.r()));
 
@@ -163,7 +163,7 @@ impl NodeIteratorMethods for NodeIterator {
         }
 
         // Step 3-1.
-        for preceding_node in node.r().preceding_nodes(self.root_node.root().r()) {
+        for preceding_node in node.r().preceding_nodes(self.root_node.get().root().r()) {
 
             // Step 3-2.
             let result = try!(self.accept_node(preceding_node.r()));
@@ -194,11 +194,11 @@ impl NodeIterator {
         // Step 1.
         let n = node.NodeType() - 1;
         // Step 2.
-        if (self.what_to_show & (1 << n)) == 0 {
+        if (self.what_to_show.get() & (1 << n)) == 0 {
             return Ok(NodeFilterConstants::FILTER_SKIP)
         }
         // Step 3-5.
-        match self.filter {
+        match self.filter.get() {
             Filter::None => Ok(NodeFilterConstants::FILTER_ACCEPT),
             Filter::Native(f) => Ok((f)(node)),
             Filter::Callback(ref callback) => callback.AcceptNode_(self, node, Rethrow)

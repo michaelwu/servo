@@ -88,7 +88,7 @@ impl KeyboardEvent {
         {
             let ev = ev.r();
             ev.key.set(key);
-            *ev.code.borrow_mut() = code;
+            ev.code.set(code);
             ev.ctrl.set(ctrlKey);
             ev.alt.set(altKey);
             ev.shift.set(shiftKey);
@@ -767,19 +767,19 @@ impl KeyboardEventMethods for KeyboardEvent {
 
         self.upcast::<UIEvent>()
             .InitUIEvent(typeArg, canBubbleArg, cancelableArg, viewArg, 0);
-        *self.key_string.borrow_mut() = keyArg;
+        self.key_string.set(keyArg);
         self.location.set(locationArg);
         self.repeat.set(repeat);
     }
 
     // https://w3c.github.io/uievents/#widl-KeyboardEvent-key
     fn Key(&self) -> DOMString {
-        self.key_string.borrow().clone()
+        self.key_string.get()
     }
 
     // https://w3c.github.io/uievents/#widl-KeyboardEvent-code
     fn Code(&self) -> DOMString {
-        self.code.borrow().clone()
+        self.code.get()
     }
 
     // https://w3c.github.io/uievents/#widl-KeyboardEvent-location

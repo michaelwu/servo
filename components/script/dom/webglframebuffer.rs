@@ -45,18 +45,18 @@ impl WebGLFramebuffer {
 
 impl WebGLFramebuffer {
     pub fn id(&self) -> u32 {
-        self.id
+        self.id.get()
     }
 
     pub fn bind(&self, renderer: &IpcSender<CanvasMsg>, target: u32) {
-        let cmd = CanvasWebGLMsg::BindFramebuffer(target, WebGLFramebufferBindingRequest::Explicit(self.id));
+        let cmd = CanvasWebGLMsg::BindFramebuffer(target, WebGLFramebufferBindingRequest::Explicit(self.id.get()));
         renderer.send(CanvasMsg::WebGL(cmd)).unwrap();
     }
 
     pub fn delete(&self, renderer: &IpcSender<CanvasMsg>) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteFramebuffer(self.id))).unwrap();
+            renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DeleteFramebuffer(self.id.get()))).unwrap();
         }
     }
 }
