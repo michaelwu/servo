@@ -44,12 +44,13 @@ impl BrowsingContext {
         }
     }
 
-    pub fn active_document(&self) -> &Document {
-        &*self.history[self.active_index].document
+    pub fn active_document(&self) -> Root<Document> {
+        self.history[self.active_index].document.root()
     }
 
     pub fn active_window(&self) -> Root<Window> {
-        self.active_document().window()
+        let doc = self.active_document();
+        doc.r().window()
     }
 
     pub fn frame_element(&self) -> Option<Root<Element>> {

@@ -255,7 +255,7 @@ impl Document {
         let browsing_context = browsing_context.as_ref().unwrap();
         let active_document = browsing_context.active_document();
 
-        if self != active_document {
+        if self != active_document.r() {
             return false;
         }
         // FIXME: It should also check whether the browser context is top-level or not

@@ -391,7 +391,7 @@ impl WindowMethods for Window {
 
     // https://html.spec.whatwg.org/multipage/#dom-document-0
     fn Document(&self) -> Root<Document> {
-        Root::from_ref(self.browsing_context().as_ref().unwrap().active_document())
+        self.browsing_context().as_ref().unwrap().active_document()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-location
