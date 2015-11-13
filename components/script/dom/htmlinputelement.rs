@@ -13,7 +13,7 @@ use dom::bindings::codegen::Bindings::HTMLInputElementBinding::HTMLInputElementM
 use dom::bindings::codegen::Bindings::KeyboardEventBinding::KeyboardEventMethods;
 use dom::bindings::conversions::Castable;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, LayoutJS, Root, RootedReference};
+use dom::bindings::js::{HeapJS, JS, LayoutJS, Root, RootedReference};
 use dom::document::Document;
 use dom::element::{AttributeMutation, Element, IN_ENABLED_STATE, RawLayoutElementHelpers};
 use dom::event::{Event, EventBubbles, EventCancelable};
@@ -41,7 +41,7 @@ const DEFAULT_RESET_VALUE: &'static str = "Reset";
 #[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 #[allow(dead_code)]
 #[derive(HeapSizeOf)]
-enum InputType {
+pub enum InputType {
     InputSubmit,
     InputReset,
     InputButton,
@@ -56,13 +56,13 @@ enum InputType {
 magic_dom_struct! {
     pub struct HTMLInputElement {
         htmlelement: Base<HTMLElement>,
-        input_type: Mut<InputType>,
-        checked: Mut<bool>,
+        input_type: Layout<InputType>,
+        checked: Layout<bool>,
         checked_changed: Mut<bool>,
         placeholder: Layout<DOMString>,
-        indeterminate: Mut<bool>,
+        indeterminate: Layout<bool>,
         value_changed: Mut<bool>,
-        size: Mut<u32>,
+        size: Layout<u32>,
         extra: Box<HTMLInputElementExtra>,
     }
 }
@@ -75,9 +75,10 @@ pub struct HTMLInputElementExtra {
     activation_state: DOMRefCell<InputActivationState>,
 }
 
+use dom::bindings::magic::MagicDOMClass;
 impl PartialEq for HTMLInputElement {
     fn eq(&self, other: &HTMLInputElement) -> bool {
-        self as *const HTMLInputElement == &*other
+        self.get_jsobj() == other.get_jsobj()
     }
 }
 
@@ -88,7 +89,7 @@ struct InputActivationState {
     indeterminate: bool,
     checked: bool,
     checked_changed: bool,
-    checked_radio: Option<JS<HTMLInputElement>>,
+    checked_radio: HeapJS<JS<HTMLInputElement>>,
     // In case mutability changed
     was_mutable: bool,
     // In case the type changed
@@ -101,7 +102,7 @@ impl InputActivationState {
             indeterminate: false,
             checked: false,
             checked_changed: false,
-            checked_radio: None,
+            checked_radio: Default::default(),
             was_mutable: false,
             old_type: InputType::InputText
         }
@@ -116,9 +117,9 @@ impl HTMLInputElement {
         self.htmlelement.new_inherited_with_state(IN_ENABLED_STATE, localName, prefix, document);
         self.input_type.init(InputType::InputText);
         self.checked.init(false);
+        self.checked_changed.init(false);
         self.placeholder.init("".to_owned());
         self.indeterminate.init(false);
-        self.checked_changed.init(false);
         self.value_changed.init(false);
         self.size.init(DEFAULT_INPUT_SIZE);
         self.extra.init(box HTMLInputElementExtra {
@@ -175,7 +176,7 @@ impl LayoutHTMLInputElementHelpers for LayoutJS<HTMLInputElement> {
                                 .map(|s| s.to_owned())
         }
 
-        match (*self.unsafe_get()).input_type.get() {
+        match (&*self.unsafe_get()).input_type.layout_get() {
             InputType::InputCheckbox | InputType::InputRadio => "".to_owned(),
             InputType::InputFile | InputType::InputImage => "".to_owned(),
             InputType::InputButton => get_raw_attr_value(self).unwrap_or_else(|| "".to_owned()),
@@ -192,13 +193,13 @@ impl LayoutHTMLInputElementHelpers for LayoutJS<HTMLInputElement> {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_size_for_layout(self) -> u32 {
-        (*self.unsafe_get()).get_size_for_layout()
+        (&*self.unsafe_get()).get_size_for_layout()
     }
 
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_insertion_point_for_layout(self) -> Option<TextPoint> {
-        match (*self.unsafe_get()).input_type.get() {
+        match (*self.unsafe_get()).input_type.layout_get() {
           InputType::InputText | InputType::InputPassword =>
               Some((*self.unsafe_get()).extra.textinput.borrow_for_layout().edit_point),
           _ => None
@@ -210,19 +211,19 @@ impl RawLayoutHTMLInputElementHelpers for HTMLInputElement {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_checked_state_for_layout(&self) -> bool {
-        self.checked.get()
+        self.checked.layout_get()
     }
 
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_indeterminate_state_for_layout(&self) -> bool {
-        self.indeterminate.get()
+        self.indeterminate.layout_get()
     }
 
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_size_for_layout(&self) -> u32 {
-        self.size.get()
+        self.size.layout_get()
     }
 }
 
@@ -570,11 +571,12 @@ impl VirtualMethods for HTMLInputElement {
                     mutation.new_value(attr).as_ref().map(|name| name.as_atom()));
             },
             &atom!(placeholder) => {
-                let mut placeholder = self.placeholder.borrow_mut();
-                placeholder.clear();
                 if let AttributeMutation::Set(_) = mutation {
-                    placeholder.extend(
-                        attr.value().chars().filter(|&c| c != '\n' && c != '\r'));
+                    let mut buf = String::new();
+                    buf.extend(attr.value().chars().filter(|&c| c != '\n' && c != '\r'));
+                    self.placeholder.set(buf);
+                } else {
+                    self.placeholder.set(String::new());
                 }
             },
             _ => {},
@@ -716,7 +718,7 @@ impl Activatable for HTMLInputElement {
                                 in_same_group(r.r(), owner.r(), group.as_ref()) &&
                                 r.r().Checked()
                             });
-                    cache.checked_radio = checked_member.r().map(JS::from_ref);
+                    cache.checked_radio.set(checked_member.r().map(JS::from_ref));
                     cache.checked_changed = self.checked_changed.get();
                     self.SetChecked(true);
                 }
@@ -752,7 +754,7 @@ impl Activatable for HTMLInputElement {
             InputType::InputRadio => {
                 // We want to restore state only if the element had been changed in the first place
                 if cache.was_mutable {
-                    let old_checked = cache.checked_radio.as_ref().map(|t| t.root());
+                    let old_checked = cache.checked_radio.get().map(|t| t.root());
                     let name = self.get_radio_group_name();
                     match old_checked {
                         Some(ref o) => {

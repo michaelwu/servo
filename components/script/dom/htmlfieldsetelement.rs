@@ -51,7 +51,7 @@ impl HTMLFieldSetElementMethods for HTMLFieldSetElement {
             fn filter<'a>(&self, elem: &'a Element, _root: &'a Node) -> bool {
                 static TAG_NAMES: StaticStringVec = &["button", "fieldset", "input",
                     "keygen", "object", "output", "select", "textarea"];
-                TAG_NAMES.iter().any(|&tag_name| tag_name == &**elem.local_name())
+                TAG_NAMES.iter().any(|&tag_name| tag_name == &*elem.local_name())
             }
         }
         let filter = box ElementsFilter;

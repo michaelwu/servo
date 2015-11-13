@@ -52,7 +52,7 @@ impl HTMLOptionElement {
 }
 
 fn collect_text(element: &Element, value: &mut DOMString) {
-    let svg_script = *element.namespace() == ns!(SVG) && element.local_name() == &atom!("script");
+    let svg_script = element.namespace() == ns!(SVG) && element.local_name() == atom!("script");
     let html_script = element.is::<HTMLScriptElement>();
     if svg_script || html_script {
         return;

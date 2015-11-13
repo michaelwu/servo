@@ -47,18 +47,18 @@ impl DocumentType {
     }
 
     #[inline]
-    pub fn name(&self) -> &DOMString {
-        &self.name.get()
+    pub fn name(&self) -> DOMString {
+        self.name.get()
     }
 
     #[inline]
-    pub fn public_id(&self) -> &DOMString {
-        &self.public_id.get()
+    pub fn public_id(&self) -> DOMString {
+        self.public_id.get()
     }
 
     #[inline]
-    pub fn system_id(&self) -> &DOMString {
-        &self.system_id.get()
+    pub fn system_id(&self) -> DOMString {
+        self.system_id.get()
     }
 }
 

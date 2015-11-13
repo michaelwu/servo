@@ -33,7 +33,7 @@ const INITIAL_REFLOW_DELAY: u64 = 200_000_000;
 magic_dom_struct! {
     pub struct HTMLBodyElement {
         htmlelement: Base<HTMLElement>,
-        background_color: Mut<Option<RGBA>>,
+        background_color: Layout<Option<RGBA>>,
         background: Layout<Option<Url>>
     }
 }
@@ -100,7 +100,7 @@ impl HTMLBodyElementMethods for HTMLBodyElement {
 
 impl HTMLBodyElement {
     pub fn get_background_color(&self) -> Option<RGBA> {
-        self.background_color.get()
+        self.background_color.layout_get()
     }
 
     #[allow(unsafe_code)]
@@ -162,11 +162,11 @@ impl VirtualMethods for HTMLBodyElement {
                 }));
             },
             (&atom!(background), _) => {
-                *self.background.borrow_mut() = mutation.new_value(attr).and_then(|value| {
+                self.background.set(mutation.new_value(attr).and_then(|value| {
                     let document = document_from_node(self);
                     let base = document.url();
                     UrlParser::new().base_url(&base).parse(&value).ok()
-                });
+                }));
             },
             (name, AttributeMutation::Set(_)) if name.starts_with("on") => {
                 let window = window_from_node(self);

@@ -9,7 +9,7 @@ use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible, report_pending_exception};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
-use dom::bindings::magic::GlobalObjectSlots;
+use dom::bindings::magic::{MagicDOMClass, GlobalObjectSlots};
 use dom::console::Console;
 use dom::crypto::Crypto;
 use dom::dedicatedworkerglobalscope::DedicatedWorkerGlobalScope;

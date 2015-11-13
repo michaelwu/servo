@@ -33,7 +33,7 @@ impl TreeWalker {
                          what_to_show: u32,
                          filter: Filter) {
         self.root_node.init(JS::from_ref(root_node));
-        self.current_node.init(root_node);
+        self.current_node.init(JS::from_ref(root_node));
         self.what_to_show.init(what_to_show);
         self.filter.init(filter);
     }
@@ -82,18 +82,18 @@ impl TreeWalkerMethods for TreeWalker {
 
     // https://dom.spec.whatwg.org/#dom-treewalker-currentnode
     fn CurrentNode(&self) -> Root<Node> {
-        self.current_node.get()
+        self.current_node.get().root()
     }
 
     // https://dom.spec.whatwg.org/#dom-treewalker-currentnode
     fn SetCurrentNode(&self, node: &Node) {
-        self.current_node.set(node);
+        self.current_node.set(JS::from_ref(node));
     }
 
     // https://dom.spec.whatwg.org/#dom-treewalker-parentnode
     fn ParentNode(&self) -> Fallible<Option<Root<Node>>> {
         // "1. Let node be the value of the currentNode attribute."
-        let mut node = self.current_node.get();
+        let mut node = self.current_node.get().root();
         // "2. While node is not null and is not root, run these substeps:"
         while !self.is_root_node(node.r()) {
             // "1. Let node be node's parent."
@@ -103,7 +103,7 @@ impl TreeWalkerMethods for TreeWalker {
                     // "2. If node is not null and filtering node returns FILTER_ACCEPT,
                     //     then set the currentNode attribute to node, return node."
                     if NodeFilterConstants::FILTER_ACCEPT == try!(self.accept_node(node.r())) {
-                        self.current_node.set(&node);
+                        self.current_node.set(JS::from_rooted(&node));
                         return Ok(Some(node))
                     }
                 },
@@ -145,7 +145,7 @@ impl TreeWalkerMethods for TreeWalker {
     // https://dom.spec.whatwg.org/#dom-treewalker-previousnode
     fn PreviousNode(&self) -> Fallible<Option<Root<Node>>> {
         // "1. Let node be the value of the currentNode attribute."
-        let mut node = self.current_node.get();
+        let mut node = self.current_node.get().root();
         // "2. While node is not root, run these substeps:"
         while !self.is_root_node(node.r()) {
             // "1. Let sibling be the previous sibling of node."
@@ -167,7 +167,7 @@ impl TreeWalkerMethods for TreeWalker {
                         _ if node.GetFirstChild().is_some() =>
                             node = node.GetLastChild().unwrap(),
                         NodeFilterConstants::FILTER_ACCEPT => {
-                            self.current_node.set(&node);
+                            self.current_node.set(JS::from_rooted(&node));
                             return Ok(Some(node))
                         },
                         _ => break
@@ -191,7 +191,7 @@ impl TreeWalkerMethods for TreeWalker {
             // "5. Filter node and if the return value is FILTER_ACCEPT, then
             //     set the currentNode attribute to node and return node."
             if NodeFilterConstants::FILTER_ACCEPT == try!(self.accept_node(node.r())) {
-                self.current_node.set(&node);
+                self.current_node.set(JS::from_rooted(&node));
                 return Ok(Some(node))
             }
         }
@@ -202,7 +202,7 @@ impl TreeWalkerMethods for TreeWalker {
     // https://dom.spec.whatwg.org/#dom-treewalker-nextnode
     fn NextNode(&self) -> Fallible<Option<Root<Node>>> {
         // "1. Let node be the value of the currentNode attribute."
-        let mut node = self.current_node.get();
+        let mut node = self.current_node.get().root();
         // "2. Let result be FILTER_ACCEPT."
         let mut result = NodeFilterConstants::FILTER_ACCEPT;
         // "3. Run these substeps:"
@@ -222,7 +222,7 @@ impl TreeWalkerMethods for TreeWalker {
                         // "3. If result is FILTER_ACCEPT, then
                         //     set the currentNode attribute to node and return node."
                         if NodeFilterConstants::FILTER_ACCEPT == result {
-                            self.current_node.set(&node);
+                            self.current_node.set(JS::from_rooted(&node));
                             return Ok(Some(node))
                         }
                     }
@@ -240,7 +240,7 @@ impl TreeWalkerMethods for TreeWalker {
                     // "4. If result is FILTER_ACCEPT, then
                     //     set the currentNode attribute to node and return node."
                     if NodeFilterConstants::FILTER_ACCEPT == result {
-                        self.current_node.set(&node);
+                        self.current_node.set(JS::from_rooted(&node));
                         return Ok(Some(node))
                     }
                 }
@@ -264,7 +264,7 @@ impl TreeWalker {
     {
         // "To **traverse children** of type *type*, run these steps:"
         // "1. Let node be the value of the currentNode attribute."
-        let cur = self.current_node.get();
+        let cur = self.current_node.get().root();
 
         // "2. Set node to node's first child if type is first, and node's last child if type is last."
         // "3. If node is null, return null."
@@ -281,7 +281,7 @@ impl TreeWalker {
                 // "2. If result is FILTER_ACCEPT, then set the currentNode
                 //     attribute to node and return node."
                 NodeFilterConstants::FILTER_ACCEPT => {
-                    self.current_node.set(&node);
+                    self.current_node.set(JS::from_rooted(&node));
                     return Ok(Some(Root::from_ref(node.r())))
                 },
                 // "3. If result is FILTER_SKIP, run these subsubsteps:"
@@ -339,7 +339,7 @@ impl TreeWalker {
     {
         // "To **traverse siblings** of type *type* run these steps:"
         // "1. Let node be the value of the currentNode attribute."
-        let mut node = self.current_node.get();
+        let mut node = self.current_node.get().root();
         // "2. If node is root, return null."
         if self.is_root_node(node.r()) {
             return Ok(None)
@@ -358,7 +358,7 @@ impl TreeWalker {
                 // "3. If result is FILTER_ACCEPT, then set the currentNode
                 //     attribute to node and return node."
                 if NodeFilterConstants::FILTER_ACCEPT == result {
-                    self.current_node.set(&node);
+                    self.current_node.set(JS::from_rooted(&node));
                     return Ok(Some(node))
                 }
 
@@ -444,7 +444,7 @@ impl TreeWalker {
     }
 
     fn is_current_node(&self, node: &Node) -> bool {
-        node == &*self.current_node.get()
+        JS::from_ref(node) == self.current_node.get()
     }
 }
 

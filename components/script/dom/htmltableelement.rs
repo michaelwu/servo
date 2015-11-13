@@ -23,10 +23,10 @@ use util::str::{self, DOMString, LengthOrPercentageOrAuto};
 magic_dom_struct! {
     pub struct HTMLTableElement {
         htmlelement: Base<HTMLElement>,
-        background_color: Mut<Option<RGBA>>,
-        border: Mut<Option<u32>>,
-        cellspacing: Mut<Option<u32>>,
-        width: Mut<LengthOrPercentageOrAuto>,
+        background_color: Layout<Option<RGBA>>,
+        border: Layout<Option<u32>>,
+        cellspacing: Layout<Option<u32>>,
+        width: Layout<LengthOrPercentageOrAuto>,
     }
 }
 
@@ -99,7 +99,7 @@ impl HTMLTableElementMethods for HTMLTableElement {
         let last_tbody =
             node.rev_children()
                 .filter_map(Root::downcast::<Element>)
-                .find(|n| n.is::<HTMLTableSectionElement>() && n.local_name() == &atom!("tbody"));
+                .find(|n| n.is::<HTMLTableSectionElement>() && n.local_name() == atom!("tbody"));
         let reference_element =
             last_tbody.and_then(|t| t.upcast::<Node>().GetNextSibling());
 
@@ -118,19 +118,19 @@ impl HTMLTableElementMethods for HTMLTableElement {
 
 impl HTMLTableElement {
     pub fn get_background_color(&self) -> Option<RGBA> {
-        self.background_color.get()
+        self.background_color.layout_get()
     }
 
     pub fn get_border(&self) -> Option<u32> {
-        self.border.get()
+        self.border.layout_get()
     }
 
     pub fn get_cellspacing(&self) -> Option<u32> {
-        self.cellspacing.get()
+        self.cellspacing.layout_get()
     }
 
     pub fn get_width(&self) -> LengthOrPercentageOrAuto {
-        self.width.get()
+        self.width.layout_get()
     }
 }
 

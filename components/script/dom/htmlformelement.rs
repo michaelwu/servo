@@ -45,7 +45,7 @@ magic_dom_struct! {
 
 impl PartialEq for HTMLFormElement {
     fn eq(&self, other: &HTMLFormElement) -> bool {
-        self as *const HTMLFormElement == &*other
+        self.get_jsobj() == other.get_jsobj()
     }
 }
 
@@ -371,7 +371,7 @@ pub enum FormMethod {
     FormDialog
 }
 
-#[derive(Copy, Clone, HeapSizeOf)]
+#[derive(Copy, Clone)]
 pub enum FormSubmitter<'a> {
     FormElement(&'a HTMLFormElement),
     InputElement(&'a HTMLInputElement),

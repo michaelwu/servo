@@ -24,9 +24,9 @@ const DEFAULT_COLSPAN: u32 = 1;
 magic_dom_struct! {
     pub struct HTMLTableCellElement {
         htmlelement: Base<HTMLElement>,
-        background_color: Mut<Option<RGBA>>,
-        colspan: Mut<Option<u32>>,
-        width: Mut<LengthOrPercentageOrAuto>,
+        background_color: Layout<Option<RGBA>>,
+        colspan: Layout<Option<u32>>,
+        width: Layout<LengthOrPercentageOrAuto>,
     }
 }
 
@@ -82,19 +82,19 @@ pub trait HTMLTableCellElementLayoutHelpers {
 impl HTMLTableCellElementLayoutHelpers for LayoutJS<HTMLTableCellElement> {
     fn get_background_color(&self) -> Option<RGBA> {
         unsafe {
-            (*self.unsafe_get()).background_color.get()
+            (&*self.unsafe_get()).background_color.layout_get()
         }
     }
 
     fn get_colspan(&self) -> Option<u32> {
         unsafe {
-            (*self.unsafe_get()).colspan.get()
+            (&*self.unsafe_get()).colspan.layout_get()
         }
     }
 
     fn get_width(&self) -> LengthOrPercentageOrAuto {
         unsafe {
-            (*self.unsafe_get()).width.get()
+            (&*self.unsafe_get()).width.layout_get()
         }
     }
 }

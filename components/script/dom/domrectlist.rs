@@ -18,15 +18,15 @@ magic_dom_struct! {
 }
 
 impl DOMRectList {
-    fn new_inherited<T>(&mut self, rects: T) -> DOMRectList
+    fn new_inherited<T>(&mut self, global: GlobalRef, rects: T)
                         where T: Iterator<Item=Root<DOMRect>> {
-        self.rects.init(rects.map(|r| JS::from_rooted(&r)).collect());
+        self.rects.init(DOMVec::from_iter(global, rects.map(|r| JS::from_rooted(&r))));
     }
 
     pub fn new<T>(window: &Window, rects: T) -> Root<DOMRectList>
                   where T: Iterator<Item=Root<DOMRect>> {
         let mut obj = alloc_dom_object::<DOMRectList>(GlobalRef::Window(window));
-        obj.new_inherited(rects);
+        obj.new_inherited(GlobalRef::Window(window), rects);
         obj.into_root()
     }
 }
@@ -39,12 +39,8 @@ impl DOMRectListMethods for DOMRectList {
 
     // https://drafts.fxtf.org/geometry/#dom-domrectlist-item
     fn Item(&self, index: u32) -> Option<Root<DOMRect>> {
-        let rects = &self.rects.get();
-        if index < rects.len() as u32 {
-            Some(rects[index as usize].root())
-        } else {
-            None
-        }
+        let rects = self.rects.get();
+        rects.get(index).map(|rect| rect.root())
     }
 
     // check-tidy: no specs after this line

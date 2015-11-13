@@ -50,7 +50,7 @@ impl PartialEq for HTMLElement {
 impl HTMLElement {
     pub fn new_inherited(&mut self, tag_name: DOMString, prefix: Option<DOMString>,
                          document: &Document) {
-        HTMLElement::new_inherited_with_state(EventState::empty(), tag_name, prefix, document)
+        self.new_inherited_with_state(EventState::empty(), tag_name, prefix, document)
     }
 
     pub fn new_inherited_with_state(&mut self, state: EventState, tag_name: DOMString,

@@ -37,7 +37,7 @@ impl StorageEvent {
         self.oldValue.init(oldValue);
         self.newValue.init(newValue);
         self.url.init(url);
-        self.storageArea.init(storageArea);
+        self.storageArea.init(storageArea.map(JS::from_ref));
     }
 
     pub fn new(global: GlobalRef,

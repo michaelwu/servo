@@ -34,7 +34,7 @@ impl NodeIterator {
                      what_to_show: u32,
                      filter: Filter) {
         self.root_node.init(JS::from_ref(root_node));
-        self.reference_node.init(root_node);
+        self.reference_node.init(JS::from_ref(root_node));
         self.pointer_before_reference_node.init(true);
         self.what_to_show.init(what_to_show);
         self.filter.init(filter);
@@ -84,7 +84,7 @@ impl NodeIteratorMethods for NodeIterator {
 
     // https://dom.spec.whatwg.org/#dom-nodeiterator-referencenode
     fn ReferenceNode(&self) -> Root<Node> {
-        self.reference_node.get()
+        self.reference_node.get().root()
     }
 
     // https://dom.spec.whatwg.org/#dom-nodeiterator-pointerbeforereferencenode
@@ -96,7 +96,7 @@ impl NodeIteratorMethods for NodeIterator {
     fn NextNode(&self) -> Fallible<Option<Root<Node>>> {
         // https://dom.spec.whatwg.org/#concept-NodeIterator-traverse
         // Step 1.
-        let node = self.reference_node.get();
+        let node = self.reference_node.get().root();
 
         // Step 2.
         let mut before_node = self.pointer_before_reference_node.get();
@@ -111,7 +111,7 @@ impl NodeIteratorMethods for NodeIterator {
             // Step 3-3.
             if result == NodeFilterConstants::FILTER_ACCEPT {
                 // Step 4.
-                self.reference_node.set(node.r());
+                self.reference_node.set(JS::from_rooted(&node));
                 self.pointer_before_reference_node.set(before_node);
 
                 return Ok(Some(node));
@@ -126,7 +126,7 @@ impl NodeIteratorMethods for NodeIterator {
             // Step 3-3.
             if result == NodeFilterConstants::FILTER_ACCEPT {
                 // Step 4.
-                self.reference_node.set(following_node.r());
+                self.reference_node.set(JS::from_rooted(&following_node));
                 self.pointer_before_reference_node.set(before_node);
 
                 return Ok(Some(following_node));
@@ -140,7 +140,7 @@ impl NodeIteratorMethods for NodeIterator {
     fn PreviousNode(&self) -> Fallible<Option<Root<Node>>> {
         // https://dom.spec.whatwg.org/#concept-NodeIterator-traverse
         // Step 1.
-        let node = self.reference_node.get();
+        let node = self.reference_node.get().root();
 
         // Step 2.
         let mut before_node = self.pointer_before_reference_node.get();
@@ -155,7 +155,7 @@ impl NodeIteratorMethods for NodeIterator {
             // Step 3-3.
             if result == NodeFilterConstants::FILTER_ACCEPT {
                 // Step 4.
-                self.reference_node.set(node.r());
+                self.reference_node.set(JS::from_rooted(&node));
                 self.pointer_before_reference_node.set(before_node);
 
                 return Ok(Some(node));
@@ -171,7 +171,7 @@ impl NodeIteratorMethods for NodeIterator {
             // Step 3-3.
             if result == NodeFilterConstants::FILTER_ACCEPT {
                 // Step 4.
-                self.reference_node.set(preceding_node.r());
+                self.reference_node.set(JS::from_rooted(&preceding_node));
                 self.pointer_before_reference_node.set(before_node);
 
                 return Ok(Some(preceding_node));

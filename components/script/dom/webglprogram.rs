@@ -71,19 +71,23 @@ impl WebGLProgram {
 
     /// glAttachShader
     pub fn attach_shader(&self, renderer: &IpcSender<CanvasMsg>, shader: &WebGLShader) -> WebGLResult<()> {
-        let shader_slot = match shader.gl_type() {
-            constants::FRAGMENT_SHADER => &self.fragment_shader,
-            constants::VERTEX_SHADER => &self.vertex_shader,
+        let has_shader = match shader.gl_type() {
+            constants::FRAGMENT_SHADER => self.fragment_shader.is_some(),
+            constants::VERTEX_SHADER => self.vertex_shader.is_some(),
             _ => return Err(WebGLError::InvalidOperation),
         };
 
         // TODO(ecoal95): Differentiate between same shader already assigned and other previous
         // shader.
-        if shader_slot.get().is_some() {
+        if has_shader {
             return Err(WebGLError::InvalidOperation);
         }
 
-        shader_slot.set(Some(shader));
+        match shader.gl_type() {
+            constants::FRAGMENT_SHADER => self.fragment_shader.set(Some(JS::from_ref(shader))),
+            constants::VERTEX_SHADER => self.vertex_shader.set(Some(JS::from_ref(shader))),
+            _ => unreachable!(),
+        }
 
         renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::AttachShader(self.id.get(), shader.id()))).unwrap();
 

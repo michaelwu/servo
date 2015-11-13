@@ -34,7 +34,7 @@ magic_dom_struct! {
     pub struct HTMLTableRowElement {
         htmlelement: Base<HTMLElement>,
         cells: Mut<Option<JS<HTMLCollection>>>,
-        background_color: Mut<Option<RGBA>>,
+        background_color: Layout<Option<RGBA>>,
     }
 }
 
@@ -55,7 +55,7 @@ impl HTMLTableRowElement {
     }
 
     pub fn get_background_color(&self) -> Option<RGBA> {
-        self.background_color.get()
+        self.background_color.layout_get()
     }
 }
 

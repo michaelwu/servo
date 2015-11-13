@@ -144,13 +144,14 @@ impl CharacterDataMethods for CharacterData {
 
 impl CharacterData {
     #[inline]
-    pub fn data(&self) -> Ref<DOMString> {
+    pub fn data(&self) -> DOMString {
         self.data.get()
     }
     #[inline]
     pub fn append_data(&self, data: &str) {
-        self.data.borrow_mut().push_str(data);
-        self.content_changed();
+        let mut buf = self.data.get();
+        buf.push_str(data);
+        self.data.set(buf)
     }
 
     fn content_changed(&self) {
@@ -162,14 +163,14 @@ impl CharacterData {
 
 #[allow(unsafe_code)]
 pub trait LayoutCharacterDataHelpers {
-    unsafe fn data_for_layout(&self) -> &str;
+    unsafe fn data_for_layout(&self) -> DOMString;
 }
 
 #[allow(unsafe_code)]
 impl LayoutCharacterDataHelpers for LayoutJS<CharacterData> {
     #[inline]
-    unsafe fn data_for_layout(&self) -> &str {
-        &(*self.unsafe_get()).data.layout_get()
+    unsafe fn data_for_layout(&self) -> DOMString {
+        (&*self.unsafe_get()).data.layout_get()
     }
 }
 

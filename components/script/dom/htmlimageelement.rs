@@ -66,12 +66,13 @@ impl Runnable for ImageResponseHandlerRunnable {
         // Update the image field
         let element = self.element.root();
         let element_ref = element.r();
-        *element_ref.image.borrow_mut() = match self.image {
+        let image = match self.image {
             ImageResponse::Loaded(image) | ImageResponse::PlaceholderLoaded(image) => {
                 Some(image)
             }
             ImageResponse::None => None,
         };
+       element_ref.image.set(image);
 
         // Mark the node dirty
         let document = document_from_node(&*element);
@@ -170,12 +171,12 @@ pub trait LayoutHTMLImageElementHelpers {
 impl LayoutHTMLImageElementHelpers for LayoutJS<HTMLImageElement> {
     #[allow(unsafe_code)]
     unsafe fn image(&self) -> Option<Arc<Image>> {
-        (*self.unsafe_get()).image.layout_get()
+        (&*self.unsafe_get()).image.layout_get()
     }
 
     #[allow(unsafe_code)]
     unsafe fn image_url(&self) -> Option<Url> {
-        (*self.unsafe_get()).url.layout_get()
+        (&*self.unsafe_get()).url.layout_get()
     }
 }
 
@@ -231,7 +232,7 @@ impl HTMLImageElementMethods for HTMLImageElement {
     fn NaturalWidth(&self) -> u32 {
         let image = self.image.get();
 
-        match *image {
+        match image {
             Some(ref image) => image.width,
             None => 0,
         }
@@ -241,7 +242,7 @@ impl HTMLImageElementMethods for HTMLImageElement {
     fn NaturalHeight(&self) -> u32 {
         let image = self.image.get();
 
-        match *image {
+        match image {
             Some(ref image) => image.height,
             None => 0,
         }

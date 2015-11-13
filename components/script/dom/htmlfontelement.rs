@@ -22,7 +22,7 @@ use util::str::{self, DOMString, parse_legacy_font_size};
 magic_dom_struct! {
     pub struct HTMLFontElement {
         htmlelement: Base<HTMLElement>,
-        color: Mut<Option<RGBA>>,
+        color: Layout<Option<RGBA>>,
         face: Layout<Option<Atom>>,
     }
 }
@@ -83,9 +83,9 @@ impl VirtualMethods for HTMLFontElement {
                 }));
             },
             &atom!(face) => {
-                *self.face.borrow_mut() =
+                self.face.set(
                     mutation.new_value(attr)
-                            .map(|value| value.as_atom().clone())
+                            .map(|value| value.as_atom().clone()));
             },
             _ => {},
         }
@@ -106,13 +106,13 @@ impl VirtualMethods for HTMLFontElement {
 
 impl HTMLFontElement {
     pub fn get_color(&self) -> Option<RGBA> {
-        self.color.get()
+        self.color.layout_get()
     }
 
     #[allow(unsafe_code)]
     pub fn get_face(&self) -> Option<Atom> {
         let face = unsafe { self.face.layout_get() };
-        match *face {
+        match face {
             Some(ref s) => Some(s.clone()),
             None => None,
         }

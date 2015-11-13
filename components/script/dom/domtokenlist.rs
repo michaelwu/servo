@@ -137,7 +137,7 @@ impl DOMTokenListMethods for DOMTokenList {
 
     // https://dom.spec.whatwg.org/#stringification-behavior
     fn Stringifier(&self) -> DOMString {
-        let tokenlist = self.element.get().root().r().get_tokenlist_attribute(&self.local_name);
+        let tokenlist = self.element.get().root().r().get_tokenlist_attribute(&self.local_name.get());
         str_join(&tokenlist, "\x20")
     }
 

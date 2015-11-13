@@ -35,7 +35,7 @@ use std::default::Default;
 use url::Url;
 
 #[must_root]
-#[derive(JSTraceable, HeapSizeOf)]
+//#[derive(JSTraceable, HeapSizeOf)]
 pub struct Sink {
     pub base_url: Option<Url>,
     pub document: JS<Document>,
@@ -47,7 +47,7 @@ impl Sink {
         match child {
             NodeOrText::AppendNode(n) => n.root(),
             NodeOrText::AppendText(t) => {
-                let doc = self.document.get().root();
+                let doc = self.document.root();
                 let text = Text::new(t.into(), &doc);
                 Root::upcast(text)
             }
@@ -363,6 +363,6 @@ impl JSTraceable for Tokenizer {
 
         let tree_builder = self.sink();
         tree_builder.trace_handles(tracer);
-        tree_builder.sink().trace(trc);
+        tree_builder.sink().document.trace(trc);
     }
 }

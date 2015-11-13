@@ -18,13 +18,13 @@ use dom::bindings::codegen::InheritTypes::{ElementTypeId, HTMLElementTypeId, Nod
 use dom::bindings::codegen::UnionTypes::NodeOrString;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
-use dom::bindings::global::GlobalRef;
+use dom::bindings::global::{GlobalRef, GlobalRoot};
 use dom::bindings::js::RootedReference;
-use dom::bindings::js::{JS, LayoutJS, Root};
+use dom::bindings::js::{JS, LayoutJS, Root, DOMVec, DOMMap};
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::trace::RootedVec;
 use dom::bindings::utils::XMLName::InvalidXMLName;
-use dom::bindings::magic::alloc_dom_object;
+use dom::bindings::magic::{MagicDOMClass, alloc_dom_object};
 use dom::bindings::utils::{validate_and_extract, xml_name_type};
 use dom::comment::Comment;
 use dom::customevent::CustomEvent;
@@ -108,6 +108,7 @@ magic_dom_struct! {
     pub struct Document {
         node: Base<Node>,
         window: JS<Window>,
+        idmap: DOMMap<DOMVec<JS<Element>>>,
         implementation: Mut<Option<JS<DOMImplementation>>>,
         location: Mut<Option<JS<Location>>>,
         content_type: DOMString,
@@ -149,7 +150,6 @@ magic_dom_struct! {
 #[must_root]
 #[derive(JSTraceable, HeapSizeOf)]
 struct DocumentExtra {
-    idmap: DOMRefCell<HashMap<Atom, Vec<JS<Element>>>>,
     url: Url,
     /// https://html.spec.whatwg.org/multipage/#list-of-animation-frame-callbacks
     /// List of animation frame callbacks
@@ -163,7 +163,7 @@ struct DocumentExtra {
 
 impl PartialEq for Document {
     fn eq(&self, other: &Document) -> bool {
-        self as *const Document == &*other
+        self.get_jsobj() == other.get_jsobj()
     }
 }
 
@@ -241,7 +241,7 @@ impl Document {
     }
 
     #[inline]
-    pub fn encoding_name(&self) -> Ref<DOMString> {
+    pub fn encoding_name(&self) -> DOMString {
         self.encoding_name.get()
     }
 
@@ -299,7 +299,7 @@ impl Document {
             .traverse_preorder()
             .filter_map(Root::downcast::<HTMLBaseElement>)
             .find(|element| element.upcast::<Element>().has_attribute(&atom!("href")));
-        self.base_element.set(base.r());
+        self.base_element.set(base.map(|base| JS::from_rooted(&base)));
     }
 
     pub fn quirks_mode(&self) -> QuirksMode {
@@ -364,15 +364,15 @@ impl Document {
                                 to_unregister: &Element,
                                 id: Atom) {
         debug!("Removing named element from document {:p}: {:p} id={}", self, to_unregister, id);
-        let mut idmap = self.extra.idmap.borrow_mut();
-        let is_empty = match idmap.get_mut(&id) {
+        let idmap = self.idmap.get();
+        let is_empty = match idmap.get(&id) {
             None => false,
             Some(elements) => {
                 let position = elements.iter()
                                        .map(|elem| elem.root())
                                        .position(|element| element.r() == to_unregister)
                                        .expect("This element should be in registered.");
-                elements.remove(position);
+                elements.remove(position as u32);
                 elements.is_empty()
             }
         };
@@ -389,24 +389,25 @@ impl Document {
         assert!(element.upcast::<Node>().is_in_doc());
         assert!(!id.is_empty());
 
-        let mut idmap = self.extra.idmap.borrow_mut();
+        let idmap = self.idmap.get();
 
         let root = self.GetDocumentElement().expect(
             "The element is in the document, so there must be a document element.");
 
-        match idmap.entry(id) {
-            Vacant(entry) => {
-                entry.insert(vec![JS::from_ref(element)]);
+        match idmap.get(&id) {
+            None => {
+                let global = GlobalRoot::Window(self.window.get().root());
+                let elements = DOMVec::new(global.r(), 1);
+                elements.set(0, JS::from_ref(element));
+                idmap.set(&id, &elements);
             }
-            Occupied(entry) => {
-                let elements = entry.into_mut();
-
+            Some(elements) => {
                 let new_node = element.upcast::<Node>();
-                let mut head: usize = 0;
+                let mut head = 0;
                 let root = root.upcast::<Node>();
                 for node in root.traverse_preorder() {
                     if let Some(elem) = node.downcast() {
-                        if (*elements)[head].root().r() == elem {
+                        if elements.get(head).unwrap().root().r() == elem {
                             head += 1;
                         }
                         if new_node == node.r() || head == elements.len() {
@@ -500,7 +501,7 @@ impl Document {
     /// Request that the given element receive focus once the current transaction is complete.
     pub fn request_focus(&self, elem: &Element) {
         if elem.is_focusable_area() {
-            self.possibly_focused.set(Some(elem))
+            self.possibly_focused.set(Some(JS::from_ref(elem)))
         }
     }
 
@@ -513,7 +514,7 @@ impl Document {
             elem.set_focus_state(false);
         }
 
-        self.focused.set(self.possibly_focused.get().r());
+        self.focused.set(self.possibly_focused.get());
 
         if let Some(ref elem) = self.focused.get().map(Root::from_rooted) {
             elem.set_focus_state(true);
@@ -667,14 +668,12 @@ impl Document {
 
         // Remove hover from any elements in the previous list that are no longer
         // under the mouse.
-        for target in prev_mouse_over_targets.iter() {
-            if !mouse_over_targets.contains(target) {
-                let target = target.root();
-                let target_ref = target.r();
-                if target_ref.get_hover_state() {
-                    target_ref.set_hover_state(false);
+        for target in prev_mouse_over_targets.rooted_iter() {
+            if !mouse_over_targets.contains(&JS::from_ref(target)) {
+                if target.get_hover_state() {
+                    target.set_hover_state(false);
 
-                    let target = target_ref.upcast();
+                    let target = target.upcast();
 
                     self.fire_mouse_event(point, &target, "mouseout".to_owned());
                 }
@@ -684,7 +683,7 @@ impl Document {
         // Set hover state for any elements in the current mouse over list.
         // Check if any of them changed state to determine whether to
         // force a reflow below.
-        for target in mouse_over_targets.r() {
+        for target in mouse_over_targets.rooted_iter() {
             if !target.get_hover_state() {
                 target.set_hover_state(true);
 
@@ -846,7 +845,7 @@ impl Document {
     }
 
     pub fn set_current_script(&self, script: Option<&HTMLScriptElement>) {
-        self.current_script.set(script);
+        self.current_script.set(script.map(JS::from_ref));
     }
 
     pub fn trigger_mozbrowser_event(&self, event: MozBrowserEvent) {
@@ -947,7 +946,7 @@ impl Document {
     }
 
     pub fn set_current_parser(&self, script: Option<&ServoHTMLParser>) {
-        self.current_parser.set(script);
+        self.current_parser.set(script.map(JS::from_ref));
     }
 
     pub fn get_current_parser(&self) -> Option<Root<ServoHTMLParser>> {
@@ -1018,8 +1017,9 @@ impl Document {
                 }
             };
 
-        self.node.init(Node::new_document_node());
+        self.node.new_document_node();
         self.window.init(JS::from_ref(window));
+        self.idmap.init(DOMMap::new(GlobalRef::Window(window)));
         self.implementation.init(Default::default());
         self.location.init(Default::default());
         self.content_type.init(content_type);
@@ -1046,7 +1046,6 @@ impl Document {
         self.base_element.init(Default::default());
         self.appropriate_template_contents_owner_document.init(Default::default());
         self.extra.init(box DocumentExtra {
-            idmap: DOMRefCell::new(HashMap::new()),
             url: url,
             animation_frame_list: RefCell::new(HashMap::new()),
             loader: DOMRefCell::new(doc_loader),
@@ -1072,15 +1071,18 @@ impl Document {
                last_modified: Option<DOMString>,
                source: DocumentSource,
                doc_loader: DocumentLoader) -> Root<Document> {
-        let mut document = alloc_dom_object::<Document>(GlobalRef::Window(window));
-        document.new_inherited(window, url, doctype,
-                                                                      content_type, last_modified,
-                                                                      source, doc_loader);
+        let document = {
+            let mut document = alloc_dom_object::<Document>(GlobalRef::Window(window));
+            document.new_inherited(window, url, doctype,
+                                   content_type, last_modified,
+                                   source, doc_loader);
+            document.into_root()
+        };
         {
-            let node = document.upcast::<Node>();
+            let node = document.r().upcast::<Node>();
             node.set_owner_doc(document.r());
         }
-        document.into_root()
+        document
     }
 
     fn create_node_list<F: Fn(&Node) -> bool>(&self, callback: F) -> Root<NodeList> {
@@ -1106,7 +1108,7 @@ impl Document {
             let new_doc = Document::new(
                 &*self.window(), None, doctype, None, None,
                 DocumentSource::NotFromParser, DocumentLoader::new(&self.loader()));
-            new_doc.appropriate_template_contents_owner_document.set(Some(&new_doc));
+            new_doc.appropriate_template_contents_owner_document.set(Some(JS::from_rooted(&new_doc)));
             new_doc
         })
     }
@@ -1230,7 +1232,7 @@ impl DocumentMethods for Document {
     // https://dom.spec.whatwg.org/#dom-nonelementparentnode-getelementbyid
     fn GetElementById(&self, id: DOMString) -> Option<Root<Element>> {
         let id = Atom::from_slice(&id);
-        self.extra.idmap.borrow().get(&id).map(|ref elements| (*elements)[0].root())
+        self.idmap.get().get(&id).map(|ref elements| elements.get(0).unwrap().root())
     }
 
     // https://dom.spec.whatwg.org/#dom-document-createelement
@@ -1394,11 +1396,11 @@ impl DocumentMethods for Document {
     // https://html.spec.whatwg.org/multipage/#document.title
     fn Title(&self) -> DOMString {
         let title = self.GetDocumentElement().and_then(|root| {
-            if root.r().namespace() == &ns!(SVG) && root.r().local_name() == &atom!("svg") {
+            if root.r().namespace() == ns!(SVG) && root.r().local_name() == atom!("svg") {
                 // Step 1.
                 root.upcast::<Node>().child_elements().find(|node| {
-                    node.r().namespace() == &ns!(SVG) &&
-                    node.r().local_name() == &atom!("title")
+                    node.r().namespace() == ns!(SVG) &&
+                    node.r().local_name() == atom!("title")
                 }).map(Root::upcast::<Node>)
             } else {
                 // Step 2.
@@ -1425,11 +1427,11 @@ impl DocumentMethods for Document {
             None => return,
         };
 
-        let elem = if root.r().namespace() == &ns!(SVG) &&
-                       root.r().local_name() == &atom!("svg") {
+        let elem = if root.r().namespace() == ns!(SVG) &&
+                       root.r().local_name() == atom!("svg") {
             let elem = root.upcast::<Node>().child_elements().find(|node| {
-                node.r().namespace() == &ns!(SVG) &&
-                node.r().local_name() == &atom!("title")
+                node.r().namespace() == ns!(SVG) &&
+                node.r().local_name() == atom!("title")
             });
             match elem {
                 Some(elem) => Root::upcast::<Node>(elem),
@@ -1442,7 +1444,7 @@ impl DocumentMethods for Document {
                         .unwrap()
                 }
             }
-        } else if root.r().namespace() == &ns!(HTML) {
+        } else if root.r().namespace() == ns!(HTML) {
             let elem = root.upcast::<Node>()
                            .traverse_preorder()
                            .find(|node| node.r().is::<HTMLTitleElement>());
@@ -1542,7 +1544,7 @@ impl DocumentMethods for Document {
                 Some(element) => element,
                 None => return false,
             };
-            if element.namespace() != &ns!(HTML) {
+            if element.namespace() != ns!(HTML) {
                 return false;
             }
             element.get_attribute(&ns!(""), &atom!("name")).map_or(false, |attr| {

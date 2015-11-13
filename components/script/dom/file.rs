@@ -33,8 +33,8 @@ impl File {
         obj.into_root()
     }
 
-    pub fn name(&self) -> &DOMString {
-        &self.name.get()
+    pub fn name(&self) -> DOMString {
+        self.name.get()
     }
 }
 

@@ -103,12 +103,12 @@ impl Event {
 
     #[inline]
     pub fn set_current_target(&self, val: &EventTarget) {
-        self.current_target.set(Some(val));
+        self.current_target.set(Some(JS::from_ref(val)));
     }
 
     #[inline]
     pub fn set_target(&self, val: &EventTarget) {
-        self.target.set(Some(val));
+        self.target.set(Some(JS::from_ref(val)));
     }
 
     #[inline]

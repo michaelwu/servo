@@ -10,6 +10,7 @@ use dom::bindings::conversions::{Castable, ToJSValConvertible};
 use dom::bindings::error::{Error, ErrorResult, Fallible};
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root, LayoutJS};
+use dom::bindings::magic::MagicDOMClass;
 use dom::customevent::CustomEvent;
 use dom::document::Document;
 use dom::element::{self, AttributeMutation, Element};
@@ -53,9 +54,9 @@ enum SandboxAllowance {
 magic_dom_struct! {
     pub struct HTMLIFrameElement {
         htmlelement: Base<HTMLElement>,
-        pipeline_id: Mut<Option<PipelineId>>,
-        subpage_id: Mut<Option<SubpageId>>,
-        containing_page_pipeline_id: Mut<Option<PipelineId>>,
+        pipeline_id: Layout<Option<PipelineId>>,
+        subpage_id: Layout<Option<SubpageId>>,
+        containing_page_pipeline_id: Layout<Option<PipelineId>>,
         sandbox: Mut<Option<u8>>,
     }
 }
@@ -205,6 +206,16 @@ impl HTMLIFrameElement {
     pub fn subpage_id(&self) -> Option<SubpageId> {
         self.subpage_id.get()
     }
+
+    #[inline]
+    pub fn layout_containing_page_pipeline_id(&self) -> Option<PipelineId> {
+        self.containing_page_pipeline_id.layout_get()
+    }
+
+    #[inline]
+    pub fn layout_subpage_id(&self) -> Option<SubpageId> {
+        self.subpage_id.layout_get()
+    }
 }
 
 pub trait HTMLIFrameElementLayoutMethods {
@@ -216,7 +227,7 @@ impl HTMLIFrameElementLayoutMethods for LayoutJS<HTMLIFrameElement> {
     #[allow(unsafe_code)]
     fn pipeline_id(self) -> Option<PipelineId> {
         unsafe {
-            (*self.unsafe_get()).pipeline_id.get()
+            (*self.unsafe_get()).pipeline_id.layout_get()
         }
     }
 }

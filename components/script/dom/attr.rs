@@ -178,7 +178,7 @@ pub struct AttrExtra {
 impl Attr {
     fn new_inherited(&mut self, local_name: Atom, value: AttrValue, name: Atom, namespace: Namespace,
                      prefix: Option<Atom>, owner: Option<&Element>) {
-        self.owner.init(owner);
+        self.owner.init(owner.map(JS::from_ref));
         self.extra.init(box AttrExtra {
             local_name: local_name,
             value: DOMRefCell::new(value),
@@ -318,7 +318,7 @@ impl Attr {
             }
             (old, new) => assert!(old == new)
         }
-        self.owner.set(owner);
+        self.owner.set(owner.map(JS::from_ref));
     }
 
     pub fn owner(&self) -> Option<Root<Element>> {

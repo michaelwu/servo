@@ -48,7 +48,7 @@ macro_rules! css_properties(
     );
 );
 
-fn serialize_list(list: &[Ref<PropertyDeclaration>]) -> DOMString {
+fn serialize_list(list: &[PropertyDeclaration]) -> DOMString {
     let str_iter = list.iter().map(|d| d.value());
     str_join(str_iter, " ")
 }
@@ -88,7 +88,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
     fn Length(&self) -> u32 {
         let owner = self.owner.get().root();
         let elem = owner.upcast::<Element>();
-        let len = match *elem.style_attribute().borrow() {
+        let len = match elem.style_attribute() {
             Some(ref declarations) => declarations.normal.len() + declarations.important.len(),
             None => 0
         };
@@ -100,8 +100,8 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
         let index = index as usize;
         let owner = self.owner.get().root();
         let elem = owner.upcast::<Element>();
-        let style_attribute = elem.style_attribute().borrow();
-        let result = style_attribute.as_ref().and_then(|declarations| {
+        let style_attribute = elem.style_attribute();
+        let result = style_attribute.and_then(|declarations| {
             if index > declarations.normal.len() {
                 declarations.important
                             .get(index - declarations.normal.len())

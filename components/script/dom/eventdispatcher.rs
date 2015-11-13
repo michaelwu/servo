@@ -45,7 +45,7 @@ fn handle_event(window: Option<&Window>, listener: &EventListenerType,
     listener.call_or_handle_event(current_target, event, Report);
 }
 
-fn dispatch_to_listeners(event: &Event, target: &EventTarget, chain: &[&EventTarget]) {
+fn dispatch_to_listeners(event: &Event, target: &EventTarget, chain: &RootedVec<EventTarget>) {
     assert!(!event.stop_propagation());
     assert!(!event.stop_immediate());
 
@@ -64,11 +64,11 @@ fn dispatch_to_listeners(event: &Event, target: &EventTarget, chain: &[&EventTar
 
     /* capturing */
     event.set_phase(EventPhase::Capturing);
-    for cur_target in chain.iter().rev() {
+    for cur_target in chain.rooted_iter().rev() {
         if let Some(listeners) = cur_target.get_listeners_for(&type_, ListenerPhase::Capturing) {
             event.set_current_target(cur_target);
             for listener in &listeners {
-                handle_event(window.r(), listener, *cur_target, event);
+                handle_event(window.r(), listener, cur_target, event);
 
                 if event.stop_immediate() {
                     return;
@@ -110,11 +110,11 @@ fn dispatch_to_listeners(event: &Event, target: &EventTarget, chain: &[&EventTar
     }
 
     event.set_phase(EventPhase::Bubbling);
-    for cur_target in chain {
+    for cur_target in chain.rooted_iter() {
         if let Some(listeners) = cur_target.get_listeners_for(&type_, ListenerPhase::Bubbling) {
             event.set_current_target(cur_target);
             for listener in &listeners {
-                handle_event(window.r(), listener, *cur_target, event);
+                handle_event(window.r(), listener, cur_target, event);
 
                 if event.stop_immediate() {
                     return;
@@ -154,7 +154,7 @@ pub fn dispatch_event(target: &EventTarget, pseudo_target: Option<&EventTarget>,
         }
     }
 
-    dispatch_to_listeners(event, target, chain.r());
+    dispatch_to_listeners(event, target, &chain);
 
     /* default action */
     let target = event.GetTarget();

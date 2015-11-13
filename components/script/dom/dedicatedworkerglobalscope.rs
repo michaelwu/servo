@@ -13,6 +13,7 @@ use dom::bindings::error::ErrorResult;
 use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{Root, RootCollection};
 use dom::bindings::magic::alloc_dom_global;
+use dom::bindings::magic::MagicDOMClass;
 use dom::bindings::refcounted::LiveDOMReferences;
 use dom::bindings::structuredclone::StructuredCloneData;
 use dom::messageevent::MessageEvent;

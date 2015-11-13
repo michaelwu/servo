@@ -4,7 +4,9 @@
 
 use dom::bindings::conversions::native_from_handleobject;
 use dom::bindings::conversions::{ToJSValConvertible};
+use dom::bindings::global::GlobalRef;
 use dom::bindings::js::{JS, Root};
+use dom::bindings::magic::{MagicDOMClass, alloc_dom_object};
 use dom::bindings::proxyhandler::{fill_property_descriptor, get_property_descriptor};
 use dom::bindings::utils::get_array_index_from_id;
 use dom::bindings::utils::{WindowProxyHandler};
@@ -23,29 +25,30 @@ use js::jsval::{ObjectValue, UndefinedValue};
 use std::default::Default;
 use std::ptr;
 
-#[derive(JSTraceable, HeapSizeOf)]
-#[privatize]
-#[allow(raw_pointer_derive)]
-#[must_root]
-pub struct BrowsingContext {
-    history: Vec<SessionHistoryEntry>,
-    active_index: usize,
-    window_proxy: Heap<*mut JSObject>,
-    frame_element: Option<JS<Element>>,
+magic_dom_struct! {
+    pub struct BrowsingContext {
+        document: Mut<JS<Document>>,
+        active_index: Mut<u32>,
+        window_proxy: Mut<*mut JSObject>,
+        frame_element: Mut<Option<JS<Element>>>,
+    }
 }
 
+anonymous_dom_object!(BrowsingContext);
+
 impl BrowsingContext {
-    pub fn new(document: &Document, frame_element: Option<&Element>) -> BrowsingContext {
-        BrowsingContext {
-            history: vec!(SessionHistoryEntry::new(document)),
-            active_index: 0,
-            window_proxy: Heap::default(),
-            frame_element: frame_element.map(JS::from_ref),
-        }
+    pub fn new(document: &Document, frame_element: Option<&Element>) -> Root<BrowsingContext> {
+        let window = document.window();
+        let mut ctx = alloc_dom_object::<BrowsingContext>(GlobalRef::Window(window.r()));
+        ctx.document.init(JS::from_ref(document));
+        ctx.active_index.init(0);
+        ctx.window_proxy.init(ptr::null_mut());
+        ctx.frame_element.init(frame_element.map(JS::from_ref));
+        ctx.into_root()
     }
 
     pub fn active_document(&self) -> Root<Document> {
-        self.history[self.active_index].document.root()
+        self.document.get().root()
     }
 
     pub fn active_window(&self) -> Root<Window> {
@@ -54,7 +57,7 @@ impl BrowsingContext {
     }
 
     pub fn frame_element(&self) -> Option<Root<Element>> {
-        self.frame_element.as_ref().map(JS::root)
+        self.frame_element.get().map(Root::from_rooted)
     }
 
     pub fn window_proxy(&self) -> *mut JSObject {
@@ -63,7 +66,7 @@ impl BrowsingContext {
     }
 
     #[allow(unsafe_code)]
-    pub fn create_window_proxy(&mut self) {
+    pub fn create_window_proxy(&self) {
         let win = self.active_window();
         let win = win.r();
 
@@ -77,25 +80,6 @@ impl BrowsingContext {
         let wrapper = unsafe { WrapperNew(cx, parent, handler, ptr::null(), false) };
         assert!(!wrapper.is_null());
         self.window_proxy.set(wrapper);
-    }
-}
-
-// This isn't a DOM struct, just a convenience struct
-// without a reflector, so we don't mark this as #[dom_struct]
-#[must_root]
-#[privatize]
-#[derive(JSTraceable, HeapSizeOf)]
-pub struct SessionHistoryEntry {
-    document: JS<Document>,
-    children: Vec<BrowsingContext>
-}
-
-impl SessionHistoryEntry {
-    fn new(document: &Document) -> SessionHistoryEntry {
-        SessionHistoryEntry {
-            document: JS::from_ref(document),
-            children: vec!()
-        }
     }
 }
 

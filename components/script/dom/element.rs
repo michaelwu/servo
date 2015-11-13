@@ -23,10 +23,11 @@ use dom::bindings::codegen::InheritTypes::{ElementTypeId, HTMLElementTypeId, Nod
 use dom::bindings::codegen::UnionTypes::NodeOrString;
 use dom::bindings::conversions::Castable;
 use dom::bindings::error::{Error, ErrorResult, Fallible};
-use dom::bindings::global::GlobalRef;
+use dom::bindings::global::{GlobalRef, GlobalRoot};
 use dom::bindings::js::{JS, LayoutJS};
 use dom::bindings::js::{Root, RootedReference};
 use dom::bindings::js::DOMVec;
+use dom::bindings::magic::MagicDOMClass;
 use dom::bindings::utils::XMLName::InvalidXMLName;
 use dom::bindings::utils::{namespace_from_domstring, validate_and_extract, xml_name_type};
 use dom::characterdata::CharacterData;
@@ -113,13 +114,13 @@ magic_dom_struct! {
         style_attribute: Layout<Option<PropertyDeclarationBlock>>,
         attr_list: Mut<Option<JS<NamedNodeMap>>>,
         class_list: Mut<Option<JS<DOMTokenList>>>,
-        event_state: Mut<EventState>,
+        event_state: Layout<EventState>,
     }
 }
 
 impl PartialEq for Element {
     fn eq(&self, other: &Element) -> bool {
-        self as *const Element == &*other
+        self.get_jsobj() == other.get_jsobj()
     }
 }
 
@@ -143,7 +144,7 @@ impl Element {
     pub fn new_inherited(&mut self, local_name: DOMString,
                          namespace: Namespace, prefix: Option<DOMString>,
                          document: &Document) {
-        Element::new_inherited_with_state(EventState::empty(), local_name,
+        self.new_inherited_with_state(EventState::empty(), local_name,
                                           namespace, prefix, document)
     }
 
@@ -155,7 +156,7 @@ impl Element {
         self.local_name.init(Atom::from_slice(&local_name));
         self.namespace.init(namespace);
         self.prefix.init(prefix);
-        self.attrs.init(vec!());
+        self.attrs.init(DOMVec::new(GlobalRoot::Window(document.window()).r(), 0));
         self.id_attribute.init(None);
         self.style_attribute.init(None);
         self.attr_list.init(Default::default());
@@ -187,7 +188,7 @@ pub trait RawLayoutElementHelpers {
 pub unsafe fn get_attr_for_layout<'a>(elem: &'a Element, namespace: &Namespace, name: &Atom)
                                       -> Option<LayoutJS<Attr>> {
     // cast to point to T in RefCell<T> directly
-    let attrs = elem.attrs.layout_get();
+    let attrs = elem.attrs.readonly_get();
     attrs.iter().find(|attr| {
         let attr = attr.to_layout();
         *name == attr.local_name_atom_forever() &&
@@ -244,10 +245,10 @@ pub trait LayoutElementHelpers {
     unsafe fn html_element_in_html_document_for_layout(&self) -> bool;
     #[allow(unsafe_code)]
     unsafe fn has_attr_for_layout(&self, namespace: &Namespace, name: &Atom) -> bool;
-    fn id_attribute(&self) -> *const Option<Atom>;
-    fn style_attribute(&self) -> *const Option<PropertyDeclarationBlock>;
-    fn local_name(&self) -> &Atom;
-    fn namespace(&self) -> &Namespace;
+    fn id_attribute(&self) ->Option<Atom>;
+    fn style_attribute(&self) -> Option<PropertyDeclarationBlock>;
+    fn local_name(&self) -> Atom;
+    fn namespace(&self) -> Namespace;
     fn get_checked_state_for_layout(&self) -> bool;
     fn get_indeterminate_state_for_layout(&self) -> bool;
 
@@ -551,30 +552,30 @@ impl LayoutElementHelpers for LayoutJS<Element> {
     }
 
     #[allow(unsafe_code)]
-    fn id_attribute(&self) -> *const Option<Atom> {
+    fn id_attribute(&self) -> Option<Atom> {
         unsafe {
-            (*self.unsafe_get()).id_attribute.layout_get()
+            (&*self.unsafe_get()).id_attribute.layout_get()
         }
     }
 
     #[allow(unsafe_code)]
-    fn style_attribute(&self) -> *const Option<PropertyDeclarationBlock> {
+    fn style_attribute(&self) -> Option<PropertyDeclarationBlock> {
         unsafe {
-            (*self.unsafe_get()).style_attribute.layout_get()
+            (&*self.unsafe_get()).style_attribute.layout_get()
         }
     }
 
     #[allow(unsafe_code)]
-    fn local_name(&self) -> &Atom {
+    fn local_name(&self) -> Atom {
         unsafe {
-            &(*self.unsafe_get()).local_name.get()
+            (&*self.unsafe_get()).local_name.get()
         }
     }
 
     #[allow(unsafe_code)]
-    fn namespace(&self) -> &Namespace {
+    fn namespace(&self) -> Namespace {
         unsafe {
-            &(*self.unsafe_get()).namespace.get()
+            (&*self.unsafe_get()).namespace.get()
         }
     }
 
@@ -606,7 +607,7 @@ impl LayoutElementHelpers for LayoutJS<Element> {
     #[allow(unsafe_code)]
     fn get_event_state_for_layout(&self) -> EventState {
         unsafe {
-            (*self.unsafe_get()).event_state.get()
+            (*self.unsafe_get()).event_state.layout_get()
         }
     }
 }
@@ -623,8 +624,8 @@ impl Element {
         self.namespace.get() == ns!(HTML) && self.upcast::<Node>().is_in_html_doc()
     }
 
-    pub fn local_name(&self) -> &Atom {
-        &self.local_name.get()
+    pub fn local_name(&self) -> Atom {
+        self.local_name.get()
     }
 
     pub fn parsed_name(&self, mut name: DOMString) -> Atom {
@@ -634,20 +635,20 @@ impl Element {
         Atom::from_slice(&name)
     }
 
-    pub fn namespace(&self) -> &Namespace {
-        &self.namespace.get()
+    pub fn namespace(&self) -> Namespace {
+        self.namespace.get()
     }
 
-    pub fn prefix(&self) -> &Option<DOMString> {
-        &self.prefix.get()
+    pub fn prefix(&self) -> Option<DOMString> {
+        self.prefix.get()
     }
 
-    pub fn attrs(&self) -> Ref<Vec<JS<Attr>>> {
+    pub fn attrs(&self) -> DOMVec<JS<Attr>> {
         self.attrs.get()
     }
 
-    pub fn style_attribute(&self) -> &DOMRefCell<Option<PropertyDeclarationBlock>> {
-        &self.style_attribute
+    pub fn style_attribute(&self) -> Option<PropertyDeclarationBlock> {
+        self.style_attribute.get()
     }
 
     pub fn summarize(&self) -> Vec<AttrInfo> {
@@ -675,13 +676,15 @@ impl Element {
     }
 
     pub fn remove_inline_style_property(&self, property: &str) {
-        let mut inline_declarations = self.style_attribute.borrow_mut();
-        if let &mut Some(ref mut declarations) = &mut *inline_declarations {
+        let mut inline_declarations = self.style_attribute.get();
+        if let Some(ref mut declarations) = inline_declarations {
             let index = declarations.normal
                                     .iter()
                                     .position(|decl| decl.matches(property));
             if let Some(index) = index {
+                self.style_attribute.set(None);
                 Arc::make_mut(&mut declarations.normal).remove(index);
+                self.style_attribute.set(Some(declarations.clone()));
                 return;
             }
 
@@ -689,7 +692,9 @@ impl Element {
                                     .iter()
                                     .position(|decl| decl.matches(property));
             if let Some(index) = index {
+                self.style_attribute.set(None);
                 Arc::make_mut(&mut declarations.important).remove(index);
+                self.style_attribute.set(Some(declarations.clone()));
                 return;
             }
         }
@@ -698,24 +703,32 @@ impl Element {
     pub fn update_inline_style(&self,
                                property_decl: PropertyDeclaration,
                                style_priority: StylePriority) {
-        let mut inline_declarations = self.style_attribute().borrow_mut();
-        if let &mut Some(ref mut declarations) = &mut *inline_declarations {
-            let existing_declarations = if style_priority == StylePriority::Important {
-                &mut declarations.important
-            } else {
-                &mut declarations.normal
-            };
+        let mut inline_declarations = self.style_attribute.get();
+        if let Some(ref mut declarations) = inline_declarations {
+            self.style_attribute.set(None);
+            {
+                let existing_declarations = if style_priority == StylePriority::Important {
+                    &mut declarations.important
+                } else {
+                    &mut declarations.normal
+                };
 
-            // Usually, the reference count will be 1 here. But transitions could make it greater
-            // than that.
-            let existing_declarations = Arc::make_mut(existing_declarations);
-            for declaration in &mut *existing_declarations {
-                if declaration.name() == property_decl.name() {
-                    *declaration = property_decl;
-                    return;
+                // Usually, the reference count will be 1 here. But transitions could make it greater
+                // than that.
+                let mut exists = false;
+                let existing_declarations = Arc::make_mut(existing_declarations);
+                for declaration in existing_declarations.iter_mut() {
+                    if declaration.name() == property_decl.name() {
+                        *declaration = property_decl.clone();
+                        exists = true;
+                        return;
+                    }
+                }
+                if !exists {
+                    existing_declarations.push(property_decl);
                 }
             }
-            existing_declarations.push(property_decl);
+            self.style_attribute.set(Some(declarations.clone()));
             return;
         }
 
@@ -725,15 +738,16 @@ impl Element {
             (vec!(), vec!(property_decl))
         };
 
-        *inline_declarations = Some(PropertyDeclarationBlock {
+        self.style_attribute.set(Some(PropertyDeclarationBlock {
             important: Arc::new(important),
             normal: Arc::new(normal),
-        });
+        }));
     }
 
     pub fn set_inline_style_property_priority(&self, properties: &[&str], style_priority: StylePriority) {
-        let mut inline_declarations = self.style_attribute().borrow_mut();
-        if let &mut Some(ref mut declarations) = &mut *inline_declarations {
+        let mut inline_declarations = self.style_attribute.get();
+        self.style_attribute.set(None);
+        if let Some(ref mut declarations) = inline_declarations {
             let (from, to) = if style_priority == StylePriority::Important {
                 (&mut declarations.normal, &mut declarations.important)
             } else {
@@ -755,27 +769,26 @@ impl Element {
             }
             mem::replace(from, new_from);
         }
+        self.style_attribute.set(inline_declarations);
     }
 
-    pub fn get_inline_style_declaration(&self, property: &Atom) -> Option<Ref<PropertyDeclaration>> {
-        Ref::filter_map(self.style_attribute.get(), |inline_declarations| {
-            inline_declarations.as_ref().and_then(|declarations| {
-                declarations.normal
-                            .iter()
-                            .chain(declarations.important.iter())
-                            .find(|decl| decl.matches(&property))
-            })
+    pub fn get_inline_style_declaration(&self, property: &Atom) -> Option<PropertyDeclaration> {
+        self.style_attribute.get().and_then(|declarations| {
+            declarations.normal
+                        .iter()
+                        .chain(declarations.important.iter())
+                        .find(|decl| decl.matches(&property))
+                        .map(|prop| prop.clone())
         })
     }
 
     pub fn get_important_inline_style_declaration(&self, property: &Atom)
-                                                  -> Option<Ref<PropertyDeclaration>> {
-        Ref::filter_map(self.style_attribute.get(), |inline_declarations| {
-            inline_declarations.as_ref().and_then(|declarations| {
-                declarations.important
-                            .iter()
-                            .find(|decl| decl.matches(&property))
-            })
+                                                  -> Option<PropertyDeclaration> {
+        self.style_attribute.get().and_then(|declarations| {
+            declarations.important
+                        .iter()
+                        .find(|decl| decl.matches(&property))
+                        .map(|prop| prop.clone())
         })
     }
 
@@ -803,7 +816,7 @@ impl Element {
             match node.downcast::<Element>() {
                 Some(element) => {
                     // Step 1.
-                    if *element.namespace() == namespace {
+                    if element.namespace() == namespace {
                         if let Some(prefix) = element.GetPrefix() {
                             return Some(prefix);
                         }
@@ -879,14 +892,15 @@ impl Element {
         let window = window_from_node(self);
         let in_empty_ns = namespace == ns!("");
         let attr = Attr::new(&window, local_name, value, name, namespace, prefix, Some(self));
-        self.attrs.borrow_mut().push(JS::from_rooted(&attr));
+        let attrs = self.attrs.get();
+        attrs.push(JS::from_rooted(&attr));
         if in_empty_ns {
             vtable_for(self.upcast()).attribute_mutated(&attr, AttributeMutation::Set(None));
         }
     }
 
     pub fn get_attribute(&self, namespace: &Namespace, local_name: &Atom) -> Option<Root<Attr>> {
-        self.attrs.get().iter().map(JS::root).find(|attr| {
+        self.attrs.get().iter().map(|attr| attr.root()).find(|attr| {
             attr.local_name() == local_name && attr.namespace() == namespace
         })
     }
@@ -894,7 +908,7 @@ impl Element {
     // https://dom.spec.whatwg.org/#concept-element-attributes-get-by-name
     pub fn get_attribute_by_name(&self, name: DOMString) -> Option<Root<Attr>> {
         let name = &self.parsed_name(name);
-        self.attrs.get().iter().map(JS::root)
+        self.attrs.get().iter().map(|attr| attr.root())
              .find(|a| a.r().name() == name)
     }
 
@@ -903,7 +917,7 @@ impl Element {
                                      value: DOMString,
                                      prefix: Option<Atom>) {
         // Don't set if the attribute already exists, so we can handle add_attrs_if_missing
-        if self.attrs.get().iter().map(JS::root)
+        if self.attrs.get().iter().map(|attr| attr.root())
                 .any(|a| *a.r().local_name() == qname.local && *a.r().namespace() == qname.ns) {
             return;
         }
@@ -954,7 +968,7 @@ impl Element {
                                        find: F)
                                        where F: Fn(&Attr)
                                        -> bool {
-        let attr = self.attrs.get().iter().map(JS::root).find(|attr| find(&attr));
+        let attr = self.attrs.get().iter().map(|attr| attr.root()).find(|attr| find(attr));
         if let Some(attr) = attr {
             attr.set_value(value, self);
         } else {
@@ -985,11 +999,12 @@ impl Element {
     fn remove_first_matching_attribute<F>(&self, find: F) -> Option<Root<Attr>>
         where F: Fn(&Attr) -> bool
     {
-        let idx = self.attrs.get().iter().map(JS::root).position(|attr| find(&attr));
+        let attrs = self.attrs.get();
+        let idx = attrs.iter().map(|attr| attr.root()).position(|attr| find(&attr));
 
         idx.map(|idx| {
-            let attr = (*self.attrs.get())[idx].root();
-            self.attrs.borrow_mut().remove(idx);
+            let attr = attrs.get(idx as u32).unwrap().root();
+            attrs.remove(idx as u32);
             attr.set_owner(None);
             if attr.namespace() == &ns!("") {
                 vtable_for(self.upcast()).attribute_mutated(&attr, AttributeMutation::Removed);
@@ -1017,7 +1032,7 @@ impl Element {
 
     pub fn has_attribute(&self, local_name: &Atom) -> bool {
         assert!(local_name.bytes().all(|b| b.to_ascii_lowercase() == b));
-        self.attrs.get().iter().map(JS::root).any(|attr| {
+        self.attrs.get().iter().map(|attr| attr.root()).any(|attr| {
             attr.r().local_name() == local_name && attr.r().namespace() == &ns!("")
         })
     }
@@ -1122,14 +1137,14 @@ impl ElementMethods for Element {
     fn TagName(&self) -> DOMString {
         let qualified_name = match self.prefix.get() {
             Some(ref prefix) => {
-                Cow::Owned(format!("{}:{}", &**prefix, &*self.local_name.get()))
+                format!("{}:{}", &**prefix, &*self.local_name.get())
             },
-            None => Cow::Borrowed(&*self.local_name.get())
+            None => (&*self.local_name.get()).to_owned()
         };
         if self.html_element_in_html_document() {
             qualified_name.to_ascii_uppercase()
         } else {
-            qualified_name.into_owned()
+            qualified_name
         }
     }
 
@@ -1491,10 +1506,10 @@ impl VirtualMethods for Element {
         let damage = match attr.local_name() {
             &atom!(style) => {
                 // Modifying the `style` attribute might change style.
-                *self.style_attribute.borrow_mut() =
+                self.style_attribute.set(
                     mutation.new_value(attr).map(|value| {
                         parse_style_attribute(&value, &doc.base_url())
-                    });
+                    }));
                 NodeDamage::NodeStyleDamaged
             },
             &atom!(class) => {
@@ -1502,7 +1517,7 @@ impl VirtualMethods for Element {
                 NodeDamage::NodeStyleDamaged
             },
             &atom!(id) => {
-                *self.id_attribute.borrow_mut() =
+                self.id_attribute.set(
                     mutation.new_value(attr).and_then(|value| {
                         let value = value.as_atom();
                         if value != &atom!("") {
@@ -1510,7 +1525,7 @@ impl VirtualMethods for Element {
                         } else {
                             None
                         }
-                    });
+                    }));
                 if node.is_in_doc() {
                     let value = attr.value().as_atom().clone();
                     match mutation {
@@ -1557,7 +1572,7 @@ impl VirtualMethods for Element {
 
         if !tree_in_doc { return; }
 
-        if let Some(ref value) = *self.id_attribute.get() {
+        if let Some(ref value) = self.id_attribute.get() {
             let doc = document_from_node(self);
             doc.register_named_element(self, value.clone());
         }
@@ -1570,7 +1585,7 @@ impl VirtualMethods for Element {
 
         if !tree_in_doc { return; }
 
-        if let Some(ref value) = *self.id_attribute.get() {
+        if let Some(ref value) = self.id_attribute.get() {
             let doc = document_from_node(self);
             doc.unregister_named_element(self, value.clone());
         }
@@ -1723,7 +1738,7 @@ impl<'a> ::selectors::Element for Root<Element> {
                     })
             },
             NamespaceConstraint::Any => {
-                self.attrs.get().iter().map(JS::root).any(|attr| {
+                self.attrs.get().iter().map(|attr| attr.root()).any(|attr| {
                      attr.local_name() == local_name && test(&attr.value())
                 })
             }

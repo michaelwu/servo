@@ -27,7 +27,7 @@ use util::str::DOMString;
 #[derive(JSTraceable, PartialEq, Copy, Clone, NumFromPrimitive)]
 #[allow(dead_code)]
 #[derive(HeapSizeOf)]
-enum ButtonType {
+pub enum ButtonType {
     Submit,
     Reset,
     Button,

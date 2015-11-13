@@ -35,8 +35,8 @@ use util::str::DOMString;
 magic_dom_struct! {
     pub struct HTMLTextAreaElement {
         htmlelement: Base<HTMLElement>,
-        cols: Mut<u32>,
-        rows: Mut<u32>,
+        cols: Layout<u32>,
+        rows: Layout<u32>,
         // https://html.spec.whatwg.org/multipage/#concept-textarea-dirty
         value_changed: Mut<bool>,
         extra: Box<HTMLTextAreaElementExtra>,
@@ -73,13 +73,13 @@ impl<'a> RawLayoutHTMLTextAreaElementHelpers for &'a HTMLTextAreaElement {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_cols_for_layout(self) -> u32 {
-        self.cols.get()
+        self.cols.layout_get()
     }
 
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_rows_for_layout(self) -> u32 {
-        self.rows.get()
+        self.rows.layout_get()
     }
 }
 

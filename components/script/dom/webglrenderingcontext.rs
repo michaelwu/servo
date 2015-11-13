@@ -349,16 +349,15 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.8
     fn BindTexture(&self, target: u32, texture: Option<&WebGLTexture>) {
-        let slot = match target {
-            constants::TEXTURE_2D => &self.bound_texture_2d,
-            constants::TEXTURE_CUBE_MAP => &self.bound_texture_cube_map,
-
-            _ => return self.webgl_error(InvalidEnum),
-        };
-
         if let Some(texture) = texture {
             match texture.bind(&self.extra.ipc_renderer, target) {
-                Ok(_) => slot.set(Some(texture)),
+                Ok(_) => match target {
+                    constants::TEXTURE_2D =>
+                        self.bound_texture_2d.set(Some(JS::from_ref(texture))),
+                    constants::TEXTURE_CUBE_MAP =>
+                        self.bound_texture_cube_map.set(Some(JS::from_ref(texture))),
+                    _ => return self.webgl_error(InvalidEnum),
+                },
                 Err(err) => return self.webgl_error(err),
             }
         } else {
@@ -943,10 +942,10 @@ pub trait LayoutCanvasWebGLRenderingContextHelpers {
 impl LayoutCanvasWebGLRenderingContextHelpers for LayoutJS<WebGLRenderingContext> {
     #[allow(unsafe_code)]
     unsafe fn get_renderer_id(&self) -> usize {
-        (*self.unsafe_get()).extra.renderer_id
+        (&*self.unsafe_get()).extra.renderer_id
     }
     #[allow(unsafe_code)]
     unsafe fn get_ipc_renderer(&self) -> IpcSender<CanvasMsg> {
-        (*self.unsafe_get()).extra.ipc_renderer.clone()
+        (&*self.unsafe_get()).extra.ipc_renderer.clone()
     }
 }

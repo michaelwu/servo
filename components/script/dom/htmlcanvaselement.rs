@@ -73,7 +73,7 @@ impl HTMLCanvasElement {
 
     fn recreate_contexts(&self) {
         let size = self.get_size();
-        if let Some(ref context) = *self.context.get() {
+        if let Some(ref context) = self.context.get() {
             match *context {
                 CanvasContext::Context2d(ref context) => context.root().r().recreate(size),
                 CanvasContext::WebGL(ref context) => context.root().r().recreate(size),
@@ -179,7 +179,7 @@ impl HTMLCanvasElement {
             self.context.set(maybe_ctx.map( |ctx| CanvasContext::WebGL(JS::from_rooted(&ctx))));
         }
 
-        if let Some(ref context) = *self.context.get() {
+        if let Some(ref context) = self.context.get() {
             match *context {
                 CanvasContext::WebGL(ref context) => Some(context.root()),
                 _ => None,
